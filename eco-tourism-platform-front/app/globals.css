@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Manrope", sans-serif;
+  --font-manrope: "Manrope", sans-serif;
+
+  --color-primary: #13ec49;
+  --color-background: #f6f8f6;
+  --color-background-light: #f6f8f6;
+  --color-background-dark: #102215;
+
+  --color-surface: #ffffff;
+  --color-on-surface: #0f170f;
+  --color-on-background: #191c19;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f8faf8;
+  --color-surface-container: #f1f3f1;
+  --color-surface-container-high: #e8ebe8;
+  --color-surface-container-highest: #e2e5e2;
+
+  --color-outline: #707970;
+  --color-outline-variant: #c0c9c0;
+
+  --color-primary-container: #13ec49;
+  --color-on-primary-container: #002204;
+
+  --color-secondary: #4f6352;
+  --color-secondary-container: #d2e8d3;
+  --color-on-secondary: #ffffff;
+  --color-on-secondary-container: #0d1f12;
+
+  --color-tertiary: #3b6470;
+  --color-tertiary-container: #beeaf7;
+  --color-on-tertiary: #ffffff;
+  --color-on-tertiary-container: #001f26;
+
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #410002;
+
+  --radius-default: 0.5rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-full: 9999px;
+}
+
+@layer base {
+  html,
+  body {
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    @apply bg-background text-on-surface font-sans antialiased;
+    font-family: "Manrope", sans-serif;
+  }
+}
+
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+}

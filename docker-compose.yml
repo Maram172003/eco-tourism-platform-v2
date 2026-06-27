@@ -1,0 +1,66 @@
+services:
+
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - tourisme_pgdata:/var/lib/postgresql/data
+    networks:
+      - tourisme_net
+    # port 5432 is NOT exposed to the host (internal only)
+
+  # ── MongoDB ────────────────────────────────────────────────────────────────
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - tourisme_mongodata:/data/db
+    networks:
+      - tourisme_net
+    # port 27017 is NOT exposed to the host (internal only)
+
+  # ── NestJS API ─────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    env_file:
+      - ./backend/.env.production
+    depends_on:
+      - db
+      - mongo
+    networks:
+      - tourisme_net
+
+  # ── Next.js Frontend ───────────────────────────────────────────────────────
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://91.134.139.163:3001/api
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    depends_on:
+      - api
+    networks:
+      - tourisme_net
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  tourisme_net:
+    external: true
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  tourisme_pgdata:
+  tourisme_mongodata:
