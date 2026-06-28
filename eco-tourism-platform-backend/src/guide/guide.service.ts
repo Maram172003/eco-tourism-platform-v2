@@ -106,7 +106,7 @@ export class GuideService {
     const saved = await this.repo.save(profile);
     await this.mongoService.upsertSkills(userId, {
       landscapes: dto.landscapes,
-      certifications: dto.certifications,
+      certifications: dto.certifications.map((c) => ({ label: c.label, proof: c.proof ?? '' })),
     });
 
     return saved;

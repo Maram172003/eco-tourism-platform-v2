@@ -1,5 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsInt, IsNotEmpty, IsOptional, IsString, Min, Max } from 'class-validator';
+import { IsArray, IsInt, IsNotEmpty, IsOptional, IsString, Min, Max, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class CertificationDto {
+  @IsString()
+  label!: string;
+
+  @IsString()
+  @IsOptional()
+  proof?: string;
+}
 
 export class CompleteGuideProfileDto {
   @ApiProperty({ example: 'Ahmed Ben Ali' })
@@ -67,8 +77,9 @@ export class UpdateGuideExperienceDto {
   @IsString({ each: true })
   landscapes!: string[];
 
-  @ApiProperty({ example: ['Guide certifié AFRATIM', 'Premiers secours'] })
+  @ApiProperty({ example: [{ label: 'Guide certifié Éco-Voyage', proof: 'https://...' }] })
   @IsArray()
-  @IsString({ each: true })
-  certifications!: string[];
+  @ValidateNested({ each: true })
+  @Type(() => CertificationDto)
+  certifications!: CertificationDto[];
 }

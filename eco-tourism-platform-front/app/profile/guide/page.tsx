@@ -58,7 +58,7 @@ type GuideProfile = {
   years_experience: number | null;
   sustainability_score: number | null;
   feedback_received: number; reservations_handled: number;
-  skills_activities: string[]; skills_landscapes: string[]; certifications: string[];
+  skills_activities: string[]; skills_landscapes: string[]; certifications: { label: string; proof: string; _id?: string }[];
   badges: { label: string; obtained_at: string }[];
 };
 
@@ -172,6 +172,73 @@ const LANDSCAPES_LIST = [
   { value: "lake",        label: "Lacs & Zones humides" },
 ];
 
+function ProofInput({ proof, onChange }: { proof: string; onChange: (v: string) => void }) {
+  const [mode, setMode] = useState<"url" | "image">("url");
+  const isImage = proof.startsWith("data:");
+
+  function handleImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => onChange(reader.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  if (isImage) {
+    return (
+      <div className="flex items-center gap-3 p-2 bg-slate-50 border border-slate-200 rounded-xl">
+        <img src={proof} alt="Justificatif" className="w-10 h-10 object-cover rounded-lg shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold text-slate-700">Justificatif</p>
+          <p className="text-[10px] text-slate-400">Image uploadée</p>
+        </div>
+        <button type="button" onClick={() => onChange("")} className="text-slate-400 hover:text-red-500 transition-colors shrink-0">
+          <span className="material-symbols-outlined text-base">delete</span>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <button type="button" onClick={() => setMode("url")}
+          className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full border transition-all
+            ${mode === "url" ? "bg-primary border-primary text-slate-900" : "border-slate-200 text-slate-500 hover:border-primary/40"}`}>
+          <span className="material-symbols-outlined text-xs">link</span> URL
+        </button>
+        <button type="button" onClick={() => setMode("image")}
+          className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full border transition-all
+            ${mode === "image" ? "bg-primary border-primary text-slate-900" : "border-slate-200 text-slate-500 hover:border-primary/40"}`}>
+          <span className="material-symbols-outlined text-xs">photo_camera</span> Photo
+        </button>
+        {proof && (
+          <button type="button" onClick={() => onChange("")} className="ml-auto text-[10px] text-red-400 hover:text-red-600 font-bold flex items-center gap-0.5">
+            <span className="material-symbols-outlined text-xs">delete</span> Supprimer
+          </button>
+        )}
+      </div>
+      {mode === "url" ? (
+        <div className="relative">
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-base">link</span>
+          <input type="url" value={proof} onChange={(e) => onChange(e.target.value)}
+            placeholder="https://exemple.com/certificat.pdf"
+            className="w-full pl-9 pr-4 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary text-slate-700 placeholder:text-slate-400 font-medium" />
+        </div>
+      ) : (
+        <label className="flex items-center gap-3 p-2.5 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all">
+          <span className="material-symbols-outlined text-slate-400 text-xl">upload_file</span>
+          <div>
+            <p className="text-xs font-bold text-slate-600">Cliquer pour uploader</p>
+            <p className="text-[10px] text-slate-400">JPG, PNG — max 2Mo</p>
+          </div>
+          <input type="file" accept="image/*" className="hidden" onChange={handleImage} />
+        </label>
+      )}
+    </div>
+  );
+}
+
 const CERTIFICATIONS_LIST = [
   "Guide certifié Éco-Voyage",
   "Premiers secours (PSC1)",
@@ -283,7 +350,8 @@ export default function GuideProfilePage() {
   const [editSpecialties,    setEditSpecialties]    = useState<string[]>([]);
   const [editLangsSpoken,    setEditLangsSpoken]    = useState<string[]>([]);
   const [editLandscapes,     setEditLandscapes]     = useState<string[]>([]);
-  const [editCertifications, setEditCertifications] = useState<string>("");
+  const [editCertifications, setEditCertifications] = useState<{ label: string; proof: string }[]>([]);
+  const [customCertPool,    setCustomCertPool]    = useState<{ label: string; proof: string }[]>([]);
   const [editProfileSaving,  setEditProfileSaving]  = useState(false);
   const [editProfileError,   setEditProfileError]   = useState("");
 
@@ -577,7 +645,9 @@ export default function GuideProfilePage() {
     setEditSpecialties(profile.skills_activities ?? profile.specialties ?? []);
     setEditLangsSpoken(profile.languages_spoken ?? []);
     setEditLandscapes(profile.skills_landscapes ?? []);
-    setEditCertifications((profile.certifications ?? []).join("\n"));
+    const allCertsFromProfile = (profile.certifications ?? []).map((c) => ({ label: c.label, proof: c.proof ?? "" }));
+    setEditCertifications(allCertsFromProfile);
+    setCustomCertPool(allCertsFromProfile.filter((c) => !CERTIFICATIONS_LIST.includes(c.label)));
     setEditProfileError("");
     setEditProfileOpen(true);
   }
@@ -595,8 +665,6 @@ export default function GuideProfilePage() {
       else if (editProfilePhoto === null) photoUrl = undefined;
       if (editProfileCover?.file) coverUrl = await uploadImage(editProfileCover.file);
       else if (editProfileCover === null) coverUrl = undefined;
-
-      const certs = editCertifications.split("\n").map((s) => s.trim()).filter(Boolean);
 
       const [updated] = await Promise.all([
         apiFetch<GuideProfile>("/guide/profile", {
@@ -621,7 +689,7 @@ export default function GuideProfilePage() {
           body: JSON.stringify({
             years_experience: editProfileForm.years_experience ? Number(editProfileForm.years_experience) : 0,
             landscapes: editLandscapes,
-            certifications: certs,
+            certifications: editCertifications,
           }),
         }).catch(() => {}),
       ]);
@@ -632,7 +700,7 @@ export default function GuideProfilePage() {
         skills_activities: editSpecialties,
         languages_spoken:  editLangsSpoken,
         skills_landscapes: editLandscapes,
-        certifications:    certs,
+        certifications:    editCertifications,
         years_experience:  editProfileForm.years_experience ? Number(editProfileForm.years_experience) : null,
       } : prev);
       setEditProfileOpen(false);
@@ -1044,24 +1112,74 @@ export default function GuideProfilePage() {
                 <div>
                   <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Certifications</label>
                   <div className="space-y-2">
-                    {CERTIFICATIONS_LIST.map((cert) => {
-                      const certs = editCertifications.split("\n").map((s) => s.trim()).filter(Boolean);
-                      const active = certs.includes(cert);
-                      return (
-                        <button key={cert} type="button"
-                          onClick={() => {
-                            const list = editCertifications.split("\n").map((s) => s.trim()).filter(Boolean);
-                            const updated = active ? list.filter((c) => c !== cert) : [...list, cert];
-                            setEditCertifications(updated.join("\n"));
-                          }}
-                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-sm font-bold text-left transition-all ${active ? "bg-primary/10 border-primary text-slate-900" : "border-slate-100 text-slate-600 hover:border-primary/30 bg-white"}`}>
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${active ? "border-primary bg-primary" : "border-slate-300"}`}>
-                            {active && <Check size={10} className="text-white" />}
+                    {(() => {
+                      const allCerts = [
+                        ...CERTIFICATIONS_LIST.map((label) => ({ label, isCustom: false })),
+                        ...customCertPool.map((c) => ({ label: c.label, isCustom: true })),
+                      ];
+                      return allCerts.map(({ label, isCustom }) => {
+                        const active = editCertifications.some((c) => c.label === label);
+                        const certObj = editCertifications.find((c) => c.label === label);
+                        return (
+                          <div key={label} className={`rounded-xl border-2 overflow-hidden transition-all ${active ? "border-primary bg-primary/5" : "border-slate-100 bg-white hover:border-primary/30"}`}>
+                            <button type="button"
+                              onClick={() => {
+                                if (active) {
+                                  setEditCertifications(editCertifications.filter((c) => c.label !== label));
+                                } else {
+                                  const poolEntry = customCertPool.find((c) => c.label === label);
+                                  setEditCertifications([...editCertifications, { label, proof: poolEntry?.proof ?? "" }]);
+                                }
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-left">
+                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${active ? "border-primary bg-primary" : "border-slate-300"}`}>
+                                {active && <Check size={10} className="text-white" />}
+                              </div>
+                              <span className={active ? "text-slate-900" : "text-slate-600"}>{label}</span>
+                              {isCustom && <span className="ml-auto text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">Personnalisé</span>}
+                            </button>
+                            {active && (
+                              <div className="px-4 pb-3 space-y-2">
+                                {isCustom && (
+                                  <div className="relative">
+                                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-base">edit</span>
+                                    <input
+                                      type="text"
+                                      value={label}
+                                      onChange={(e) => {
+                                        const newLabel = e.target.value;
+                                        setEditCertifications(editCertifications.map((c) => c.label === label ? { ...c, label: newLabel } : c));
+                                        setCustomCertPool(customCertPool.map((c) => c.label === label ? { ...c, label: newLabel } : c));
+                                      }}
+                                      placeholder="Nom de la certification"
+                                      className="w-full pl-9 pr-4 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary text-slate-700 placeholder:text-slate-400 font-medium"
+                                    />
+                                  </div>
+                                )}
+                                <ProofInput
+                                  proof={certObj?.proof ?? ""}
+                                  onChange={(v) => {
+                                    setEditCertifications(editCertifications.map((c) => c.label === label ? { ...c, proof: v } : c));
+                                    setCustomCertPool(customCertPool.map((c) => c.label === label ? { ...c, proof: v } : c));
+                                  }}
+                                />
+                              </div>
+                            )}
                           </div>
-                          {cert}
-                        </button>
-                      );
-                    })}
+                        );
+                      });
+                    })()}
+                    {/* Ajouter une certification personnalisée */}
+                    <button type="button"
+                      onClick={() => {
+                        const newCert = { label: "", proof: "" };
+                        setCustomCertPool([...customCertPool, newCert]);
+                        setEditCertifications([...editCertifications, newCert]);
+                      }}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-slate-200 rounded-xl text-xs font-bold text-slate-400 hover:border-primary/40 hover:text-primary transition-all">
+                      <span className="material-symbols-outlined text-base">add</span>
+                      Ajouter une certification personnalisée
+                    </button>
                   </div>
                 </div>
 
@@ -1648,14 +1766,14 @@ export default function GuideProfilePage() {
                   </div>
                 </div>
               </div>
-              <div className="mt-6 md:mt-0 flex flex-row flex-wrap justify-center sm:justify-end gap-3 self-center md:self-end">
+              <div className="flex items-center gap-2 shrink-0 mt-6 md:mt-0 self-center md:self-end">
                 <button onClick={openModal}
-                  className="bg-primary hover:bg-primary/90 active:scale-95 text-white font-bold px-5 py-3 rounded-2xl inline-flex items-center gap-2 hover:shadow-lg transition-all shadow-sm text-sm">
-                  <Plus size={18} strokeWidth={2.5} /><span>Publier une offre</span>
+                  className="bg-primary hover:bg-primary/90 active:scale-95 text-white font-bold px-4 py-2.5 rounded-xl inline-flex items-center gap-1.5 hover:shadow-lg transition-all shadow-sm text-sm whitespace-nowrap">
+                  <Plus size={16} strokeWidth={2.5} /><span>Publier une offre</span>
                 </button>
                 <button onClick={openEditProfile}
-                  className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold px-5 py-3 rounded-2xl inline-flex items-center gap-2 hover:shadow-sm active:scale-95 transition-all text-sm">
-                  <Edit3 size={16} /><span>Modifier le profil</span>
+                  className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold px-4 py-2.5 rounded-xl inline-flex items-center gap-1.5 hover:shadow-sm active:scale-95 transition-all text-sm whitespace-nowrap">
+                  <Edit3 size={15} /><span>Modifier</span>
                 </button>
               </div>
             </div>
@@ -2076,7 +2194,17 @@ export default function GuideProfilePage() {
                           <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                             <Check size={12} className="text-primary" />
                           </div>
-                          <p className="text-sm font-semibold text-slate-700">{c}</p>
+                          <p className="text-sm font-semibold text-slate-700">{c.label}</p>
+                          {c.proof && (
+                            <button type="button" onClick={() => {
+                              if (c.proof.startsWith("data:")) {
+                                const w = window.open(); w?.document.write(`<img src="${c.proof}" style="max-width:100%">`);
+                              } else { window.open(c.proof, "_blank"); }
+                            }} className="ml-auto text-xs text-primary font-bold flex items-center gap-1 hover:underline">
+                              <span className="material-symbols-outlined text-sm">open_in_new</span>
+                              Justificatif
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>

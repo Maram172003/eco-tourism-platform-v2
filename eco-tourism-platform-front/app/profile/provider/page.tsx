@@ -2456,14 +2456,6 @@ export default function ProviderProfilePage() {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Inclusions</label>
-                  <textarea rows={3} placeholder={"Ex :\n• Transport inclus\n• Repas traditionnels\n• Guide bilingue"}
-                    value={form.inclusions}
-                    onChange={(e) => setForm((f) => ({ ...f, inclusions: e.target.value }))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
-                  />
-                </div>
-                <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Localisation</label>
                     <button type="button" onClick={() => setShowPublishMap((v) => !v)}
@@ -2486,6 +2478,14 @@ export default function ProviderProfilePage() {
                       }}
                     />
                   )}
+                </div>
+                <div>
+                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Inclusions</label>
+                  <textarea rows={3} placeholder={"Ex :\n• Transport inclus\n• Repas traditionnels\n• Guide bilingue"}
+                    value={form.inclusions}
+                    onChange={(e) => setForm((f) => ({ ...f, inclusions: e.target.value }))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
+                  />
                 </div>
                 {/* Max. pers. + Âge min. — masqués pour hébergement (capacité par unité dans l'onglet) */}
                 {offerActivity?.category !== 'hebergement' && <div className="grid grid-cols-2 gap-3">
@@ -2710,7 +2710,7 @@ export default function ProviderProfilePage() {
                                       <div className={`w-3.5 h-3.5 rounded-sm border-2 flex items-center justify-center transition-all ${getData(field.key) ? "border-primary bg-primary" : "border-slate-300"}`}>
                                         {getData(field.key) && <Check size={9} className="text-white" />}
                                       </div>
-                                      {getData(field.key) ? "Oui" : "Non"}
+                                      Oui
                                     </button>
 
                                   ) : field.type === "textarea" ? (
@@ -3125,39 +3125,6 @@ export default function ProviderProfilePage() {
                           })()}
                         </div>
 
-                        {/* ── Tarification par unité (si multi-unités) ── */}
-                        <div className="mb-3 pb-3 border-b border-slate-200 space-y-2.5">
-                          <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Tarification de cette unité</p>
-                          {(() => {
-                            const uArr = getUnitData(st);
-                            const uI = getActiveTab(st);
-                            const getU = (f: string) => uArr[uI]?.[f];
-                            const setU = (f: string, v: any) => { const a = [...uArr]; a[uI] = { ...(a[uI] ?? {}), [f]: v }; setUnitData(st, a); };
-                            return (
-                              <>
-                                <div>
-                                  <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Prix groupe <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-bold">DT</span><input type="number" min="0" placeholder="1200" value={(getU('prixGroupe') as string) ?? ''} onChange={(e) => setU('prixGroupe', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
-                                    <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">pers.</span><input type="number" min="1" placeholder="10" value={(getU('nbPersonnesGroupe') as string) ?? ''} onChange={(e) => setU('nbPersonnesGroupe', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
-                                  </div>
-                                </div>
-                                <div>
-                                  <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Prix enfant <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-bold">DT</span><input type="number" min="0" placeholder="150" value={(getU('prixEnfant') as string) ?? ''} onChange={(e) => setU('prixEnfant', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
-                                    <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">≤ âge</span><input type="number" min="0" max="18" placeholder="12" value={(getU('ageMaxEnfant') as string) ?? ''} onChange={(e) => setU('ageMaxEnfant', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-11 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
-                                  </div>
-                                </div>
-                                <div>
-                                  <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Supplément privatisation <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                                  <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-bold">DT</span><input type="number" min="0" placeholder="500" value={(getU('suppPrivatisation') as string) ?? ''} onChange={(e) => setU('suppPrivatisation', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
-                                </div>
-                              </>
-                            );
-                          })()}
-                        </div>
-
                         {/* ── Champs par unité : prix, max pers, acompte ── */}
                         <div className="mb-3 pb-3 border-b border-slate-200 space-y-3">
                           {/* Prix / nuit */}
@@ -3248,7 +3215,7 @@ export default function ProviderProfilePage() {
                             <>
                               {/* Dispo + Tarif au niveau sous-type seulement si 1 seule unité */}
                               {getNbUnites(st) === 1 && renderSubtypeAvailBloc(st)}
-                              {getNbUnites(st) === 1 && renderSubtypePricingBloc(st)}
+                              {renderSubtypePricingBloc(st)}
                               {renderNbUnitesControl(st)}
                               {getNbUnites(st) > 1
                                 ? renderUnitTabs(st)
@@ -3866,14 +3833,6 @@ export default function ProviderProfilePage() {
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Inclusions</label>
-                        <textarea rows={3} placeholder={"Ex :\n• Transport inclus\n• Repas traditionnels\n• Guide bilingue"}
-                          value={editForm.inclusions}
-                          onChange={(e) => setEditForm((f) => ({ ...f, inclusions: e.target.value }))}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
-                        />
-                      </div>
-                      <div>
                         <div className="flex items-center justify-between mb-1.5">
                           <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Localisation</label>
                           <button type="button" onClick={() => setShowEditMap((v) => !v)}
@@ -3896,6 +3855,14 @@ export default function ProviderProfilePage() {
                             }}
                           />
                         )}
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Inclusions</label>
+                        <textarea rows={3} placeholder={"Ex :\n• Transport inclus\n• Repas traditionnels\n• Guide bilingue"}
+                          value={editForm.inclusions}
+                          onChange={(e) => setEditForm((f) => ({ ...f, inclusions: e.target.value }))}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
+                        />
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>

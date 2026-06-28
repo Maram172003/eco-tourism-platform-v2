@@ -179,15 +179,6 @@ export const PROVIDER_SCHEMA: ProviderCategory[] = [
     ],
   },
   {
-    value: "guide_activites", label: "Guide & Services", icon: "explore",
-    subtypes: [
-      { value: "guide_randonnee", label: "Guide de randonnée" },
-      { value: "centre_activites", label: "Centre d'activités" },
-      { value: "association_locale", label: "Association locale" },
-      { value: "agence_ecotourisme", label: "Agence écotourisme" },
-    ],
-  },
-  {
     value: "transport", label: "Transport", icon: "directions_car",
     subtypes: [
       { value: "transporteur_local", label: "Transporteur local" },

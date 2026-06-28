@@ -275,18 +275,157 @@ function StepSpecialties({ data, setData }: any) {
   );
 }
 
+function CertProofInput({
+  certLabel,
+  proof,
+  onChange,
+}: {
+  certLabel: string;
+  proof: string;
+  onChange: (v: string) => void;
+}) {
+  const [mode, setMode] = useState<"url" | "image">("url");
+
+  function handleImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => onChange(reader.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  return (
+    <div className="mt-2 ml-8 space-y-2">
+      <div className="flex gap-2 mb-2">
+        <button
+          type="button"
+          onClick={() => setMode("url")}
+          className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border transition-all
+            ${mode === "url" ? "bg-primary border-primary text-slate-900" : "border-slate-200 text-slate-500 hover:border-primary/40"}`}
+        >
+          <span className="material-symbols-outlined text-sm">link</span>
+          URL / Lien
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("image")}
+          className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border transition-all
+            ${mode === "image" ? "bg-primary border-primary text-slate-900" : "border-slate-200 text-slate-500 hover:border-primary/40"}`}
+        >
+          <span className="material-symbols-outlined text-sm">photo_camera</span>
+          Photo
+        </button>
+      </div>
+
+      {mode === "url" ? (
+        <div className="relative">
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-base">link</span>
+          <input
+            type="url"
+            value={proof.startsWith("data:") ? "" : proof}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="https://exemple.com/mon-certificat.pdf"
+            className="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent text-slate-700 placeholder:text-slate-400 font-medium"
+          />
+        </div>
+      ) : (
+        <div>
+          {proof.startsWith("data:") ? (
+            <div className="flex items-center gap-3 p-2 bg-slate-50 rounded-xl border border-slate-200">
+              <img src={proof} alt="Justificatif" className="w-12 h-12 object-cover rounded-lg" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-slate-700 truncate">Justificatif ajouté</p>
+                <p className="text-xs text-slate-400">Image téléchargée</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onChange("")}
+                className="text-slate-400 hover:text-red-500 transition-colors"
+              >
+                <span className="material-symbols-outlined text-base">delete</span>
+              </button>
+            </div>
+          ) : (
+            <label className="flex items-center gap-3 p-3 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all">
+              <span className="material-symbols-outlined text-slate-400 text-2xl">upload_file</span>
+              <div>
+                <p className="text-sm font-bold text-slate-600">Cliquer pour uploader</p>
+                <p className="text-xs text-slate-400">JPG, PNG, PDF — max 2Mo</p>
+              </div>
+              <input type="file" accept="image/*,.pdf" className="hidden" onChange={handleImage} />
+            </label>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const AUTRE_KEY = "__autre__";
+
 function StepExperience({ data, setData }: any) {
+  const [autreLabel, setAutreLabel] = useState("");
+
   const toggleLandscape = (v: string) => {
     const s = data.landscapes.includes(v)
       ? data.landscapes.filter((x: string) => x !== v)
       : [...data.landscapes, v];
     setData({ ...data, landscapes: s });
   };
-  const toggleCert = (v: string) => {
-    const s = data.certifications.includes(v)
-      ? data.certifications.filter((x: string) => x !== v)
-      : [...data.certifications, v];
-    setData({ ...data, certifications: s });
+
+  const isActiveCert = (label: string) =>
+    data.certifications.some((c: { label: string; proof: string }) => c.label === label);
+
+  const autreEntry = data.certifications.find(
+    (c: { label: string }) => !CERTIFICATIONS.includes(c.label)
+  );
+  const autreActive = !!autreEntry;
+
+  const toggleCert = (label: string) => {
+    if (isActiveCert(label)) {
+      setData({ ...data, certifications: data.certifications.filter((c: { label: string }) => c.label !== label) });
+    } else {
+      setData({ ...data, certifications: [...data.certifications, { label, proof: "" }] });
+    }
+  };
+
+  const toggleAutre = () => {
+    if (autreActive) {
+      setData({ ...data, certifications: data.certifications.filter((c: { label: string }) => CERTIFICATIONS.includes(c.label)) });
+      setAutreLabel("");
+    } else {
+      setData({ ...data, certifications: [...data.certifications, { label: autreLabel || "", proof: "" }] });
+    }
+  };
+
+  const setAutreLabelAndSync = (val: string) => {
+    setAutreLabel(val);
+    if (autreActive) {
+      setData({
+        ...data,
+        certifications: data.certifications.map((c: { label: string; proof: string }) =>
+          !CERTIFICATIONS.includes(c.label) ? { ...c, label: val } : c
+        ),
+      });
+    }
+  };
+
+  const setProof = (label: string, proof: string) => {
+    setData({
+      ...data,
+      certifications: data.certifications.map((c: { label: string; proof: string }) =>
+        c.label === label ? { ...c, proof } : c
+      ),
+    });
+  };
+
+  const setAutreProof = (proof: string) => {
+    setData({
+      ...data,
+      certifications: data.certifications.map((c: { label: string; proof: string }) =>
+        !CERTIFICATIONS.includes(c.label) ? { ...c, proof } : c
+      ),
+    });
   };
 
   return (
@@ -314,26 +453,85 @@ function StepExperience({ data, setData }: any) {
       </div>
 
       <div>
-        <p className="text-sm font-bold text-slate-700 mb-3">Certifications & formations</p>
+        <p className="text-sm font-bold text-slate-700 mb-1">Certifications & formations</p>
+        <p className="text-xs text-slate-400 mb-3">Pour chaque certification sélectionnée, ajoutez un justificatif (URL ou photo).</p>
         <div className="grid grid-cols-1 gap-2">
           {CERTIFICATIONS.map((cert) => {
-            const active = data.certifications.includes(cert);
+            const active = isActiveCert(cert);
+            const certObj = data.certifications.find((c: { label: string }) => c.label === cert);
             return (
-              <button
-                key={cert}
-                type="button"
-                onClick={() => toggleCert(cert)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-sm font-bold text-left transition-all
-                  ${active ? "bg-primary/10 border-primary text-slate-900" : "border-slate-100 text-slate-600 hover:border-primary/30 bg-white"}`}
-              >
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0
-                  ${active ? "border-primary bg-primary" : "border-slate-300"}`}>
-                  {active && <Check className="w-3 h-3 text-slate-900" />}
-                </div>
-                {cert}
-              </button>
+              <div key={cert} className={`rounded-xl border-2 transition-all overflow-hidden
+                ${active ? "border-primary bg-primary/5" : "border-slate-100 bg-white hover:border-primary/30"}`}>
+                <button
+                  type="button"
+                  onClick={() => toggleCert(cert)}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-left"
+                >
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0
+                    ${active ? "border-primary bg-primary" : "border-slate-300"}`}>
+                    {active && <Check className="w-3 h-3 text-slate-900" />}
+                  </div>
+                  <span className={active ? "text-slate-900" : "text-slate-600"}>{cert}</span>
+                  {active && certObj?.proof && (
+                    <span className="ml-auto flex items-center gap-1 text-xs text-emerald-600 font-bold">
+                      <span className="material-symbols-outlined text-sm">verified</span>
+                      Justifié
+                    </span>
+                  )}
+                </button>
+                {active && (
+                  <div className="px-4 pb-4">
+                    <CertProofInput
+                      certLabel={cert}
+                      proof={certObj?.proof ?? ""}
+                      onChange={(v) => setProof(cert, v)}
+                    />
+                  </div>
+                )}
+              </div>
             );
           })}
+
+          {/* Option Autre */}
+          <div className={`rounded-xl border-2 transition-all overflow-hidden
+            ${autreActive ? "border-primary bg-primary/5" : "border-slate-100 bg-white hover:border-primary/30"}`}>
+            <button
+              type="button"
+              onClick={toggleAutre}
+              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-left"
+            >
+              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0
+                ${autreActive ? "border-primary bg-primary" : "border-slate-300"}`}>
+                {autreActive && <Check className="w-3 h-3 text-slate-900" />}
+              </div>
+              <span className={autreActive ? "text-slate-900" : "text-slate-600"}>Autre</span>
+              {autreActive && autreEntry?.proof && (
+                <span className="ml-auto flex items-center gap-1 text-xs text-emerald-600 font-bold">
+                  <span className="material-symbols-outlined text-sm">verified</span>
+                  Justifié
+                </span>
+              )}
+            </button>
+            {autreActive && (
+              <div className="px-4 pb-4 space-y-3">
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-base">edit</span>
+                  <input
+                    type="text"
+                    value={autreLabel}
+                    onChange={(e) => setAutreLabelAndSync(e.target.value)}
+                    placeholder="Nom de la certification…"
+                    className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent text-slate-700 placeholder:text-slate-400 font-medium"
+                  />
+                </div>
+                <CertProofInput
+                  certLabel="__autre__"
+                  proof={autreEntry?.proof ?? ""}
+                  onChange={setAutreProof}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -367,7 +565,7 @@ export default function GuideOnboardingPage() {
     languages_spoken: [] as string[],
     years_experience: 0,
     landscapes: [] as string[],
-    certifications: [] as string[],
+    certifications: [] as { label: string; proof: string }[],
   });
 
   useEffect(() => {

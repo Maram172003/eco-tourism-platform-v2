@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
 
@@ -57,6 +57,7 @@ export default function MapPicker({
   lng: number | null;
   onPick: (lat: number, lng: number, address: string) => void;
 }) {
+  const mapKey = useId();
   const [flyTarget, setFlyTarget] = useState<{ lat: number; lng: number } | null>(null);
   const [searching, setSearching]   = useState(false);
   const [searchErr, setSearchErr]   = useState("");
@@ -116,6 +117,7 @@ export default function MapPicker({
       {/* Map */}
       <div className="rounded-2xl overflow-hidden border border-slate-200">
         <MapContainer
+          key={mapKey}
           center={lat && lng ? [lat, lng] : [33.8869, 9.5375]}
           zoom={lat && lng ? 13 : 6}
           style={{ height: "220px", width: "100%" }}

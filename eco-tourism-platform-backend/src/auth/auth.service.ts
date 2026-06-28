@@ -257,6 +257,8 @@ export class AuthService {
                 return '/dashboard/provider';
             case Role.ADMIN:
                 return '/dashboard/admin';
+            case Role.GUIDE:
+                return '/dashboard/guide';
             default:
                 return '/dashboard';
         }

@@ -9,7 +9,7 @@ import { registerUser } from "@/lib/auth";
 export default function RegisterPage() {
   const router = useRouter();
 
-  const [role, setRole] = useState<"eco_traveler" | "provider">("eco_traveler");
+  const [role, setRole] = useState<"eco_traveler" | "provider" | "guide">("eco_traveler");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -131,7 +131,7 @@ export default function RegisterPage() {
                   Je suis un...
                 </label>
 
-                <div className="grid gap-3 grid-cols-2">
+                <div className="grid gap-3 grid-cols-3">
                   <label className="relative flex flex-col items-center p-4 rounded-xl border-2 border-slate-100 bg-surface-container-low cursor-pointer hover:border-primary/30 transition-all group has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                     <input
                       checked={role === "eco_traveler"}
@@ -161,7 +161,23 @@ export default function RegisterPage() {
                     <span className="text-xs font-bold text-slate-700 group-hover:text-primary uppercase tracking-wide text-center">
                       Prestataire
                     </span>
-                    <span className="text-[10px] text-slate-400 mt-1 text-center">Guide, lodge, activité...</span>
+                    <span className="text-[10px] text-slate-400 mt-1 text-center">Lodge, activité...</span>
+                  </label>
+
+                  <label className="relative flex flex-col items-center p-4 rounded-xl border-2 border-slate-100 bg-surface-container-low cursor-pointer hover:border-primary/30 transition-all group has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                    <input
+                      checked={role === "guide"}
+                      onChange={() => setRole("guide")}
+                      className="sr-only"
+                      name="role"
+                      type="radio"
+                      value="guide"
+                    />
+                    <span className="material-symbols-outlined mb-2 text-primary" style={{ fontSize: 32 }}>hiking</span>
+                    <span className="text-xs font-bold text-slate-700 group-hover:text-primary uppercase tracking-wide text-center">
+                      Guide
+                    </span>
+                    <span className="text-[10px] text-slate-400 mt-1 text-center">Accompagner & guider</span>
                   </label>
                 </div>
               </div>

@@ -29,7 +29,7 @@ type GuideProfile = {
   profile_completion: number;
   is_onboarded: boolean;
   skills_activities: string[];
-  certifications: string[];
+  certifications: { label: string; proof: string; _id?: string }[];
   badges: Badge[];
   feedback_received: number;
   reservations_handled: number;
@@ -384,9 +384,19 @@ export default function GuideDashboardPage() {
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Certifications</p>
                       <div className="space-y-2">
                         {profile!.certifications.map((cert) => (
-                          <div key={cert} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                          <div key={cert.label} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
                             <span className="material-symbols-outlined text-primary text-xl">verified</span>
-                            <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{cert}</span>
+                            <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{cert.label}</span>
+                            {cert.proof && (
+                              <button type="button" onClick={() => {
+                                if (cert.proof.startsWith("data:")) {
+                                  const w = window.open(); w?.document.write(`<img src="${cert.proof}" style="max-width:100%">`);
+                                } else { window.open(cert.proof, "_blank"); }
+                              }} className="ml-auto text-xs text-primary font-bold flex items-center gap-1 hover:underline">
+                                <span className="material-symbols-outlined text-sm">open_in_new</span>
+                                Justificatif
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>

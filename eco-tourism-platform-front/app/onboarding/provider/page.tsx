@@ -457,7 +457,7 @@ function ActivityFields({
   const MULTI_SUBTYPE_CATEGORIES = new Set([
     "hebergement", "activite", "eco_tour", "restaurant_terroir",
     "artisanat", "agriculture_terroir", "culture_patrimoine",
-    "bien_etre_spa", "transport_eco", "volontariat_eco", "guide_activites",
+    "bien_etre_spa", "transport_eco", "volontariat_eco",
   ]);
   const isMultiSubtype = MULTI_SUBTYPE_CATEGORIES.has(categoryValue);
 
