@@ -19,7 +19,7 @@ async function bootstrap() {
 
   const allowedOrigins = [
     'http://localhost:3000',
-    'http://localhost:3002',
+    'http://localhost:4000',
     process.env.FRONTEND_URL,
   ].filter(Boolean) as string[];
 
@@ -70,11 +70,12 @@ async function bootstrap() {
     },
   });
 
-  const port = Number(process.env.PORT || 3002);
+  const port = Number(process.env.PORT || 4000);
+
   await app.listen(port);
 
-  console.log(`API: http://localhost:${port}/api`);
-  console.log(`Swagger: http://localhost:${port}/swagger`);
+  console.log(`✅ API: http://localhost:${port}/api`);
+  console.log(`📘 Swagger: http://localhost:${port}/swagger`);
 }
 
 bootstrap();

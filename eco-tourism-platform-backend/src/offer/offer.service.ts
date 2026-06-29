@@ -149,6 +149,9 @@ export class OfferService {
     if (dto.max_group_size !== undefined) offer.max_group_size = dto.max_group_size ?? null;
     if (dto.min_age !== undefined) offer.min_age = dto.min_age ?? null;
     if (dto.cancellation_policy !== undefined) offer.cancellation_policy = dto.cancellation_policy ?? null;
+    if (dto.confirmation_mode !== undefined) offer.confirmation_mode = dto.confirmation_mode ?? 'manual';
+    if (dto.confirmation_deadline_hours !== undefined) offer.confirmation_deadline_hours = dto.confirmation_deadline_hours ?? null;
+    if (dto.deposit_percentage !== undefined) offer.deposit_percentage = dto.deposit_percentage ?? null;
     if (dto.details !== undefined) offer.details = dto.details ?? null;
     if (dto.status !== undefined) offer.status = dto.status;
 

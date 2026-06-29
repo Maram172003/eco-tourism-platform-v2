@@ -7,7 +7,7 @@ import {
   Plus, Edit3, ShieldCheck, MapPin, Calendar, Phone, Building2, Globe, Leaf, ArrowLeft,
   LayoutGrid, Tag, Info, Sparkles, Users, Mail, MessageCircle,
   ArrowRight, Send, X, Clock, ChevronLeft, ChevronRight, Check, Search, UserPlus,
-  MoreVertical, UserX, ShieldBan, Flag,
+  MoreVertical, UserX, ShieldBan, Flag, Route, Trash2,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import MessagerieWidget from "@/components/MessagerieWidget";
@@ -133,6 +133,18 @@ type Offer = {
   cancellation_policy: string | null;
   sustainability_score: number | null;
   images?: string[] | null; cover_image?: string | null;
+  offer_subtype?: string | null;
+  offer_subtypes?: string[] | null;
+  details?: Record<string, any> | null;
+  // Extended fields from backend
+  activity_id?: string | null;
+  offer_mode?: string | null;
+  availability_mode?: string | null;
+  availability_start?: string | null;
+  availability_end?: string | null;
+  confirmation_mode?: string | null;
+  confirmation_deadline_hours?: number | null;
+  deposit_percentage?: number | null;
 };
 
 type Activity = {
@@ -325,7 +337,39 @@ const ACTIVITY_SUSTAINABILITY_STEPS = [
   },
 ];
 
-type Tab = "tout" | "offres" | "activites" | "reseau" | "apropos";
+type Tab = "tout" | "offres" | "activites" | "circuits" | "reseau" | "apropos";
+
+// ── Circuit types ─────────────────────────────────────────────────────────────
+type CircuitEtape = {
+  id: string;
+  jour: number;
+  destination: string;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  categorie: string;
+  subtypes: string[];
+  titre: string;
+  description_courte: string;
+  description_longue: string;
+  prix: number | null;
+  photos: string[];
+  fields: Record<string, Record<string, any>>;
+  unit_details: Record<string, Array<Record<string, any>>>;
+  nb_unites: Record<string, number>;
+  form_config: Record<string, Record<string, any>>;
+  entity_photos: Record<string, string[]>;
+};
+
+type Circuit = {
+  id: string;
+  title: string;
+  description: string;
+  nb_jours: number;
+  cover_image: string | null;
+  etapes: CircuitEtape[];
+  created_at: string;
+};
 
 // ─── Botanical SVG Cover ──────────────────────────────────────────────────────
 
@@ -380,12 +424,53 @@ export default function ProviderProfilePage() {
   const [orgActSliderIdx,  setOrgActSliderIdx]  = useState(0);
 
   // ── Activity modal (create) ──────────────────────────────────────────────
-  const [actModalOpen,   setActModalOpen]   = useState(false);
-  const [actForm,        setActForm]        = useState({ title: "", category: "", level: "primary" as "primary"|"secondary", description: "", region: "", address: "", website: "", phone: "" });
-  const [actFormError,   setActFormError]   = useState("");
-  const [actPublishing,  setActPublishing]  = useState(false);
-  const [actImages,      setActImages]      = useState<{ file: File; preview: string }[]>([]);
-  const [actCoverIdx,    setActCoverIdx]    = useState(0);
+  const [actModalOpen,        setActModalOpen]        = useState(false);
+  const [actFormError,        setActFormError]        = useState("");
+  const [actPublishing,       setActPublishing]       = useState(false);
+  const [actImages,           setActImages]           = useState<{ file: File; preview: string }[]>([]);
+  const [actCoverIdx,         setActCoverIdx]         = useState(0);
+  const [actSelCategory,      setActSelCategory]      = useState("");
+  const [actSelSubtypes,      setActSelSubtypes]      = useState<string[]>([]);
+  const [actFieldValues,      setActFieldValues]      = useState<Record<string, Record<string, any>>>({});
+  const [actYearsExp,         setActYearsExp]         = useState("");
+
+  // ── Circuits ──────────────────────────────────────────────────────────────
+  const [circuits,            setCircuits]            = useState<Circuit[]>([]);
+  const [circuitModalOpen,    setCircuitModalOpen]    = useState(false);
+  const [circuitSaving,       setCircuitSaving]       = useState(false);
+  const [circuitFormError,    setCircuitFormError]    = useState("");
+  const [editingCircuit,      setEditingCircuit]      = useState<Circuit | null>(null);
+  const [circuitTitle,        setCircuitTitle]        = useState("");
+  const [circuitDescription,  setCircuitDescription]  = useState("");
+  const [circuitNbJours,      setCircuitNbJours]      = useState(1);
+  const [circuitCoverImg,     setCircuitCoverImg]     = useState<{ file: File; preview: string } | null>(null);
+  const [circuitCoverExisting,setCircuitCoverExisting]= useState<string | null>(null);
+  const [circuitEtapes,       setCircuitEtapes]       = useState<CircuitEtape[]>([]);
+  // États du formulaire d'une nouvelle étape
+  const [etapeFormOpen,       setEtapeFormOpen]       = useState(false);
+  const [etapeJour,           setEtapeJour]           = useState(1);
+  const [etapeDestination,    setEtapeDestination]    = useState("");
+  const [etapeAddress,        setEtapeAddress]        = useState("");
+  const [etapeLat,            setEtapeLat]            = useState<number | null>(null);
+  const [etapeLng,            setEtapeLng]            = useState<number | null>(null);
+  const [etapeCategorie,      setEtapeCategorie]      = useState("");
+  const [etapeSubtypes,       setEtapeSubtypes]       = useState<string[]>([]);
+  const [etapeFields,         setEtapeFields]         = useState<Record<string, Record<string, any>>>({});
+  const [etapeTitre,          setEtapeTitre]          = useState("");
+  const [etapeDescCourte,     setEtapeDescCourte]     = useState("");
+  const [etapeDescLongue,     setEtapeDescLongue]     = useState("");
+  const [etapePrix,           setEtapePrix]           = useState("");
+  const [etapeLocalPhotos,    setEtapeLocalPhotos]    = useState<{ file: File; preview: string }[]>([]);
+  const [etapePhotoCoverIdx,  setEtapePhotoCoverIdx]  = useState(0);
+  const [etapeFormError,      setEtapeFormError]      = useState("");
+  const [etapeEntityImages,         setEtapeEntityImages]         = useState<Record<string, { file: File; preview: string }[]>>({});
+  const [etapeEntityCoverIdx,       setEtapeEntityCoverIdx]       = useState<Record<string, number>>({});
+  const [etapeEntityExistingImages, setEtapeEntityExistingImages] = useState<Record<string, string[]>>({});
+  const [etapeSubtypeNbUnites,   setEtapeSubtypeNbUnites]   = useState<Record<string, number>>({});
+  const [etapeSubtypeUnitDetails,setEtapeSubtypeUnitDetails]= useState<Record<string, Array<Record<string, any>>>>({});
+  const [etapeActiveSubtypeTab,  setEtapeActiveSubtypeTab]  = useState<Record<string, number>>({});
+  const [etapeSubtypeFormConfig, setEtapeSubtypeFormConfig] = useState<Record<string, Record<string, any>>>({});
+  const [etapeSubtypeDetails,    setEtapeSubtypeDetails]    = useState<Record<string, Record<string, any>>>({});
 
   // ── Activity detail/edit modal ───────────────────────────────────────────
   const [actDetailOpen,  setActDetailOpen]  = useState(false);
@@ -490,8 +575,13 @@ export default function ProviderProfilePage() {
   // ── Config par sous-type (disponibilité + tarification — hébergement) ────
   const [subtypeFormConfig,  setSubtypeFormConfig]  = useState<Record<string, Record<string, any>>>({});
   // ── Photos par entité (sous-type ou unité) ───────────────────────────────
-  const [entityImages,   setEntityImages]   = useState<Record<string, Array<{file: File; preview: string}>>>({});
-  const [entityCoverIdx, setEntityCoverIdx] = useState<Record<string, number>>({});
+  const [entityImages,         setEntityImages]         = useState<Record<string, Array<{file: File; preview: string}>>>({});
+  const [entityCoverIdx,       setEntityCoverIdx]       = useState<Record<string, number>>({});
+  const [entityExistingImages, setEntityExistingImages] = useState<Record<string, string[]>>({});
+  // ── Publish modal — edit mode ─────────────────────────────────────────────
+  const [offerEditMode,        setOfferEditMode]        = useState(false);
+  const [offerEditId,          setOfferEditId]          = useState("");
+  const [publishExistingImages,setPublishExistingImages] = useState<string[]>([]);
 
   // ── Offer detail / edit modal ────────────────────────────────────────────
   const [editModalOpen,  setEditModalOpen]  = useState(false);
@@ -507,6 +597,7 @@ export default function ProviderProfilePage() {
   const [offerDeleting,  setOfferDeleting]  = useState(false);
   const [editImages,     setEditImages]     = useState<{ src: string; file?: File }[]>([]);
   const [editCoverIdx,   setEditCoverIdx]   = useState(0);
+  const [editDetails,    setEditDetails]    = useState<Record<string, any>>({});
   const [showEditMap,    setShowEditMap]    = useState(false);
   const [editMapLat,     setEditMapLat]     = useState<number | null>(null);
   const [editMapLng,     setEditMapLng]     = useState<number | null>(null);
@@ -582,6 +673,120 @@ export default function ProviderProfilePage() {
     return () => clearTimeout(t);
   }, [netSearch, token]);
 
+  // ── Circuits localStorage ──────────────────────────────────────────────────
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("eco_circuits");
+      if (stored) setCircuits(JSON.parse(stored));
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem("eco_circuits", JSON.stringify(circuits)); } catch {}
+  }, [circuits]);
+
+  function openCircuitModal(circuit?: Circuit) {
+    if (circuit) {
+      setEditingCircuit(circuit);
+      setCircuitTitle(circuit.title);
+      setCircuitDescription(circuit.description);
+      setCircuitNbJours(circuit.nb_jours);
+      setCircuitCoverExisting(circuit.cover_image);
+      setCircuitEtapes([...circuit.etapes]);
+    } else {
+      setEditingCircuit(null);
+      setCircuitTitle(""); setCircuitDescription("");
+      setCircuitNbJours(1); setCircuitCoverExisting(null);
+      setCircuitEtapes([]);
+    }
+    setCircuitCoverImg(null); setCircuitFormError("");
+    setEtapeFormOpen(false); resetEtapeForm();
+    setCircuitModalOpen(true);
+  }
+
+  function resetEtapeForm() {
+    setEtapeJour(circuitEtapes.length + 1);
+    setEtapeDestination(""); setEtapeAddress("");
+    setEtapeLat(null); setEtapeLng(null);
+    setEtapeCategorie("");
+    setEtapeSubtypes([]); setEtapeFields({});
+    setEtapeTitre(""); setEtapeDescCourte(""); setEtapeDescLongue(""); setEtapePrix("");
+    setEtapeLocalPhotos([]); setEtapePhotoCoverIdx(0);
+    setEtapeFormError("");
+    setEtapeEntityImages({}); setEtapeEntityCoverIdx({}); setEtapeEntityExistingImages({});
+    setEtapeSubtypeNbUnites({}); setEtapeSubtypeUnitDetails({});
+    setEtapeActiveSubtypeTab({}); setEtapeSubtypeFormConfig({});
+    setEtapeSubtypeDetails({});
+  }
+
+  async function addEtape() {
+    if (!etapeLat || !etapeLng)      { setEtapeFormError("Positionnez la destination sur la carte."); return; }
+    if (!etapeCategorie)              { setEtapeFormError("Choisissez un type d'activité."); return; }
+    if (etapeSubtypes.length === 0)   { setEtapeFormError("Choisissez au moins un sous-type."); return; }
+    if (!etapeTitre.trim())           { setEtapeFormError("Le titre de l'étape est requis."); return; }
+    const displayName = etapeDestination.trim() || etapeAddress.split(",")[0].trim();
+    // Upload entity-keyed photos et fusionner avec les existantes
+    const finalEntityPhotos: Record<string, string[]> = { ...etapeEntityExistingImages };
+    try {
+      for (const [entityKey, imgs] of Object.entries(etapeEntityImages)) {
+        if (imgs.length === 0) continue;
+        const coverI = etapeEntityCoverIdx[entityKey] ?? 0;
+        const urls = await Promise.all(imgs.map((p) => uploadImage(p.file)));
+        const cover = urls[coverI] ?? urls[0];
+        const newOrdered = [cover, ...urls.filter((u) => u !== cover)];
+        const existing = finalEntityPhotos[entityKey] ?? [];
+        finalEntityPhotos[entityKey] = [...existing, ...newOrdered];
+      }
+    } catch { setEtapeFormError("Erreur upload photos."); return; }
+    const uploadedEntityPhotos = finalEntityPhotos;
+    const allEntityUrls = Object.values(finalEntityPhotos).flat();
+    const newEtape: CircuitEtape = {
+      id: crypto.randomUUID(),
+      jour: etapeJour,
+      destination: displayName,
+      address: etapeAddress,
+      lat: etapeLat,
+      lng: etapeLng,
+      categorie: etapeCategorie,
+      subtypes: etapeSubtypes,
+      titre: etapeTitre.trim(),
+      description_courte: etapeDescCourte.trim(),
+      description_longue: etapeDescLongue.trim(),
+      prix: etapePrix ? Number(etapePrix) : null,
+      photos: allEntityUrls,
+      fields: etapeSubtypeDetails,
+      unit_details: etapeSubtypeUnitDetails,
+      nb_unites: etapeSubtypeNbUnites,
+      form_config: etapeSubtypeFormConfig,
+      entity_photos: uploadedEntityPhotos,
+    };
+    setCircuitEtapes((prev) => [...prev.filter((e) => e.jour !== etapeJour), newEtape].sort((a, b) => a.jour - b.jour));
+    setEtapeFormOpen(false);
+    resetEtapeForm();
+  }
+
+  async function saveCircuit() {
+    if (!circuitTitle.trim()) { setCircuitFormError("Titre requis."); return; }
+    if (circuitEtapes.length === 0) { setCircuitFormError("Configurez au moins un jour."); return; }
+    const missingJours = Array.from({ length: circuitNbJours }, (_, i) => i + 1).filter((j) => !circuitEtapes.find((e) => e.jour === j));
+    if (missingJours.length > 0) { setCircuitFormError(`Jours non configurés : ${missingJours.join(", ")}.`); return; }
+    setCircuitSaving(true);
+    try {
+      let coverUrl = circuitCoverExisting;
+      if (circuitCoverImg) coverUrl = await uploadImage(circuitCoverImg.file);
+      if (editingCircuit) {
+        const updated: Circuit = { ...editingCircuit, title: circuitTitle, description: circuitDescription, nb_jours: circuitNbJours, cover_image: coverUrl, etapes: circuitEtapes };
+        setCircuits((prev) => prev.map((c) => c.id === updated.id ? updated : c));
+      } else {
+        const created: Circuit = { id: crypto.randomUUID(), title: circuitTitle, description: circuitDescription, nb_jours: circuitNbJours, cover_image: coverUrl, etapes: circuitEtapes, created_at: new Date().toISOString() };
+        setCircuits((prev) => [created, ...prev]);
+      }
+      if (circuitCoverImg) URL.revokeObjectURL(circuitCoverImg.preview);
+      setCircuitModalOpen(false);
+    } catch { setCircuitFormError("Erreur lors de la sauvegarde."); }
+    finally { setCircuitSaving(false); }
+  }
+
   async function handleNetUnfollow(userId: string) {
     try {
       await apiFetch(`/follows/${userId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
@@ -654,6 +859,10 @@ export default function ProviderProfilePage() {
     setSubtypeFormConfig({});
     setEntityImages((prev) => { Object.values(prev).flat().forEach((img) => URL.revokeObjectURL(img.preview)); return {}; });
     setEntityCoverIdx({});
+    setEntityExistingImages({});
+    setForm({ title: "", offer_type: "", description: "", price: "", duration: "", region: "", inclusions: "", meeting_point: "", min_group_size: "", max_group_size: "", min_age: "", cancellation_policy: "" });
+    setPublishMapLat(null); setPublishMapLng(null); setShowPublishMap(false);
+    setOfferEditMode(false); setOfferEditId(""); setPublishExistingImages([]);
   }
 
   async function handlePublish(e: React.SyntheticEvent<HTMLFormElement>) {
@@ -665,16 +874,12 @@ export default function ProviderProfilePage() {
       const combinedDetails: Record<string, any> = {};
 
       if (isHebergementOffer && offerSubtypes.length > 0) {
-        // Unités par sous-type
         combinedDetails.subtypes_units = Object.fromEntries(
           offerSubtypes.map((st) => [st, subtypeUnitDetails[st] ?? [{}]])
         );
-        // Disponibilité + tarification par sous-type
         if (Object.keys(subtypeFormConfig).length > 0) combinedDetails.subtypes_config = subtypeFormConfig;
-        // Prix par sous-type en mode variant
         if (Object.keys(subtypePrices).length > 0) combinedDetails.subtypes_pricing = subtypePrices;
       } else {
-        // Autres catégories : champs groupés
         Object.values(subtypeDetails).forEach((d) => Object.assign(combinedDetails, d));
       }
       if (availabilityMode === "weekly")   combinedDetails.available_weekdays = availableWeekdays;
@@ -683,97 +888,124 @@ export default function ProviderProfilePage() {
       if (availHeureDebut) combinedDetails.heure_debut = availHeureDebut;
       if (availHeureFin)   combinedDetails.heure_fin   = availHeureFin;
       if (availabilityMode === "on_demand") {
-        combinedDetails.delai_reponse    = availDelaiReponse;
-        combinedDetails.message_accueil  = availMessageAccueil;
+        combinedDetails.delai_reponse   = availDelaiReponse;
+        combinedDetails.message_accueil = availMessageAccueil;
+      }
+      if (form.description.trim()) combinedDetails.description_longue = form.description.trim();
+
+      const payload = {
+        activity_id:                 offerActivity?.id                         || undefined,
+        offer_subtypes:              offerSubtypes.length > 0 ? offerSubtypes  : undefined,
+        offer_subtype:               offerSubtypes[0]                          || undefined,
+        offer_mode:                  offerSubtypes.length > 1 ? offerMode      : "single",
+        availability_mode:           availabilityMode,
+        availability_start:          availabilityMode === "period" ? availabilityStart : undefined,
+        availability_end:            availabilityMode === "period" ? availabilityEnd   : undefined,
+        confirmation_mode:           offerConfirmMode,
+        confirmation_deadline_hours: ["24h","48h"].includes(offerConfirmMode) ? Number(offerDeadlineHours) : undefined,
+        deposit_percentage:          offerConfirmMode === "deposit" ? Number(offerDepositPct) : undefined,
+        details: Object.keys(combinedDetails).length > 0 ? combinedDetails : undefined,
+        title:               form.title.trim(),
+        offer_type:          form.offer_type || offerActivity?.category || undefined,
+        description:         offerDescCourte.trim() || undefined,
+        langue_offre:        offerLangue || undefined,
+        price:               form.price  ? Number(form.price)  : undefined,
+        duration:            form.duration.trim()      || undefined,
+        region:              form.region.trim()        || undefined,
+        inclusions:          form.inclusions.trim()    || undefined,
+        meeting_point:       form.meeting_point.trim() || undefined,
+        meeting_lat:         publishMapLat              ?? undefined,
+        meeting_lng:         publishMapLng              ?? undefined,
+        min_group_size:      form.min_group_size ? Number(form.min_group_size) : undefined,
+        max_group_size:      form.max_group_size ? Number(form.max_group_size) : undefined,
+        min_age:             form.min_age        ? Number(form.min_age)        : undefined,
+        cancellation_policy: cancellationPolicy !== "custom"
+          ? cancellationPolicy
+          : (cancellationDesc.trim() || undefined),
+      };
+
+      let finalOffer: Offer;
+
+      if (offerEditMode && offerEditId) {
+        // ── MODE ÉDITION : PATCH sur l'offre existante ──────────────────────
+        finalOffer = await apiFetch<Offer>(`/offers/${offerEditId}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        // ── MODE CRÉATION : POST nouvelle offre ─────────────────────────────
+        finalOffer = await apiFetch<Offer>("/offers", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ organization_id: org?.id || undefined, ...payload }),
+        });
       }
 
-      const created = await apiFetch<Offer>("/offers", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          organization_id:             org?.id                                   || undefined,
-          activity_id:                 offerActivity?.id                         || undefined,
-          offer_subtypes:              offerSubtypes.length > 0 ? offerSubtypes  : undefined,
-          offer_subtype:               offerSubtypes[0]                          || undefined,
-          offer_mode:                  offerSubtypes.length > 1 ? offerMode      : "single",
-          availability_mode:           availabilityMode,
-          availability_start:          availabilityMode === "period" ? availabilityStart : undefined,
-          availability_end:            availabilityMode === "period" ? availabilityEnd   : undefined,
-          confirmation_mode:           offerConfirmMode,
-          confirmation_deadline_hours: ["24h","48h"].includes(offerConfirmMode) ? Number(offerDeadlineHours) : undefined,
-          deposit_percentage:          offerConfirmMode === "deposit" ? Number(offerDepositPct) : undefined,
-          details: Object.keys(combinedDetails).length > 0 ? combinedDetails : undefined,
-          title:               form.title.trim(),
-          offer_type:          form.offer_type || offerActivity?.category  || undefined,
-          description:         offerDescCourte.trim() || form.description.trim() || undefined,
-          langue_offre:        offerLangue || undefined,
-          price:               form.price  ? Number(form.price)  : undefined,
-          subtypes_pricing:    Object.keys(subtypePrices).length > 0
-            ? Object.fromEntries(Object.entries(subtypePrices).map(([k, v]) => [k, Number(v)]))
-            : undefined,
-          prix_par_groupe:     prixGroupe  ? Number(prixGroupe)  : undefined,
-          nb_personnes_groupe: nbPersonnesGroupe ? Number(nbPersonnesGroupe) : undefined,
-          prix_enfant:         prixEnfant  ? Number(prixEnfant)  : undefined,
-          age_max_enfant:      ageMaxEnfant? Number(ageMaxEnfant): undefined,
-          supplement_privatisation: suppPrivatisation ? Number(suppPrivatisation) : undefined,
-          acompte_requis:      acompteRequis || undefined,
-          type_acompte:        acompteRequis ? typeAcompte   : undefined,
-          valeur_acompte:      acompteRequis ? Number(valeurAcompte) : undefined,
-          duration:            form.duration.trim()      || undefined,
-          region:              form.region.trim()        || undefined,
-          inclusions:          form.inclusions.trim()    || undefined,
-          meeting_point:       form.meeting_point.trim() || undefined,
-          meeting_lat:         publishMapLat              ?? undefined,
-          meeting_lng:         publishMapLng              ?? undefined,
-          min_group_size:      form.min_group_size ? Number(form.min_group_size) : undefined,
-          max_group_size:      form.max_group_size ? Number(form.max_group_size) : undefined,
-          min_age:             form.min_age        ? Number(form.min_age)        : undefined,
-          cancellation_policy: cancellationPolicy !== "custom"
-            ? cancellationPolicy
-            : (cancellationDesc.trim() || undefined),
-        }),
-      });
-
-      let finalOffer: Offer = created;
-
+      // ── Images ─────────────────────────────────────────────────────────────
       try {
-        let mainImages: string[] = [];
+        // On commence avec les images existantes déjà uploadées (mode édition)
+        let mainImages: string[] = [...publishExistingImages];
         const detailsPhotos: Record<string, string[]> = {};
 
-        if (offerSubtypes.length === 0 && publishImages.length > 0) {
-          // Pas de sous-type → photos générales
+        // Photos générales (offres sans sous-types)
+        if (publishImages.length > 0) {
           const urls = await Promise.all(publishImages.map((img) => uploadImage(img.file)));
           const cover = urls[publishCoverIdx] ?? urls[0];
-          mainImages = [cover, ...urls.filter((u) => u !== cover)];
-        } else {
-          // Photos par sous-type ou par unité
-          for (const [key, imgs] of Object.entries(entityImages)) {
-            if (!imgs.length) continue;
-            const urls = await Promise.all(imgs.map((img) => uploadImage(img.file)));
+          const newOrdered = [cover, ...urls.filter((u) => u !== cover)];
+          mainImages = [...newOrdered, ...mainImages.filter((u) => !newOrdered.includes(u))];
+        }
+        // Photos par entité : combiner existantes + nouvelles, dans details.photos uniquement
+        const allEntityKeys = new Set([...Object.keys(entityExistingImages), ...Object.keys(entityImages)]);
+        for (const key of allEntityKeys) {
+          const existingUrls = entityExistingImages[key] ?? [];
+          const newImgs = entityImages[key] ?? [];
+          let newUploaded: string[] = [];
+          if (newImgs.length > 0) {
+            const urls = await Promise.all(newImgs.map((img) => uploadImage(img.file)));
             const coverI = entityCoverIdx[key] ?? 0;
             const cover = urls[coverI] ?? urls[0];
-            const ordered = [cover, ...urls.filter((u) => u !== cover)];
-            detailsPhotos[key] = ordered;
-            // Les photos du premier sous-type / unité 0 deviennent les images principales
-            if (!mainImages.length) mainImages = ordered;
+            newUploaded = [cover, ...urls.filter((u) => u !== cover)];
           }
+          const combined = [...existingUrls, ...newUploaded];
+          if (combined.length > 0) detailsPhotos[key] = combined;
         }
 
-        if (mainImages.length > 0) {
-          const patchBody: Record<string, any> = { images: mainImages };
-          if (Object.keys(detailsPhotos).length > 0) patchBody.details_photos = detailsPhotos;
-          await apiFetch<Offer>(`/offers/${created.id}`, {
+        const hasPhotos = mainImages.length > 0 || Object.keys(detailsPhotos).length > 0;
+        if (hasPhotos) {
+          const patchBody: Record<string, any> = {};
+          if (mainImages.length > 0) patchBody.images = mainImages;
+          if (Object.keys(detailsPhotos).length > 0) {
+            patchBody.details = { ...combinedDetails, photos: detailsPhotos };
+          }
+          const patchedOffer = await apiFetch<Offer>(`/offers/${finalOffer.id}`, {
             method: "PATCH",
             headers: { Authorization: `Bearer ${token}` },
             body: JSON.stringify(patchBody),
           });
-          finalOffer = { ...finalOffer, images: mainImages, cover_image: mainImages[0] };
+          const validImgs = patchedOffer.images?.filter((u) => u.startsWith("http")) ?? [];
+          finalOffer = { ...patchedOffer, cover_image: patchedOffer.cover_image ?? validImgs[0] ?? null };
         }
       } catch { /* offer saved without images */ }
 
-      setOffers((prev) => [finalOffer, ...prev]);
+      // Toujours dériver cover_image depuis images[0] si absent
+      const validImgsFinal = finalOffer.images?.filter((u) => u.startsWith("http")) ?? [];
+      finalOffer = { ...finalOffer, cover_image: finalOffer.cover_image ?? validImgsFinal[0] ?? null };
+
+      const wasEditMode = offerEditMode;
+      const savedId     = finalOffer.id;
+
+      if (wasEditMode) {
+        setOffers((prev) => prev.map((o) => o.id === savedId ? finalOffer : o));
+      } else {
+        setOffers((prev) => [finalOffer, ...prev]);
+      }
+
       closeModal();
-      setOqOfferId(finalOffer.id); setOqStep(0); setOqAnswers({}); setOqOpen(true);
+
+      if (!wasEditMode) {
+        setOqOfferId(savedId); setOqStep(0); setOqAnswers({}); setOqOpen(true);
+      }
     } catch (err: any) {
       setPublishError(err.message || "Erreur lors de la publication.");
     } finally {
@@ -813,6 +1045,159 @@ export default function ProviderProfilePage() {
     setViewOffer(null);
     setEditTitleError(""); setEditError("");
     setShowEditMap(false); setEditMapLat(null); setEditMapLng(null);
+  }
+
+  // Ouvre le modal de publication pré-rempli avec les données d'une offre existante
+  function openPublishModalForEdit(offer: Offer) {
+    closeEditModal();
+
+    const details = (offer.details ?? {}) as Record<string, any>;
+
+    // 1 – Champs de base du formulaire
+    setOfferDescCourte(offer.description ?? "");
+    setForm({
+      title:               offer.title,
+      offer_type:          offer.offer_type          ?? "",
+      description:         (details.description_longue as string) ?? "",
+      price:               offer.price   !== null && offer.price   !== undefined ? String(offer.price)   : "",
+      duration:            offer.duration            ?? "",
+      region:              offer.region              ?? "",
+      inclusions:          offer.inclusions          ?? "",
+      meeting_point:       offer.meeting_point       ?? "",
+      min_group_size:      offer.min_group_size !== null && offer.min_group_size !== undefined ? String(offer.min_group_size) : "",
+      max_group_size:      offer.max_group_size !== null && offer.max_group_size !== undefined ? String(offer.max_group_size) : "",
+      min_age:             offer.min_age       !== null && offer.min_age       !== undefined ? String(offer.min_age)       : "",
+      cancellation_policy: offer.cancellation_policy ?? "",
+    });
+
+    // 2 – Activité liée : on cherche dans orgActivities par activity_id
+    if (offer.activity_id) {
+      const found = orgActivities.find((a) => a.id === offer.activity_id) ?? null;
+      if (found) {
+        setOfferActivity(found);
+      } else if (offer.offer_type) {
+        // Activité non trouvée → activité synthétique minimale pour que les checks de catégorie fonctionnent
+        setOfferActivity({
+          id: "", provider_id: "", organization_id: "",
+          level: "primary", category: offer.offer_type,
+          subtypes: null, years_experience: null,
+          fields: {}, photos: {}, certifications: [],
+        });
+      }
+    } else if (offer.offer_type) {
+      setOfferActivity({
+        id: "", provider_id: "", organization_id: "",
+        level: "primary", category: offer.offer_type,
+        subtypes: null, years_experience: null,
+        fields: {}, photos: {}, certifications: [],
+      });
+    }
+
+    // 3 – Sous-types & mode
+    const subtypes = offer.offer_subtypes ?? (offer.offer_subtype ? [offer.offer_subtype] : []);
+    setOfferSubtypes(subtypes);
+    setOfferMode((offer.offer_mode ?? "single") as "single" | "variant" | "package");
+
+    // 4 – Données par unité (hébergement)
+    if (details.subtypes_units) {
+      const unitsData = details.subtypes_units as Record<string, Record<string, any>[]>;
+      setSubtypeUnitDetails(unitsData);
+      setSubtypeNbUnites(
+        Object.fromEntries(Object.entries(unitsData).map(([k, v]) => [k, Array.isArray(v) ? v.length : 1]))
+      );
+    }
+
+    // 5 – Config par sous-type (disponibilité + tarification hébergement)
+    if (details.subtypes_config) {
+      setSubtypeFormConfig(details.subtypes_config as Record<string, Record<string, any>>);
+    }
+
+    // 6 – Tarifs par sous-type
+    if (details.subtypes_pricing) {
+      setSubtypePrices(
+        Object.fromEntries(
+          Object.entries(details.subtypes_pricing as Record<string, number>).map(([k, v]) => [k, String(v)])
+        )
+      );
+    }
+
+    // 7 – Champs de sous-type (hors hébergement)
+    if (!details.subtypes_units && subtypes.length > 0) {
+      const stDetails: Record<string, Record<string, any>> = {};
+      const meta = ["specific_dates","available_weekdays","available_saisons","heure_debut","heure_fin","delai_reponse","message_accueil","photos","subtypes_pricing"];
+      const fieldData: Record<string, any> = Object.fromEntries(
+        Object.entries(details).filter(([k]) => !meta.includes(k))
+      );
+      subtypes.forEach((st) => { stDetails[st] = fieldData; });
+      setSubtypeDetails(stDetails);
+    }
+
+    // 8 – Disponibilité
+    setAvailabilityMode(offer.availability_mode ?? "specific");
+    setAvailabilityStart(offer.availability_start ?? "");
+    setAvailabilityEnd(offer.availability_end ?? "");
+    setAvailableWeekdays((details.available_weekdays as number[]) ?? []);
+    setSpecificDates((details.specific_dates as string[]) ?? []);
+    setAvailSaisons((details.available_saisons as string[]) ?? []);
+    setAvailHeureDebut((details.heure_debut as string) ?? "");
+    setAvailHeureFin((details.heure_fin as string) ?? "");
+    setAvailDelaiReponse((details.delai_reponse as string) ?? "24h");
+    setAvailMessageAccueil((details.message_accueil as string) ?? "");
+
+    // 9 – Mode de confirmation
+    setOfferConfirmMode(offer.confirmation_mode ?? "24h");
+    setOfferDeadlineHours(offer.confirmation_deadline_hours != null ? String(offer.confirmation_deadline_hours) : "24");
+    setOfferDepositPct(offer.deposit_percentage != null ? String(offer.deposit_percentage) : "30");
+
+    // 11 – Tarification extras (stockés dans details)
+    setPrixGroupe(details.prix_par_groupe        ? String(details.prix_par_groupe)        : "");
+    setNbPersonnesGroupe(details.nb_personnes_groupe ? String(details.nb_personnes_groupe) : "");
+    setPrixEnfant(details.prix_enfant            ? String(details.prix_enfant)            : "");
+    setAgeMaxEnfant(details.age_max_enfant       ? String(details.age_max_enfant)         : "");
+    setSuppPrivatisation(details.supplement_privatisation ? String(details.supplement_privatisation) : "");
+    setAcompteRequis(!!(details.acompte_requis));
+    setTypeAcompte((details.type_acompte as string) ?? "pourcentage");
+    setValeurAcompte(details.valeur_acompte      ? String(details.valeur_acompte)         : "");
+
+    // 12 – Politique d'annulation
+    const policy = offer.cancellation_policy ?? "moderate";
+    if (["flexible", "moderate", "strict"].includes(policy)) {
+      setCancellationPolicy(policy);
+      setCancellationDesc("");
+    } else {
+      setCancellationPolicy("custom");
+      setCancellationDesc(policy);
+    }
+
+    // 13 – Carte
+    setPublishMapLat(offer.meeting_lat ?? null);
+    setPublishMapLng(offer.meeting_lng ?? null);
+    setShowPublishMap(!!(offer.meeting_lat && offer.meeting_lng));
+
+    // 14 – Images existantes (déjà uploadées sur Cloudinary)
+    const detailsPhotosExisting = (details.photos ?? {}) as Record<string, string[]>;
+    // Normaliser les clés hébergement : ancien format 'suite' → 'suite_unit_0'
+    const isHeberg = !!(details.subtypes_units);
+    const normalizedEntityPhotos: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(detailsPhotosExisting)) {
+      if (isHeberg && !k.includes('_unit_')) {
+        normalizedEntityPhotos[`${k}_unit_0`] = v;
+      } else {
+        normalizedEntityPhotos[k] = v;
+      }
+    }
+    const entityPhotoSet = new Set<string>(Object.values(normalizedEntityPhotos).flat());
+    // Cover = images de l'offre qui ne sont pas des photos d'entité
+    const coverImgs = (offer.images ?? []).filter((url) => url.startsWith("http") && !entityPhotoSet.has(url));
+    setPublishExistingImages(coverImgs);
+    setEntityExistingImages(normalizedEntityPhotos);
+    setPublishImages([]);
+    setPublishCoverIdx(0);
+
+    // 15 – Activer le mode édition et ouvrir le modal
+    setOfferEditMode(true);
+    setOfferEditId(offer.id);
+    setModalOpen(true);
   }
 
   async function handleDeleteOffer() {
@@ -855,6 +1240,7 @@ export default function ProviderProfilePage() {
           min_age:             editForm.min_age        ? Number(editForm.min_age)        : undefined,
           cancellation_policy: editForm.cancellation_policy.trim() || undefined,
           status:              editForm.status,
+          details:             Object.keys(editDetails).length > 0 ? editDetails : undefined,
         }),
       });
       const finalImageSrcs = (await Promise.all(
@@ -879,6 +1265,7 @@ export default function ProviderProfilePage() {
         ...updated,
         images:      finalImageSrcs.length ? finalImageSrcs : null,
         cover_image: newCover,
+        details:     Object.keys(editDetails).length > 0 ? editDetails : updated.details,
       };
       setOffers((prev) => prev.map((o) => (o.id === editOfferId ? finalUpdated : o)));
       setViewOffer(finalUpdated);
@@ -911,49 +1298,46 @@ export default function ProviderProfilePage() {
 
   // ── Activity CRUD handlers ────────────────────────────────────────────────
 
-  function openActModal() {
-    setActForm({ title: "", category: "", level: "primary", description: "", region: "", address: "", website: "", phone: "" });
+  function openActModal(level: "primary" | "secondary" = "secondary") {
+    setActSelCategory(""); setActSelSubtypes([]); setActFieldValues({}); setActYearsExp("");
     setActFormError(""); setActImages([]); setActCoverIdx(0);
     setActModalOpen(true);
   }
 
   async function handleCreateActivity(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!actForm.title.trim()) { setActFormError("Le titre est obligatoire."); return; }
-    if (!actForm.category)     { setActFormError("Choisissez un type d'activité."); return; }
+    if (!actSelCategory) { setActFormError("Choisissez un type d'activité."); return; }
     setActFormError(""); setActPublishing(true);
     try {
-      const created = await apiFetch<Activity>("/provider-activities", {
+      const created = await apiFetch<OrgActivity>("/provider-activities", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          title:       actForm.title.trim(),
-          category:    actForm.category,
-          level:       actForm.level,
-          description: actForm.description.trim() || undefined,
-          region:      actForm.region.trim()       || undefined,
-          address:     actForm.address.trim()      || undefined,
-          website:     actForm.website.trim()      || undefined,
-          phone:       actForm.phone.trim()        || undefined,
+          organization_id:  org?.id,
+          level:            "secondary",
+          category:         actSelCategory,
+          subtypes:         actSelSubtypes.length > 0 ? actSelSubtypes : undefined,
+          years_experience: actYearsExp ? Number(actYearsExp) : undefined,
+          fields:           Object.keys(actFieldValues).length > 0 ? actFieldValues : undefined,
         }),
       });
-      let finalActivity: Activity = created;
+      let finalActivity: OrgActivity = created;
       if (actImages.length > 0) {
         try {
           const urls = await Promise.all(actImages.map((img) => uploadImage(img.file)));
-          const cover = urls[actCoverIdx] ?? urls[0];
-          await apiFetch<Activity>(`/provider-activities/${created.id}`, {
+          const coverUrl = urls[actCoverIdx] ?? urls[0];
+          const subtypeKey = actSelSubtypes[0] ?? actSelCategory;
+          const patchedAct = await apiFetch<OrgActivity>(`/provider-activities/${created.id}`, {
             method: "PATCH",
             headers: { Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ photos: urls, photo: cover }),
+            body: JSON.stringify({ photos: { [subtypeKey]: urls }, photo: coverUrl }),
           });
-          finalActivity = { ...finalActivity, photos: urls, photo: cover };
+          finalActivity = patchedAct;
         } catch {}
       }
-      setActivities((prev) => [finalActivity, ...prev]);
+      setOrgActivities((prev) => [finalActivity, ...prev]);
       setActImages((prev) => { prev.forEach((i) => URL.revokeObjectURL(i.preview)); return []; });
       setActModalOpen(false);
-      setAqActId(finalActivity.id); setAqStep(0); setAqAnswers({}); setAqOpen(true);
     } catch (err: any) {
       setActFormError(err.message || "Erreur lors de la création.");
     } finally {
@@ -1417,94 +1801,192 @@ export default function ProviderProfilePage() {
           <button onClick={() => setActModalOpen(false)} className="absolute top-5 right-5 z-10 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors"><X size={16} /></button>
           <div className="px-8 pt-8 pb-5 border-b border-slate-100 shrink-0">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center"><span className="material-symbols-outlined text-primary text-xl">category</span></div>
+              <div className="w-10 h-10 rounded-2xl bg-orange-50 flex items-center justify-center"><span className="material-symbols-outlined text-orange-500 text-xl">add_circle</span></div>
               <div>
-                <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">Nouvelle activité</h3>
-                <p className="text-slate-400 text-xs mt-0.5">Présentez votre activité éco-touristique</p>
+                <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">Nouvelle activité secondaire</h3>
+                <p className="text-slate-400 text-xs mt-0.5">Activité complémentaire à votre offre principale</p>
               </div>
             </div>
           </div>
           <div className="overflow-y-auto flex-1">
-            <form id="act-create-form" onSubmit={handleCreateActivity} className="px-8 py-6 space-y-5">
+            <form id="act-create-form" onSubmit={handleCreateActivity} className="px-8 py-6 space-y-6">
+
+              {/* ── Catégorie ── */}
               <div>
-                <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Titre *</label>
-                <input type="text" placeholder="Ex : Randonnée en forêt de Mogods"
-                  value={actForm.title} onChange={(e) => { setActForm((f) => ({ ...f, title: e.target.value })); setActFormError(""); }}
-                  className={`w-full px-4 py-3 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${actFormError && !actForm.title ? "bg-red-50 border border-red-300 focus:ring-red-200" : "bg-slate-50 border border-slate-200 focus:ring-primary focus:bg-white"}`}
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Type d'activité *</label>
+                <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Catégorie *</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {PROVIDER_ACTIVITY_TYPES.map((t) => {
-                    const active = actForm.category === t.value;
+                  {PROVIDER_SCHEMA.map((cat) => {
+                    const active = actSelCategory === cat.value;
                     return (
-                      <button key={t.value} type="button"
-                        onClick={() => { setActForm((f) => ({ ...f, category: active ? "" : t.value })); setActFormError(""); }}
+                      <button key={cat.value} type="button"
+                        onClick={() => { setActSelCategory(active ? "" : cat.value); setActSelSubtypes([]); setActFieldValues({}); setActFormError(""); }}
                         className={`flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl border-2 text-center transition-all cursor-pointer ${active ? "bg-primary/10 border-primary text-slate-900 shadow-sm" : "bg-slate-50 border-slate-200 text-slate-500 hover:border-primary/40 hover:bg-white"}`}>
-                        <span className={`material-symbols-outlined text-xl ${active ? "text-primary" : "text-slate-400"}`}>{t.icon}</span>
-                        <span className="text-[10px] font-extrabold leading-tight">{t.label}</span>
+                        <span className={`material-symbols-outlined text-xl ${active ? "text-primary" : "text-slate-400"}`}>{cat.icon}</span>
+                        <span className="text-[10px] font-extrabold leading-tight">{cat.label}</span>
                       </button>
                     );
                   })}
                 </div>
               </div>
-              <div>
-                <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Niveau</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {([["primary", "Principale", "Activité phare de votre offre"], ["secondary", "Secondaire", "Activité complémentaire"]] as const).map(([val, lbl, desc]) => (
-                    <button key={val} type="button" onClick={() => setActForm((f) => ({ ...f, level: val }))}
-                      className={`py-3 px-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${actForm.level === val ? "bg-primary/10 border-primary" : "bg-slate-50 border-slate-200 hover:border-primary/40"}`}>
-                      <p className={`text-xs font-extrabold ${actForm.level === val ? "text-primary" : "text-slate-700"}`}>{lbl}</p>
-                      <p className="text-[10px] text-slate-400 font-medium mt-0.5">{desc}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Description</label>
-                <textarea rows={4} placeholder="Décrivez votre activité éco-touristique…"
-                  value={actForm.description} onChange={(e) => setActForm((f) => ({ ...f, description: e.target.value }))}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Région</label>
-                  <input type="text" placeholder="Sousse, Djerba…"
-                    value={actForm.region} onChange={(e) => setActForm((f) => ({ ...f, region: e.target.value }))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white placeholder:text-slate-400"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Téléphone</label>
-                  <input type="tel" placeholder="+216 12 345 678"
-                    value={actForm.phone} onChange={(e) => setActForm((f) => ({ ...f, phone: e.target.value }))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white placeholder:text-slate-400"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Photos</label>
-                <label htmlFor="act-create-images" className="flex flex-col items-center justify-center gap-2 w-full h-24 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
-                  <span className="material-symbols-outlined text-slate-300 text-3xl">add_photo_alternate</span>
-                  <p className="text-xs font-semibold text-slate-400">Ajouter des photos</p>
-                  <input id="act-create-images" type="file" accept="image/*" multiple className="hidden"
-                    onChange={(e) => { const files = Array.from(e.target.files ?? []); setActImages((prev) => [...prev, ...files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))]); e.target.value = ""; }}
-                  />
-                </label>
-                {actImages.length > 0 && (
-                  <div className="mt-3 grid grid-cols-4 gap-2">
-                    {actImages.map((img, i) => (
-                      <div key={i} onClick={() => setActCoverIdx(i)} className={`relative group aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${i === actCoverIdx ? "border-primary shadow-md" : "border-transparent hover:border-slate-300"}`}>
-                        <img src={img.preview} alt="" className="w-full h-full object-cover" />
-                        {i === actCoverIdx && <div className="absolute top-1 left-1 bg-primary text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Cover</div>}
-                        <button type="button" onClick={(e) => { e.stopPropagation(); URL.revokeObjectURL(img.preview); setActImages((prev) => prev.filter((_, idx) => idx !== i)); setActCoverIdx((c) => c >= i && c > 0 ? c - 1 : c); }} className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
-                      </div>
-                    ))}
+
+              {/* ── Sous-types ── */}
+              {actSelCategory && (() => {
+                const cat = PROVIDER_SCHEMA.find((c) => c.value === actSelCategory);
+                if (!cat || !cat.subtypes.length) return null;
+                return (
+                  <div>
+                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Sous-types</label>
+                    <div className="flex flex-wrap gap-2">
+                      {cat.subtypes.map((st) => {
+                        const sel = actSelSubtypes.includes(st.value);
+                        return (
+                          <button key={st.value} type="button"
+                            onClick={() => {
+                              setActSelSubtypes((prev) => sel ? prev.filter((v) => v !== st.value) : [...prev, st.value]);
+                              if (sel) setActFieldValues((prev) => { const n = { ...prev }; delete n[st.value]; return n; });
+                            }}
+                            className={`px-3 py-1.5 rounded-xl border-2 text-[11px] font-extrabold transition-all cursor-pointer ${sel ? "bg-primary/10 border-primary text-primary" : "bg-slate-50 border-slate-200 text-slate-600 hover:border-primary/40"}`}>
+                            {st.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                )}
-              </div>
+                );
+              })()}
+
+              {/* ── Champs par sous-type (SUBTYPE_FIELDS) ── */}
+              {actSelSubtypes.map((stVal) => {
+                const config = SUBTYPE_FIELDS[stVal];
+                if (!config) return null;
+                return (
+                  <div key={stVal} className="rounded-2xl border border-slate-100 overflow-hidden">
+                    <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-100">
+                      <p className="text-[11px] font-black tracking-widest text-slate-500 uppercase">{config.label}</p>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      {config.sections.map((sec, si) => {
+                        const visibleFields = sec.fields.filter((f) => {
+                          if (!f.dependsOn) return true;
+                          return actFieldValues[stVal]?.[f.dependsOn.field] === f.dependsOn.value;
+                        });
+                        if (!visibleFields.length) return null;
+                        return (
+                          <div key={si}>
+                            <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">{sec.section}</p>
+                            <div className="space-y-3">
+                              {visibleFields.map((field) => {
+                                const val = actFieldValues[stVal]?.[field.key];
+                                const setVal = (v: any) => setActFieldValues((prev) => ({ ...prev, [stVal]: { ...(prev[stVal] ?? {}), [field.key]: v } }));
+                                if (field.type === "boolean") return (
+                                  <div key={field.key} className="flex items-center justify-between">
+                                    <span className="text-sm font-semibold text-slate-700">{field.label}</span>
+                                    <button type="button" onClick={() => setVal(!val)}
+                                      className={`w-10 h-5 rounded-full transition-colors ${val ? "bg-primary" : "bg-slate-200"}`}>
+                                      <div className={`w-4 h-4 rounded-full bg-white mx-auto transition-transform ${val ? "translate-x-2.5" : "-translate-x-2.5"}`} />
+                                    </button>
+                                  </div>
+                                );
+                                if (field.type === "multiselect") return (
+                                  <div key={field.key}>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{field.label}</label>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {(field.options ?? []).map((opt) => {
+                                        const chosen = Array.isArray(val) && val.includes(opt);
+                                        return (
+                                          <button key={opt} type="button"
+                                            onClick={() => setVal(chosen ? (val as string[]).filter((v: string) => v !== opt) : [...(val as string[] ?? []), opt])}
+                                            className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold border transition-all ${chosen ? "bg-primary/10 border-primary text-primary" : "bg-slate-50 border-slate-200 text-slate-600 hover:border-primary/30"}`}>
+                                            {opt}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                                if (field.type === "select") return (
+                                  <div key={field.key}>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{field.label}</label>
+                                    <select value={val ?? ""} onChange={(e) => setVal(e.target.value)}
+                                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                                      <option value="">— Sélectionner —</option>
+                                      {(field.options ?? []).map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                                    </select>
+                                  </div>
+                                );
+                                if (field.type === "number") return (
+                                  <div key={field.key}>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{field.label}</label>
+                                    <input type="number" min="0" value={val ?? ""} onChange={(e) => setVal(e.target.value ? Number(e.target.value) : undefined)}
+                                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                                  </div>
+                                );
+                                if (field.type === "textarea") return (
+                                  <div key={field.key}>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{field.label}</label>
+                                    <textarea rows={3} value={val ?? ""} onChange={(e) => setVal(e.target.value)}
+                                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
+                                  </div>
+                                );
+                                return (
+                                  <div key={field.key}>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{field.label}</label>
+                                    <input type={field.type === "url" ? "url" : "text"} value={val ?? ""} onChange={(e) => setVal(e.target.value)}
+                                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* ── Années d'expérience ── */}
+              {actSelCategory && (
+                <div>
+                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Années d'expérience</label>
+                  <input type="number" min="0" max="50" placeholder="Ex : 3"
+                    value={actYearsExp} onChange={(e) => setActYearsExp(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                </div>
+              )}
+
+              {/* ── Photos ── */}
+              {actSelCategory && (
+                <div>
+                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Photos</label>
+                  {actImages.length === 0 ? (
+                    <label htmlFor="act-create-images" className="flex flex-col items-center justify-center gap-2 w-full h-24 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
+                      <span className="material-symbols-outlined text-slate-300 text-3xl">add_photo_alternate</span>
+                      <p className="text-xs font-semibold text-slate-400">Ajouter des photos</p>
+                      <input id="act-create-images" type="file" accept="image/*" multiple className="hidden"
+                        onChange={(e) => { const files = Array.from(e.target.files ?? []); setActImages((prev) => [...prev, ...files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))]); e.target.value = ""; }}
+                      />
+                    </label>
+                  ) : (
+                    <div className="grid grid-cols-4 gap-2">
+                      {actImages.map((img, i) => (
+                        <div key={i} onClick={() => setActCoverIdx(i)} className={`relative group aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${i === actCoverIdx ? "border-primary shadow-md" : "border-transparent hover:border-slate-300"}`}>
+                          <img src={img.preview} alt="" className="w-full h-full object-cover" />
+                          {i === actCoverIdx && <div className="absolute top-1 left-1 bg-primary text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Cover</div>}
+                          <button type="button" onClick={(ev) => { ev.stopPropagation(); URL.revokeObjectURL(img.preview); setActImages((prev) => prev.filter((_, idx) => idx !== i)); setActCoverIdx((c) => c >= i && c > 0 ? c - 1 : c); }} className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
+                        </div>
+                      ))}
+                      <label htmlFor="act-create-images" className="flex items-center justify-center aspect-square border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-primary/50 bg-slate-50/70">
+                        <span className="material-symbols-outlined text-slate-300 text-2xl">add</span>
+                        <input id="act-create-images" type="file" accept="image/*" multiple className="hidden"
+                          onChange={(e) => { const files = Array.from(e.target.files ?? []); setActImages((prev) => [...prev, ...files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))]); e.target.value = ""; }}
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {actFormError && (
                 <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
                   <span className="material-symbols-outlined text-red-500 text-base">error</span>
@@ -1515,8 +1997,787 @@ export default function ProviderProfilePage() {
           </div>
           <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/80 flex items-center justify-end gap-3 shrink-0">
             <button type="button" onClick={() => setActModalOpen(false)} className="px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer">Annuler</button>
-            <button type="submit" form="act-create-form" disabled={actPublishing} className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs shadow-sm transition-all active:scale-95 disabled:opacity-60 cursor-pointer">
-              {actPublishing ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Création…</> : <><Send size={14} />Créer l'activité</>}
+            <button type="submit" form="act-create-form" disabled={actPublishing} className="flex items-center gap-2 px-6 py-2.5 bg-orange-500 hover:bg-orange-400 text-white font-extrabold rounded-2xl text-xs shadow-sm transition-all active:scale-95 disabled:opacity-60 cursor-pointer">
+              {actPublishing ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Création…</> : <><Send size={14} />Ajouter l'activité</>}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ══ CIRCUIT MODAL ════════════════════════════════════════════════════ */}
+    {circuitModalOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+
+          {/* Header */}
+          <div className="px-8 pt-7 pb-5 border-b border-slate-100 shrink-0 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <Route size={20} className="text-primary" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">{editingCircuit ? "Modifier le circuit" : "Nouveau circuit"}</h3>
+              <p className="text-slate-400 text-xs mt-0.5">Itinéraire multi-destinations avec activités, hébergements et plus</p>
+            </div>
+            <button onClick={() => setCircuitModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer">
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="overflow-y-auto flex-1 px-8 py-6 space-y-7">
+
+            {/* ── Infos générales ── */}
+            <div className="space-y-4">
+              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Informations générales</p>
+              <div>
+                <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Titre du circuit *</label>
+                <input type="text" placeholder="Ex : Tour du Nord Tunisien — 5 jours"
+                  value={circuitTitle} onChange={(e) => { setCircuitTitle(e.target.value); setCircuitFormError(""); }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Nombre de jours</label>
+                  <input type="number" min="1" max="30"
+                    value={circuitNbJours} onChange={(e) => {
+                      const n = Math.max(1, Number(e.target.value));
+                      if (n < circuitNbJours) {
+                        setCircuitEtapes((prev) => prev.filter((ep) => ep.jour <= n));
+                        if (etapeFormOpen && etapeJour > n) { setEtapeFormOpen(false); resetEtapeForm(); }
+                      }
+                      setCircuitNbJours(n);
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Photo de couverture</label>
+                  <label className="flex items-center gap-2 cursor-pointer w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 hover:border-primary/50 transition-colors">
+                    {circuitCoverImg
+                      ? <img src={circuitCoverImg.preview} alt="" className="w-8 h-8 rounded-lg object-cover" />
+                      : circuitCoverExisting
+                        ? <img src={circuitCoverExisting} alt="" className="w-8 h-8 rounded-lg object-cover" />
+                        : <span className="material-symbols-outlined text-slate-300 text-xl">add_photo_alternate</span>}
+                    <span className="text-xs font-semibold text-slate-400">
+                      {circuitCoverImg || circuitCoverExisting ? "Changer" : "Choisir"}
+                    </span>
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                      const f = e.target.files?.[0]; if (!f) return;
+                      if (circuitCoverImg) URL.revokeObjectURL(circuitCoverImg.preview);
+                      setCircuitCoverImg({ file: f, preview: URL.createObjectURL(f) });
+                      e.target.value = "";
+                    }} />
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Description</label>
+                <textarea rows={3} placeholder="Décrivez le circuit, les points forts…"
+                  value={circuitDescription} onChange={(e) => setCircuitDescription(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none placeholder:text-slate-400" />
+              </div>
+            </div>
+
+            {/* ── Étapes — un slot par jour ── */}
+            <div className="space-y-4">
+              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
+                Étapes ({circuitEtapes.length}/{circuitNbJours} jours configurés)
+              </p>
+
+              {Array.from({ length: circuitNbJours }, (_, i) => {
+                const jour = i + 1;
+                const etape = circuitEtapes.find((e) => e.jour === jour);
+                const isFormOpenForThisJour = etapeFormOpen && etapeJour === jour;
+                const cat = etape ? PROVIDER_SCHEMA.find((c) => c.value === etape.categorie) : null;
+                const stLabels = etape ? etape.subtypes.map((sv) => cat?.subtypes.find((s) => s.value === sv)?.label ?? sv) : [];
+
+                return (
+                  <div key={jour} className="space-y-2">
+                    {/* Jour header */}
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-full font-black text-xs flex items-center justify-center shrink-0 ${etape ? "bg-primary text-white" : "bg-slate-100 text-slate-400"}`}>{jour}</div>
+                      <p className="text-xs font-extrabold text-slate-600">Jour {jour}</p>
+                      {etape && !isFormOpenForThisJour && (
+                        <div className="flex gap-1 ml-auto">
+                          <button type="button" onClick={() => {
+                            resetEtapeForm();
+                            setEtapeJour(jour);
+                            setEtapeDestination(etape.destination);
+                            setEtapeAddress(etape.address);
+                            setEtapeLat(etape.lat);
+                            setEtapeLng(etape.lng);
+                            setEtapeCategorie(etape.categorie);
+                            setEtapeSubtypes(etape.subtypes);
+                            setEtapeTitre(etape.titre);
+                            setEtapeDescCourte(etape.description_courte);
+                            setEtapeDescLongue(etape.description_longue);
+                            setEtapePrix(etape.prix?.toString() ?? '');
+                            setEtapeSubtypeDetails(etape.fields ?? {});
+                            setEtapeSubtypeUnitDetails(etape.unit_details ?? {});
+                            setEtapeSubtypeNbUnites(etape.nb_unites ?? {});
+                            setEtapeSubtypeFormConfig(etape.form_config ?? {});
+                            setEtapeEntityExistingImages(etape.entity_photos ?? {});
+                            setEtapeFormOpen(true);
+                            setEtapeFormError('');
+                          }} className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-primary flex items-center justify-center transition-colors cursor-pointer">
+                            <Edit3 size={10} />
+                          </button>
+                          <button type="button" onClick={() => setCircuitEtapes((prev) => prev.filter((e) => e.jour !== jour))}
+                            className="w-6 h-6 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 flex items-center justify-center transition-colors cursor-pointer">
+                            <X size={10} />
+                          </button>
+                        </div>
+                      )}
+                      {isFormOpenForThisJour && (
+                        <button type="button" onClick={() => { setEtapeFormOpen(false); resetEtapeForm(); }}
+                          className="ml-auto text-[10px] font-bold text-slate-400 hover:text-slate-600 cursor-pointer">Annuler</button>
+                      )}
+                    </div>
+
+                    {/* Etape configurée */}
+                    {etape && !isFormOpenForThisJour && (
+                      <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100 ml-9">
+                        {etape.photos[0] && <img src={etape.photos[0]} alt="" className="w-10 h-10 rounded-xl object-cover shrink-0" />}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-extrabold text-slate-800 truncate">{etape.titre || etape.destination}</p>
+                          <p className="text-[10px] text-slate-400 font-semibold truncate">{etape.destination} · {cat?.label}{stLabels.length > 0 && ` · ${stLabels.join(", ")}`}</p>
+                          {etape.prix != null && <p className="text-[10px] font-black text-primary mt-0.5">{etape.prix} TND</p>}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Slot non configuré */}
+                    {!etape && !isFormOpenForThisJour && (
+                      <div className="ml-9 flex items-center justify-between px-4 py-3 border-2 border-dashed border-slate-200 rounded-2xl">
+                        <p className="text-xs text-slate-400 font-semibold">Non configuré</p>
+                        <button type="button"
+                          onClick={() => { resetEtapeForm(); setEtapeJour(jour); setEtapeFormOpen(true); setEtapeFormError(''); }}
+                          className="text-[11px] font-extrabold text-primary hover:text-primary/80 cursor-pointer">
+                          Configurer →
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Formulaire étape pour ce jour */}
+                    {isFormOpenForThisJour && (
+                      <div className="ml-9 border-2 border-primary/20 rounded-2xl p-5 bg-primary/5 space-y-4">
+                        <p className="text-[10px] font-black tracking-widest text-primary uppercase">Configuration — Jour {jour}</p>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Nom affiché (optionnel)</label>
+                          <input type="text" placeholder="Ex : Ain Draham" value={etapeDestination}
+                            onChange={(e) => setEtapeDestination(e.target.value)}
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-slate-300" />
+                        </div>
+
+                  {/* Carte */}
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">
+                      Localisation sur la carte *
+                      {etapeLat && <span className="ml-2 text-primary font-black">✓ Positionnée</span>}
+                    </label>
+                    <MapPicker
+                      lat={etapeLat}
+                      lng={etapeLng}
+                      onPick={(lat, lng, address) => {
+                        setEtapeLat(lat); setEtapeLng(lng); setEtapeAddress(address);
+                        if (!etapeDestination) setEtapeDestination(address.split(",")[0].trim());
+                        setEtapeFormError("");
+                      }}
+                    />
+                    {etapeAddress && (
+                      <p className="text-[10px] text-slate-400 mt-1 truncate">{etapeAddress}</p>
+                    )}
+                  </div>
+
+                  {/* Catégorie */}
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Type d'activité *</label>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {PROVIDER_SCHEMA.map((cat) => {
+                        const active = etapeCategorie === cat.value;
+                        return (
+                          <button key={cat.value} type="button"
+                            onClick={() => { setEtapeCategorie(active ? "" : cat.value); setEtapeSubtypes([]); setEtapeFields({}); setEtapeFormError(""); }}
+                            className={`flex flex-col items-center justify-center gap-1 py-2.5 px-1 rounded-xl border-2 text-center transition-all cursor-pointer ${active ? "bg-primary/10 border-primary text-slate-900 shadow-sm" : "bg-white border-slate-200 text-slate-500 hover:border-primary/40"}`}>
+                            <span className={`material-symbols-outlined text-base ${active ? "text-primary" : "text-slate-400"}`}>{cat.icon}</span>
+                            <span className="text-[9px] font-extrabold leading-tight">{cat.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Sous-types — multi-sélection */}
+                  {etapeCategorie && (() => {
+                    const cat = PROVIDER_SCHEMA.find((c) => c.value === etapeCategorie);
+                    if (!cat?.subtypes.length) return null;
+                    return (
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Sous-types *</label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {cat.subtypes.map((st) => {
+                            const sel = etapeSubtypes.includes(st.value);
+                            return (
+                              <button key={st.value} type="button"
+                                onClick={() => {
+                                  setEtapeSubtypes((prev) => sel ? prev.filter((v) => v !== st.value) : [...prev, st.value]);
+                                  if (sel) setEtapeFields((prev) => { const n = { ...prev }; delete n[st.value]; return n; });
+                                  setEtapeFormError("");
+                                }}
+                                className={`px-3 py-1.5 rounded-xl border-2 text-[11px] font-extrabold transition-all cursor-pointer ${sel ? "bg-primary/10 border-primary text-primary" : "bg-white border-slate-200 text-slate-600 hover:border-primary/40"}`}>
+                                {st.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* ── Champs communs (identiques à toute offre) ── */}
+                  {etapeSubtypes.length > 0 && (
+                    <div className="space-y-3">
+                      <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Informations de l'offre</p>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Titre *</label>
+                        <input type="text" placeholder="Ex : Randonnée au Djebel Zaghouan"
+                          value={etapeTitre} onChange={(e) => { setEtapeTitre(e.target.value); setEtapeFormError(""); }}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Description courte</label>
+                        <textarea rows={2} placeholder="Résumé de l'étape en 1-2 phrases…"
+                          value={etapeDescCourte} onChange={(e) => setEtapeDescCourte(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary resize-none placeholder:text-slate-300" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Description détaillée</label>
+                        <textarea rows={3} placeholder="Description complète de l'étape…"
+                          value={etapeDescLongue} onChange={(e) => setEtapeDescLongue(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary resize-none placeholder:text-slate-300" />
+                      </div>
+                      {etapeCategorie !== 'hebergement' && (
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Prix de base (TND)</label>
+                          <input type="number" min="0" placeholder="0"
+                            value={etapePrix} onChange={(e) => setEtapePrix(e.target.value)}
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary" />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── Détails spécifiques (réplique exacte du formulaire de publication) ── */}
+                  {etapeSubtypes.length > 0 && (() => {
+                    const isEtapeHeberg = etapeCategorie === 'hebergement';
+
+                    // Résolution des dynamicOptions depuis les données d'onboarding des activités
+                    const flatOrgOnboarding = orgActivities.reduce<Record<string, any>>((acc, act) => {
+                      return { ...acc, ...Object.values(act.fields ?? {}).reduce<Record<string, any>>((a, s) => ({ ...a, ...(s as Record<string, any>) }), {}) };
+                    }, {});
+                    const resolveEtapeOptions = (field: { options?: string[]; dynamicOptions?: string }): string[] => {
+                      if (!field.dynamicOptions) return field.options ?? [];
+                      const key = field.dynamicOptions.replace('onboarding.', '');
+                      const val = flatOrgOnboarding[key];
+                      if (Array.isArray(val)) return val as string[];
+                      if (typeof val === 'string' && val.trim()) return [val];
+                      return field.options ?? [];
+                    };
+
+                    const renderEtapePhotoSection = (entityKey: string, label: string) => {
+                      const existingUrls = etapeEntityExistingImages[entityKey] ?? [];
+                      const newImgs = etapeEntityImages[entityKey] ?? [];
+                      const coverI = etapeEntityCoverIdx[entityKey] ?? 0;
+                      const inputId = `ep-${entityKey.replace(/[^a-z0-9]/gi, '-')}`;
+                      const hasAny = existingUrls.length > 0 || newImgs.length > 0;
+                      return (
+                        <div className="mb-4 pb-4 border-b border-slate-200 last:border-0">
+                          <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">📷 {label}</label>
+                          {!hasAny && (
+                            <label htmlFor={inputId}
+                              className="flex flex-col items-center justify-center gap-1.5 w-full h-20 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
+                              <span className="material-symbols-outlined text-slate-300 text-2xl">add_photo_alternate</span>
+                              <p className="text-[10px] font-semibold text-slate-400">Cliquez pour ajouter des photos</p>
+                              <input id={inputId} type="file" accept="image/*" multiple className="hidden"
+                                onChange={(e) => { const files = Array.from(e.target.files ?? []); setEtapeEntityImages((prev) => ({ ...prev, [entityKey]: [...(prev[entityKey] ?? []), ...files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))] })); e.target.value = ""; }}
+                              />
+                            </label>
+                          )}
+                          {hasAny && (
+                            <>
+                              <div className="mt-1 grid grid-cols-4 gap-1.5">
+                                {/* Photos déjà sauvegardées */}
+                                {existingUrls.map((url, i) => (
+                                  <div key={`ex-${i}`}
+                                    className={`relative group aspect-square rounded-xl overflow-hidden border-2 transition-all ${i === 0 && newImgs.length === 0 ? "border-primary shadow-md" : "border-slate-200"}`}>
+                                    <img src={url} alt="" className="w-full h-full object-cover" />
+                                    {i === 0 && newImgs.length === 0 && <div className="absolute top-1 left-1 bg-primary text-white text-[8px] font-black px-1.5 py-0.5 rounded-md leading-none">Cover</div>}
+                                    <button type="button"
+                                      onClick={() => setEtapeEntityExistingImages((prev) => ({ ...prev, [entityKey]: (prev[entityKey] ?? []).filter((_, idx) => idx !== i) }))}
+                                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <X size={10} />
+                                    </button>
+                                  </div>
+                                ))}
+                                {/* Nouvelles photos à uploader */}
+                                {newImgs.map((img, i) => {
+                                  const isCover = existingUrls.length === 0 && i === coverI;
+                                  return (
+                                    <div key={`new-${i}`}
+                                      onClick={() => { if (existingUrls.length === 0) setEtapeEntityCoverIdx((prev) => ({ ...prev, [entityKey]: i })); }}
+                                      className={`relative group aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${isCover ? "border-primary shadow-md" : "border-transparent hover:border-slate-300"}`}>
+                                      <img src={img.preview} alt="" className="w-full h-full object-cover" />
+                                      {isCover && <div className="absolute top-1 left-1 bg-primary text-white text-[8px] font-black px-1.5 py-0.5 rounded-md leading-none">Cover</div>}
+                                      <button type="button"
+                                        onClick={(e) => { e.stopPropagation(); URL.revokeObjectURL(img.preview); setEtapeEntityImages((prev) => { const cur = prev[entityKey] ?? []; return { ...prev, [entityKey]: cur.filter((_, idx) => idx !== i) }; }); setEtapeEntityCoverIdx((prev) => { const cur = prev[entityKey] ?? 0; return { ...prev, [entityKey]: cur >= i && cur > 0 ? cur - 1 : cur }; }); }}
+                                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <X size={10} />
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                                {/* Bouton ajouter */}
+                                <label htmlFor={inputId}
+                                  className="flex flex-col items-center justify-center aspect-square border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
+                                  <span className="material-symbols-outlined text-slate-300 text-xl">add</span>
+                                  <input id={inputId} type="file" accept="image/*" multiple className="hidden"
+                                    onChange={(e) => { const files = Array.from(e.target.files ?? []); setEtapeEntityImages((prev) => ({ ...prev, [entityKey]: [...(prev[entityKey] ?? []), ...files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))] })); e.target.value = ""; }}
+                                  />
+                                </label>
+                              </div>
+                              {(existingUrls.length + newImgs.length) > 1 && existingUrls.length === 0 && (
+                                <p className="text-[9px] text-slate-400 font-medium mt-1">Cliquez sur une photo pour la définir comme image principale.</p>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    };
+
+                    const eGetNb = (st: string) => etapeSubtypeNbUnites[st] ?? 1;
+                    const eGetUD = (st: string) => etapeSubtypeUnitDetails[st] ?? [{}];
+                    const eGetTab = (st: string) => etapeActiveSubtypeTab[st] ?? 0;
+                    const eSetNb = (st: string, n: number) => setEtapeSubtypeNbUnites((prev) => ({ ...prev, [st]: n }));
+                    const eSetUD = (st: string, arr: Array<Record<string, any>>) => setEtapeSubtypeUnitDetails((prev) => ({ ...prev, [st]: arr }));
+                    const eSetTab = (st: string, i: number) => setEtapeActiveSubtypeTab((prev) => ({ ...prev, [st]: i }));
+                    const eGetCfg = (st: string): Record<string, any> => etapeSubtypeFormConfig[st] ?? {};
+                    const eSetCfg = (st: string, f: string, v: any) => setEtapeSubtypeFormConfig((prev) => ({ ...prev, [st]: { ...(prev[st] ?? {}), [f]: v } }));
+
+                    const renderEtapeFields = (st: string, getData: (k: string) => any, setData: (k: string, v: any) => void) => {
+                      const config = OFFER_DETAIL_FIELDS[st];
+                      if (!config) return null;
+                      return config.sections.map((sec, si) => {
+                        if ((sec.conditionalOn as any)?.onboardingKey) return null;
+                        const visible = sec.fields.filter((f) => {
+                          if (!f.conditionalOn) return true;
+                          if (f.conditionalOn.field && f.conditionalOn.value !== undefined) return getData(f.conditionalOn.field) === f.conditionalOn.value;
+                          if (f.conditionalOn.field && f.conditionalOn.notValue !== undefined) return getData(f.conditionalOn.field) !== f.conditionalOn.notValue;
+                          return true;
+                        });
+                        if (!visible.length) return null;
+                        return (
+                          <div key={si} className="mb-4 last:mb-0">
+                            <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">{sec.label}</p>
+                            <div className="space-y-2.5">
+                              {visible.map((field) => {
+                                const val = getData(field.key);
+                                const sv = (v: any) => setData(field.key, v);
+                                if (field.type === "boolean") return (
+                                  <div key={field.key} className="flex items-center justify-between">
+                                    <span className="text-xs font-semibold text-slate-700">{field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}</span>
+                                    <button type="button" onClick={() => sv(!val)} className={`w-10 h-5 rounded-full transition-colors shrink-0 ${val ? "bg-primary" : "bg-slate-200"}`}>
+                                      <div className={`w-4 h-4 rounded-full bg-white mx-auto transition-transform ${val ? "translate-x-2.5" : "-translate-x-2.5"}`} />
+                                    </button>
+                                  </div>
+                                );
+                                if (field.type === "multiselect") {
+                                  const opts = resolveEtapeOptions(field);
+                                  if (!opts.length) return (
+                                    <div key={field.key}>
+                                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}</label>
+                                      <input type="text" placeholder={`Saisir ${field.label.toLowerCase()}…`} value={Array.isArray(val) ? (val as string[]).join(", ") : (val ?? "")} onChange={(e) => sv(e.target.value ? e.target.value.split(",").map((s: string) => s.trim()).filter(Boolean) : [])} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                                    </div>
+                                  );
+                                  return (
+                                    <div key={field.key}>
+                                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}</label>
+                                      <div className="flex flex-wrap gap-1">
+                                        {opts.map((opt) => { const chosen = Array.isArray(val) && val.includes(opt); return (<button key={opt} type="button" onClick={() => sv(chosen ? (val as string[]).filter((v: string) => v !== opt) : [...(val as string[] ?? []), opt])} className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border transition-all ${chosen ? "bg-primary/10 border-primary text-primary" : "bg-white border-slate-200 text-slate-600"}`}>{opt}</button>); })}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                if (field.type === "select") {
+                                  const opts = resolveEtapeOptions(field);
+                                  if (!opts.length) return (
+                                    <div key={field.key}>
+                                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}</label>
+                                      <input type="text" placeholder={`Saisir ${field.label.toLowerCase()}…`} value={val ?? ""} onChange={(e) => sv(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                                    </div>
+                                  );
+                                  return (
+                                    <div key={field.key}>
+                                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}</label>
+                                      <select value={val ?? ""} onChange={(e) => sv(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                                        <option value="">— Sélectionner —</option>
+                                        {opts.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                                      </select>
+                                    </div>
+                                  );
+                                }
+                                if (field.type === "number") return (
+                                  <div key={field.key}>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{field.label}{field.unit && <span className="text-slate-300 ml-1">({field.unit})</span>}{field.required && <span className="text-red-400 ml-0.5">*</span>}</label>
+                                    <input type="number" min="0" placeholder={field.placeholder} value={val ?? ""} onChange={(e) => sv(e.target.value ? Number(e.target.value) : undefined)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                                  </div>
+                                );
+                                if (field.type === "time") return (
+                                  <div key={field.key}>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}</label>
+                                    <input type="time" value={val ?? ""} onChange={(e) => sv(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                                  </div>
+                                );
+                                if (field.type === "textarea") return (
+                                  <div key={field.key}>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}</label>
+                                    <textarea rows={2} placeholder={field.placeholder} value={val ?? ""} onChange={(e) => sv(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
+                                  </div>
+                                );
+                                if (field.type === "repeater") {
+                                  const rows = Array.isArray(val) ? val as Array<Record<string, any>> : [];
+                                  return (
+                                    <div key={field.key}>
+                                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{field.label}</label>
+                                      {rows.map((row, ri) => (
+                                        <div key={ri} className="flex gap-1.5 mb-1.5">
+                                          {(field.subfields ?? []).map((sf) => (
+                                            <input key={sf.key} type={sf.type === "number" ? "number" : "text"} placeholder={sf.placeholder}
+                                              value={(row[sf.key] as string) ?? ""}
+                                              onChange={(e) => { const nr = [...rows]; nr[ri] = { ...nr[ri], [sf.key]: sf.type === "number" ? Number(e.target.value) : e.target.value }; sv(nr); }}
+                                              className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                                          ))}
+                                          <button type="button" onClick={() => sv(rows.filter((_, idx) => idx !== ri))}
+                                            className="w-7 h-7 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 flex items-center justify-center shrink-0 mt-0.5"><X size={12} /></button>
+                                        </div>
+                                      ))}
+                                      <button type="button" onClick={() => sv([...rows, {}])}
+                                        className="w-full py-1.5 rounded-xl border-2 border-dashed border-slate-200 text-[10px] font-extrabold text-slate-400 hover:border-primary/40 hover:text-primary transition-all">+ Ajouter {field.label}</button>
+                                    </div>
+                                  );
+                                }
+                                if (field.type === "file") return null;
+                                return (
+                                  <div key={field.key}>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}</label>
+                                    <input type="text" placeholder={field.placeholder} value={val ?? ""} onChange={(e) => sv(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      });
+                    };
+
+                    const renderEtapeAvailBloc = (st: string) => {
+                      const cfg = eGetCfg(st);
+                      const mode = (cfg.availMode as string) ?? 'specific';
+                      const weekdays: number[] = (cfg.availWeekdays as number[]) ?? [];
+                      const specificDates: string[] = (cfg.specificDates as string[]) ?? [];
+                      const saisons: string[] = (cfg.saisons as string[]) ?? [];
+                      return (
+                        <div className="mb-4 pb-4 border-b border-slate-200">
+                          <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Disponibilité</p>
+                          <div className="grid grid-cols-2 gap-2 mb-2">
+                            {AVAILABILITY_TYPES.map((m) => (
+                              <button key={m.value} type="button" onClick={() => eSetCfg(st, 'availMode', m.value)}
+                                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border-2 text-[10px] font-bold transition-all ${mode === m.value ? 'border-primary bg-primary/10 text-slate-900' : 'border-slate-200 bg-white text-slate-500 hover:border-primary/30'}`}>
+                                <span className={`material-symbols-outlined text-sm ${mode === m.value ? 'text-primary' : 'text-slate-400'}`}>{m.icon}</span>{m.label}
+                              </button>
+                            ))}
+                          </div>
+                          {mode === 'specific' && (
+                            <div className="space-y-1.5">
+                              <div className="flex gap-2">
+                                <input type="date" value={(cfg.newSpecificDate as string) ?? ''} onChange={(e) => eSetCfg(st, 'newSpecificDate', e.target.value)} className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                                <button type="button" onClick={() => { const d = (cfg.newSpecificDate as string) ?? ''; if (d && !specificDates.includes(d)) { eSetCfg(st, 'specificDates', [...specificDates, d].sort()); eSetCfg(st, 'newSpecificDate', ''); } }} className="px-3 py-2 bg-primary text-white rounded-xl text-xs font-extrabold hover:bg-primary/90">Ajouter</button>
+                              </div>
+                              {specificDates.length > 0 && <div className="flex flex-wrap gap-1">{specificDates.map((d) => <span key={d} className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded-full text-[10px] font-bold border border-primary/20">{d}<button type="button" onClick={() => eSetCfg(st, 'specificDates', specificDates.filter((x) => x !== d))}><X size={8} /></button></span>)}</div>}
+                            </div>
+                          )}
+                          {mode === 'weekly' && (
+                            <div className="space-y-1.5">
+                              <div className="flex gap-1">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map((day, i) => <button key={i} type="button" onClick={() => eSetCfg(st, 'availWeekdays', weekdays.includes(i) ? weekdays.filter((d) => d !== i) : [...weekdays, i])} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black border-2 transition-all ${weekdays.includes(i) ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{day}</button>)}</div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début</label><input type="date" value={(cfg.availStart as string) ?? ''} onChange={(e) => eSetCfg(st, 'availStart', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                                <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin</label><input type="date" value={(cfg.availEnd as string) ?? ''} onChange={(e) => eSetCfg(st, 'availEnd', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                              </div>
+                            </div>
+                          )}
+                          {mode === 'period' && (
+                            <div className="grid grid-cols-2 gap-2">
+                              <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début *</label><input type="date" value={(cfg.availStart as string) ?? ''} onChange={(e) => eSetCfg(st, 'availStart', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                              <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin *</label><input type="date" value={(cfg.availEnd as string) ?? ''} onChange={(e) => eSetCfg(st, 'availEnd', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                            </div>
+                          )}
+                          {mode === 'on_demand' && (
+                            <div className="flex gap-2">{['24h','48h','72h'].map((d) => <button key={d} type="button" onClick={() => eSetCfg(st, 'delaiReponse', d)} className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border-2 transition-all ${(cfg.delaiReponse ?? '24h') === d ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 bg-white text-slate-500'}`}>{d}</button>)}</div>
+                          )}
+                          {mode === 'season' && (
+                            <div className="flex gap-1.5">{SAISONS.map((s) => <button key={s} type="button" onClick={() => eSetCfg(st, 'saisons', saisons.includes(s) ? saisons.filter((x) => x !== s) : [...saisons, s])} className={`flex-1 py-1.5 rounded-xl text-[9px] font-black border-2 transition-all ${saisons.includes(s) ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{s}</button>)}</div>
+                          )}
+                          {mode !== 'on_demand' && (
+                            <div className="grid grid-cols-2 gap-2 mt-2">
+                              <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Heure début</label><input type="time" value={(cfg.heureDebut as string) ?? ''} onChange={(e) => eSetCfg(st, 'heureDebut', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                              <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Heure fin</label><input type="time" value={(cfg.heureFin as string) ?? ''} onChange={(e) => eSetCfg(st, 'heureFin', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    };
+
+                    const renderEtapePricingBloc = (st: string) => {
+                      const cfg = eGetCfg(st);
+                      return (
+                        <div className="mb-4 pb-4 border-b border-slate-200 space-y-2.5">
+                          <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Tarification</p>
+                          <div>
+                            <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Prix groupe <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-bold">DT</span><input type="number" min="0" placeholder="1200" value={(cfg.prixGroupe as string) ?? ''} onChange={(e) => eSetCfg(st, 'prixGroupe', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
+                              <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">pers.</span><input type="number" min="1" placeholder="10" value={(cfg.nbPersonnesGroupe as string) ?? ''} onChange={(e) => eSetCfg(st, 'nbPersonnesGroupe', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Prix enfant <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-bold">DT</span><input type="number" min="0" placeholder="150" value={(cfg.prixEnfant as string) ?? ''} onChange={(e) => eSetCfg(st, 'prixEnfant', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
+                              <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">≤ âge</span><input type="number" min="0" max="18" placeholder="12" value={(cfg.ageMaxEnfant as string) ?? ''} onChange={(e) => eSetCfg(st, 'ageMaxEnfant', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-11 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Supplément privatisation <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
+                            <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-bold">DT</span><input type="number" min="0" placeholder="500" value={(cfg.suppPrivatisation as string) ?? ''} onChange={(e) => eSetCfg(st, 'suppPrivatisation', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
+                          </div>
+                        </div>
+                      );
+                    };
+
+                    const renderEtapeNbUnites = (st: string) => {
+                      const nb = eGetNb(st);
+                      return (
+                        <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-200">
+                          <div>
+                            <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Nb d'unités</p>
+                            <p className="text-[9px] text-slate-400 font-medium mt-0.5">Chambres / suites / tentes disponibles à la vente</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button type="button"
+                              onClick={() => {
+                                if (nb <= 1) return;
+                                const removedKey = `${st}_unit_${nb - 1}`;
+                                setEtapeEntityImages((prev) => { const imgs = prev[removedKey] ?? []; imgs.forEach((img) => URL.revokeObjectURL(img.preview)); const next = { ...prev }; delete next[removedKey]; return next; });
+                                setEtapeEntityCoverIdx((prev) => { const next = { ...prev }; delete next[removedKey]; return next; });
+                                eSetUD(st, eGetUD(st).slice(0, -1));
+                                if (eGetTab(st) >= nb - 1) eSetTab(st, nb - 2);
+                                eSetNb(st, nb - 1);
+                              }}
+                              className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-black flex items-center justify-center text-sm transition-colors">−</button>
+                            <span className="text-base font-extrabold text-slate-800 w-6 text-center">{nb}</span>
+                            <button type="button"
+                              onClick={() => { eSetUD(st, [...eGetUD(st), {}]); eSetNb(st, nb + 1); }}
+                              className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-black flex items-center justify-center text-sm transition-colors">+</button>
+                          </div>
+                        </div>
+                      );
+                    };
+
+                    const renderEtapeUnitTabs = (st: string) => {
+                      const nb = eGetNb(st);
+                      const unitArr = eGetUD(st);
+                      const activeI = eGetTab(st);
+                      const config = OFFER_DETAIL_FIELDS[st];
+                      const nameKey = config?.sections[0]?.fields.find((f) => f.key.startsWith('nom_'))?.key ?? '';
+                      const uGet = (f: string) => unitArr[activeI]?.[f];
+                      const uSet = (f: string, v: any) => { const a = [...unitArr]; a[activeI] = { ...(a[activeI] ?? {}), [f]: v }; eSetUD(st, a); };
+                      const uMode = (uGet('availMode') as string) ?? 'specific';
+                      const uWeekdays: number[] = (uGet('availWeekdays') as number[]) ?? [];
+                      const uDates: string[] = (uGet('specificDates') as string[]) ?? [];
+                      const uSaisons: string[] = (uGet('saisons') as string[]) ?? [];
+                      return (
+                        <>
+                          <div className="flex flex-wrap gap-1.5 mb-3">
+                            {Array.from({ length: nb }, (_, i) => {
+                              const unitName = (unitArr[i]?.[nameKey] as string) || null;
+                              return (
+                                <button key={i} type="button" onClick={() => eSetTab(st, i)}
+                                  className={`px-3 py-1.5 rounded-full text-xs font-extrabold border-2 transition-all ${activeI === i ? 'bg-primary text-white border-primary' : 'bg-white border-slate-200 text-slate-500 hover:border-primary/30'}`}>
+                                  {unitName || `${st.replace(/_/g, ' ')} ${i + 1}`}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="mb-3 pb-3 border-b border-slate-200">
+                            <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Disponibilité de cette unité</p>
+                            <div className="grid grid-cols-2 gap-1.5 mb-2">
+                              {AVAILABILITY_TYPES.map((m) => (
+                                <button key={m.value} type="button" onClick={() => uSet('availMode', m.value)}
+                                  className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border-2 text-[10px] font-bold transition-all ${uMode === m.value ? 'border-primary bg-primary/10 text-slate-900' : 'border-slate-200 bg-white text-slate-500 hover:border-primary/30'}`}>
+                                  <span className={`material-symbols-outlined text-sm ${uMode === m.value ? 'text-primary' : 'text-slate-400'}`}>{m.icon}</span>{m.label}
+                                </button>
+                              ))}
+                            </div>
+                            {uMode === 'specific' && (
+                              <div className="space-y-1.5">
+                                <div className="flex gap-2">
+                                  <input type="date" value={(uGet('newSpecificDate') as string) ?? ''} onChange={(e) => uSet('newSpecificDate', e.target.value)} className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                                  <button type="button" onClick={() => { const d = (uGet('newSpecificDate') as string) ?? ''; if (d && !uDates.includes(d)) { uSet('specificDates', [...uDates, d].sort()); uSet('newSpecificDate', ''); } }} className="px-3 py-2 bg-primary text-white rounded-xl text-xs font-extrabold">Ajouter</button>
+                                </div>
+                                {uDates.length > 0 && <div className="flex flex-wrap gap-1">{uDates.map((d) => <span key={d} className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded-full text-[10px] font-bold border border-primary/20">{d}<button type="button" onClick={() => uSet('specificDates', uDates.filter((x) => x !== d))}><X size={8} /></button></span>)}</div>}
+                              </div>
+                            )}
+                            {uMode === 'weekly' && (
+                              <div className="space-y-1.5">
+                                <div className="flex gap-1">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map((day, i) => <button key={i} type="button" onClick={() => uSet('availWeekdays', uWeekdays.includes(i) ? uWeekdays.filter((d) => d !== i) : [...uWeekdays, i])} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black border-2 transition-all ${uWeekdays.includes(i) ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{day}</button>)}</div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début</label><input type="date" value={(uGet('availStart') as string) ?? ''} onChange={(e) => uSet('availStart', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                                  <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin</label><input type="date" value={(uGet('availEnd') as string) ?? ''} onChange={(e) => uSet('availEnd', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                                </div>
+                              </div>
+                            )}
+                            {uMode === 'period' && (
+                              <div className="grid grid-cols-2 gap-2">
+                                <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début *</label><input type="date" value={(uGet('availStart') as string) ?? ''} onChange={(e) => uSet('availStart', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                                <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin *</label><input type="date" value={(uGet('availEnd') as string) ?? ''} onChange={(e) => uSet('availEnd', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                              </div>
+                            )}
+                            {uMode === 'on_demand' && (
+                              <div className="flex gap-2">{['24h','48h','72h'].map((d) => <button key={d} type="button" onClick={() => uSet('delaiReponse', d)} className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border-2 transition-all ${(uGet('delaiReponse') ?? '24h') === d ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 bg-white text-slate-500'}`}>{d}</button>)}</div>
+                            )}
+                            {uMode === 'season' && (
+                              <div className="flex gap-1.5">{SAISONS.map((s) => <button key={s} type="button" onClick={() => uSet('saisons', uSaisons.includes(s) ? uSaisons.filter((x) => x !== s) : [...uSaisons, s])} className={`flex-1 py-1.5 rounded-xl text-[9px] font-black border-2 transition-all ${uSaisons.includes(s) ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{s}</button>)}</div>
+                            )}
+                            {uMode !== 'on_demand' && (
+                              <div className="grid grid-cols-2 gap-2 mt-2">
+                                <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Heure début</label><input type="time" value={(uGet('heureDebut') as string) ?? ''} onChange={(e) => uSet('heureDebut', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                                <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Heure fin</label><input type="time" value={(uGet('heureFin') as string) ?? ''} onChange={(e) => uSet('heureFin', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                              </div>
+                            )}
+                          </div>
+                          <div className="mb-3 pb-3 border-b border-slate-200 space-y-3">
+                            <div>
+                              <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Prix / nuit (TND)</label>
+                              <div className="relative"><span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px] font-bold">DT</span><input type="number" min="0" placeholder="Ex : 380" value={(unitArr[activeI]?.prix_unite as string) ?? ""} onChange={(e) => { const arr = [...unitArr]; arr[activeI] = { ...(arr[activeI] ?? {}), prix_unite: e.target.value }; eSetUD(st, arr); }} className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Max. personnes pour cette unité</label>
+                              <input type="number" min="1" placeholder="Ex : 2" value={(unitArr[activeI]?.max_pers_unite as string) ?? ""} onChange={(e) => { const arr = [...unitArr]; arr[activeI] = { ...(arr[activeI] ?? {}), max_pers_unite: e.target.value }; eSetUD(st, arr); }} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
+                            </div>
+                            <div>
+                              <button type="button"
+                                onClick={() => { const arr = [...unitArr]; arr[activeI] = { ...(arr[activeI] ?? {}), acompte_requis: !(arr[activeI]?.acompte_requis ?? false) }; eSetUD(st, arr); }}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${unitArr[activeI]?.acompte_requis ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 bg-white text-slate-500 hover:border-primary/30'}`}>
+                                <div className={`w-3.5 h-3.5 rounded-sm border-2 flex items-center justify-center transition-all ${unitArr[activeI]?.acompte_requis ? 'border-primary bg-primary' : 'border-slate-300'}`}>
+                                  {unitArr[activeI]?.acompte_requis && <Check size={9} className="text-white" />}
+                                </div>
+                                Acompte requis pour cette unité
+                              </button>
+                              {unitArr[activeI]?.acompte_requis && (
+                                <div className="grid grid-cols-2 gap-2 mt-2">
+                                  <select value={(unitArr[activeI]?.type_acompte as string) ?? 'pourcentage'} onChange={(e) => { const arr = [...unitArr]; arr[activeI] = { ...(arr[activeI] ?? {}), type_acompte: e.target.value }; eSetUD(st, arr); }} className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                                    <option value="pourcentage">% du prix</option>
+                                    <option value="fixe">Montant fixe (DT)</option>
+                                  </select>
+                                  <div className="relative">
+                                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]">{(unitArr[activeI]?.type_acompte ?? 'pourcentage') === 'pourcentage' ? '%' : 'DT'}</span>
+                                    <input type="number" min="1" placeholder="30" value={(unitArr[activeI]?.valeur_acompte as string) ?? ""} onChange={(e) => { const arr = [...unitArr]; arr[activeI] = { ...(arr[activeI] ?? {}), valeur_acompte: e.target.value }; eSetUD(st, arr); }} className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {renderEtapePhotoSection(`${st}_unit_${activeI}`, `Photos — ${(unitArr[activeI]?.[nameKey] as string) || `Unité ${activeI + 1}`}`)}
+                          {renderEtapeFields(
+                            st,
+                            (key) => unitArr[activeI]?.[key],
+                            (key, val) => { const arr = [...unitArr]; arr[activeI] = { ...(arr[activeI] ?? {}), [key]: val }; eSetUD(st, arr); },
+                          )}
+                        </>
+                      );
+                    };
+
+                    return (
+                      <div className="space-y-4">
+                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase block">Détails spécifiques</label>
+                        {etapeSubtypes.map((st) => (
+                          <div key={st} className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                            {etapeSubtypes.length > 1 && (
+                              <p className="text-[10px] font-black tracking-widest text-primary/70 uppercase mb-3">{st}</p>
+                            )}
+                            {isEtapeHeberg ? (
+                              <>
+                                {eGetNb(st) === 1 && renderEtapeAvailBloc(st)}
+                                {renderEtapePricingBloc(st)}
+                                {renderEtapeNbUnites(st)}
+                                {eGetNb(st) > 1
+                                  ? renderEtapeUnitTabs(st)
+                                  : (
+                                    <>
+                                      {renderEtapePhotoSection(`${st}_unit_0`, 'Photos de l\'offre')}
+                                      {renderEtapeFields(
+                                        st,
+                                        (key) => (eGetUD(st)[0] ?? {})[key],
+                                        (key, val) => { const arr = [...eGetUD(st)]; arr[0] = { ...(arr[0] ?? {}), [key]: val }; eSetUD(st, arr); },
+                                      )}
+                                    </>
+                                  )
+                                }
+                              </>
+                            ) : (
+                              <>
+                                {renderEtapePhotoSection(st, etapeSubtypes.length > 1 ? `Photos — ${st}` : 'Photos de l\'offre')}
+                                {renderEtapeFields(
+                                  st,
+                                  (key) => (etapeSubtypeDetails[st] ?? {})[key],
+                                  (key, val) => setEtapeSubtypeDetails((prev) => ({ ...prev, [st]: { ...(prev[st] ?? {}), [key]: val } })),
+                                )}
+                                {renderEtapeAvailBloc(st)}
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+
+                  {etapeFormError && <p className="text-xs font-semibold text-red-500">{etapeFormError}</p>}
+
+                  <div className="flex gap-2 pt-1">
+                    <button type="button" onClick={() => { setEtapeFormOpen(false); resetEtapeForm(); }} className="flex-1 py-2 text-xs font-bold text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer">Annuler</button>
+                    <button type="button" onClick={addEtape} className="flex-1 py-2 text-xs font-extrabold text-white bg-primary hover:bg-primary/90 rounded-xl cursor-pointer">
+                      <Check size={12} className="inline mr-1" />{circuitEtapes.find((e) => e.jour === etapeJour) ? "Mettre à jour" : "Confirmer ce jour"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+            {circuitFormError && (
+              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
+                <span className="material-symbols-outlined text-red-500 text-base">error</span>
+                <p className="text-sm font-semibold text-red-600">{circuitFormError}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/80 flex items-center justify-end gap-3 shrink-0">
+            <button type="button" onClick={() => setCircuitModalOpen(false)} className="px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer">Annuler</button>
+            <button type="button" onClick={saveCircuit} disabled={circuitSaving} className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs shadow-sm transition-all active:scale-95 disabled:opacity-60 cursor-pointer">
+              {circuitSaving ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Sauvegarde…</> : <><Check size={14} />{editingCircuit ? "Enregistrer" : "Créer le circuit"}</>}
             </button>
           </div>
         </div>
@@ -2307,8 +3568,12 @@ export default function ProviderProfilePage() {
                   <Sparkles size={20} className="text-primary" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">Publier une offre éco</h3>
-                  <p className="text-slate-400 text-xs mt-0.5">Proposez une expérience éco-touristique à la communauté</p>
+                  <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">
+                    {offerEditMode ? "Modifier l'offre" : "Publier une offre éco"}
+                  </h3>
+                  <p className="text-slate-400 text-xs mt-0.5">
+                    {offerEditMode ? "Modifiez les informations et enregistrez." : "Proposez une expérience éco-touristique à la communauté"}
+                  </p>
                 </div>
               </div>
             </div>
@@ -2432,6 +3697,83 @@ export default function ProviderProfilePage() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
                   />
                 </div>
+
+                {/* Photo de couverture — toujours visible */}
+                <div>
+                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Photo de couverture</label>
+                  {publishExistingImages.length === 0 && publishImages.length === 0 ? (
+                    <label htmlFor="publish-cover-input"
+                      className="flex flex-col items-center justify-center gap-2 w-full h-24 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
+                      <span className="material-symbols-outlined text-slate-300 text-3xl">add_photo_alternate</span>
+                      <p className="text-xs font-semibold text-slate-400">Cliquez pour ajouter une photo de couverture</p>
+                      <input id="publish-cover-input" type="file" accept="image/*" multiple className="hidden"
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files ?? []);
+                          setPublishImages((prev) => [...prev, ...files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))]);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  ) : (
+                    <>
+                      <div className="flex gap-2 flex-wrap mt-1">
+                        {/* Images déjà uploadées (existantes) */}
+                        {publishExistingImages.map((url, i) => (
+                          <div key={`ex-${i}`}
+                            className={`relative group w-20 h-20 rounded-xl overflow-hidden border-2 transition-all ${i === 0 && publishImages.length === 0 ? "border-primary shadow-md" : "border-slate-200"}`}>
+                            <img src={url} alt="" className="w-full h-full object-cover" />
+                            {i === 0 && publishImages.length === 0 && (
+                              <div className="absolute top-1 left-1 bg-primary text-white text-[9px] font-black px-1.5 py-0.5 rounded-md leading-none">Cover</div>
+                            )}
+                            <button type="button"
+                              onClick={() => setPublishExistingImages((prev) => prev.filter((_, idx) => idx !== i))}
+                              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              <X size={10} />
+                            </button>
+                          </div>
+                        ))}
+                        {/* Nouvelles images ajoutées */}
+                        {publishImages.map((img, i) => {
+                          const isCover = publishExistingImages.length === 0 && i === publishCoverIdx;
+                          return (
+                            <div key={`new-${i}`} onClick={() => { if (publishExistingImages.length === 0) setPublishCoverIdx(i); }}
+                              className={`relative group w-20 h-20 rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${isCover ? "border-primary shadow-md" : "border-transparent hover:border-slate-300"}`}>
+                              <img src={img.preview} alt="" className="w-full h-full object-cover" />
+                              {isCover && (
+                                <div className="absolute top-1 left-1 bg-primary text-white text-[9px] font-black px-1.5 py-0.5 rounded-md leading-none">Cover</div>
+                              )}
+                              <button type="button"
+                                onClick={(ev) => {
+                                  ev.stopPropagation();
+                                  URL.revokeObjectURL(img.preview);
+                                  setPublishImages((prev) => prev.filter((_, idx) => idx !== i));
+                                  setPublishCoverIdx((c) => (c >= i && c > 0 ? c - 1 : c));
+                                }}
+                                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <X size={10} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                        <label htmlFor="publish-cover-input"
+                          className="flex flex-col items-center justify-center w-20 h-20 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
+                          <span className="material-symbols-outlined text-slate-300 text-2xl">add</span>
+                          <input id="publish-cover-input" type="file" accept="image/*" multiple className="hidden"
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files ?? []);
+                              setPublishImages((prev) => [...prev, ...files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))]);
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                      </div>
+                      {(publishExistingImages.length + publishImages.length) > 1 && publishExistingImages.length === 0 && (
+                        <p className="text-[10px] text-slate-400 font-medium mt-2">Cliquez sur une nouvelle photo pour la définir comme couverture.</p>
+                      )}
+                    </>
+                  )}
+                </div>
+
                 {offerActivity && (() => {
                   const flat = Object.values(offerActivity.fields ?? {}).reduce<Record<string, any>>((a, s) => ({ ...a, ...s }), {});
                   const langs: string[] = flat.langues_guides ?? flat.langues ?? flat.langues_accueil ?? [];
@@ -2520,52 +3862,6 @@ export default function ProviderProfilePage() {
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white font-mono"
                     />
                   </div>
-                </div>}
-                {/* Photos générales — uniquement si provider sans activités ET aucun sous-type */}
-                {offerSubtypes.length === 0 && orgActivities.length === 0 && <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Photos de l'offre</label>
-                  <label htmlFor="publish-images-input"
-                    className="flex flex-col items-center justify-center gap-2 w-full h-24 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
-                    <span className="material-symbols-outlined text-slate-300 text-3xl">add_photo_alternate</span>
-                    <p className="text-xs font-semibold text-slate-400">Cliquez pour ajouter des photos</p>
-                    <input id="publish-images-input" type="file" accept="image/*" multiple className="hidden"
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files ?? []);
-                        const newImgs = files.map((file) => ({ file, preview: URL.createObjectURL(file) }));
-                        setPublishImages((prev) => [...prev, ...newImgs]);
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
-                  {publishImages.length > 0 && (
-                    <>
-                      <div className="mt-3 grid grid-cols-4 gap-2">
-                        {publishImages.map((img, i) => {
-                          const isCover = i === publishCoverIdx;
-                          return (
-                            <div key={i} onClick={() => setPublishCoverIdx(i)}
-                              className={`relative group aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${isCover ? "border-primary shadow-md" : "border-transparent hover:border-slate-300"}`}>
-                              <img src={img.preview} alt="" className="w-full h-full object-cover" />
-                              {isCover && (
-                                <div className="absolute top-1 left-1 bg-primary text-white text-[9px] font-black px-1.5 py-0.5 rounded-md leading-none">Cover</div>
-                              )}
-                              <button type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  URL.revokeObjectURL(img.preview);
-                                  setPublishImages((prev) => prev.filter((_, idx) => idx !== i));
-                                  setPublishCoverIdx((c) => (c >= i && c > 0 ? c - 1 : c));
-                                }}
-                                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <X size={10} />
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <p className="text-[10px] text-slate-400 font-medium mt-2">Cliquez sur une photo pour la définir comme image principale (cover).</p>
-                    </>
-                  )}
                 </div>}
                 {/* Type d'offre — uniquement si le provider n'a aucune activité (fallback) */}
                 {orgActivities.length === 0 && (
@@ -2831,34 +4127,52 @@ export default function ProviderProfilePage() {
 
                   // ── Upload photos par entité (sous-type ou unité) ──
                   const renderPhotoSection = (entityKey: string, label: string) => {
-                    const imgs = entityImages[entityKey] ?? [];
+                    const existingUrls = entityExistingImages[entityKey] ?? [];
+                    const newImgs = entityImages[entityKey] ?? [];
                     const coverI = entityCoverIdx[entityKey] ?? 0;
+                    const hasAny = existingUrls.length > 0 || newImgs.length > 0;
                     const inputId = `entity-photos-${entityKey.replace(/[^a-z0-9]/gi, '-')}`;
                     return (
                       <div className="mb-4 pb-4 border-b border-slate-200 last:border-0">
                         <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">
                           📷 {label}
                         </label>
-                        <label htmlFor={inputId}
-                          className="flex flex-col items-center justify-center gap-1.5 w-full h-20 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
-                          <span className="material-symbols-outlined text-slate-300 text-2xl">add_photo_alternate</span>
-                          <p className="text-[10px] font-semibold text-slate-400">Cliquez pour ajouter des photos</p>
-                          <input id={inputId} type="file" accept="image/*" multiple className="hidden"
-                            onChange={(e) => {
-                              const files = Array.from(e.target.files ?? []);
-                              const newImgs = files.map((file) => ({ file, preview: URL.createObjectURL(file) }));
-                              setEntityImages((prev) => ({ ...prev, [entityKey]: [...(prev[entityKey] ?? []), ...newImgs] }));
-                              e.target.value = "";
-                            }}
-                          />
-                        </label>
-                        {imgs.length > 0 && (
+                        {!hasAny && (
+                          <label htmlFor={inputId}
+                            className="flex flex-col items-center justify-center gap-1.5 w-full h-20 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
+                            <span className="material-symbols-outlined text-slate-300 text-2xl">add_photo_alternate</span>
+                            <p className="text-[10px] font-semibold text-slate-400">Cliquez pour ajouter des photos</p>
+                            <input id={inputId} type="file" accept="image/*" multiple className="hidden"
+                              onChange={(e) => {
+                                const files = Array.from(e.target.files ?? []);
+                                setEntityImages((prev) => ({ ...prev, [entityKey]: [...(prev[entityKey] ?? []), ...files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))] }));
+                                e.target.value = "";
+                              }}
+                            />
+                          </label>
+                        )}
+                        {hasAny && (
                           <>
-                            <div className="mt-2 grid grid-cols-4 gap-1.5">
-                              {imgs.map((img, i) => {
-                                const isCover = i === coverI;
+                            <div className="mt-1 grid grid-cols-4 gap-1.5">
+                              {/* Photos déjà sauvegardées */}
+                              {existingUrls.map((url, i) => (
+                                <div key={`ex-${i}`}
+                                  className={`relative group aspect-square rounded-xl overflow-hidden border-2 transition-all ${i === 0 && newImgs.length === 0 ? "border-primary shadow-md" : "border-slate-200"}`}>
+                                  <img src={url} alt="" className="w-full h-full object-cover" />
+                                  {i === 0 && newImgs.length === 0 && <div className="absolute top-1 left-1 bg-primary text-white text-[8px] font-black px-1.5 py-0.5 rounded-md leading-none">Cover</div>}
+                                  <button type="button"
+                                    onClick={() => setEntityExistingImages((prev) => ({ ...prev, [entityKey]: (prev[entityKey] ?? []).filter((_, idx) => idx !== i) }))}
+                                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <X size={10} />
+                                  </button>
+                                </div>
+                              ))}
+                              {/* Nouvelles photos à uploader */}
+                              {newImgs.map((img, i) => {
+                                const isCover = existingUrls.length === 0 && i === coverI;
                                 return (
-                                  <div key={i} onClick={() => setEntityCoverIdx((prev) => ({ ...prev, [entityKey]: i }))}
+                                  <div key={`new-${i}`}
+                                    onClick={() => { if (existingUrls.length === 0) setEntityCoverIdx((prev) => ({ ...prev, [entityKey]: i })); }}
                                     className={`relative group aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${isCover ? "border-primary shadow-md" : "border-transparent hover:border-slate-300"}`}>
                                     <img src={img.preview} alt="" className="w-full h-full object-cover" />
                                     {isCover && <div className="absolute top-1 left-1 bg-primary text-white text-[8px] font-black px-1.5 py-0.5 rounded-md leading-none">Cover</div>}
@@ -2866,15 +4180,8 @@ export default function ProviderProfilePage() {
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         URL.revokeObjectURL(img.preview);
-                                        setEntityImages((prev) => {
-                                          const cur = prev[entityKey] ?? [];
-                                          const next = cur.filter((_, idx) => idx !== i);
-                                          return { ...prev, [entityKey]: next };
-                                        });
-                                        setEntityCoverIdx((prev) => {
-                                          const cur = prev[entityKey] ?? 0;
-                                          return { ...prev, [entityKey]: cur >= i && cur > 0 ? cur - 1 : cur };
-                                        });
+                                        setEntityImages((prev) => { const cur = prev[entityKey] ?? []; return { ...prev, [entityKey]: cur.filter((_, idx) => idx !== i) }; });
+                                        setEntityCoverIdx((prev) => { const cur = prev[entityKey] ?? 0; return { ...prev, [entityKey]: cur >= i && cur > 0 ? cur - 1 : cur }; });
                                       }}
                                       className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                       <X size={10} />
@@ -2882,8 +4189,22 @@ export default function ProviderProfilePage() {
                                   </div>
                                 );
                               })}
+                              {/* Bouton ajouter */}
+                              <label htmlFor={inputId}
+                                className="flex flex-col items-center justify-center aspect-square border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
+                                <span className="material-symbols-outlined text-slate-300 text-xl">add</span>
+                                <input id={inputId} type="file" accept="image/*" multiple className="hidden"
+                                  onChange={(e) => {
+                                    const files = Array.from(e.target.files ?? []);
+                                    setEntityImages((prev) => ({ ...prev, [entityKey]: [...(prev[entityKey] ?? []), ...files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))] }));
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </label>
                             </div>
-                            <p className="text-[9px] text-slate-400 font-medium mt-1">Cliquez sur une photo pour la définir comme image principale.</p>
+                            {(existingUrls.length + newImgs.length) > 1 && existingUrls.length === 0 && (
+                              <p className="text-[9px] text-slate-400 font-medium mt-1">Cliquez sur une photo pour la définir comme image principale.</p>
+                            )}
                           </>
                         )}
                       </div>
@@ -3221,7 +4542,7 @@ export default function ProviderProfilePage() {
                                 ? renderUnitTabs(st)
                                 : (
                                   <>
-                                    {renderPhotoSection(st, 'Photos de l\'offre')}
+                                    {renderPhotoSection(`${st}_unit_0`, 'Photos de l\'offre')}
                                     {renderFields(
                                       st,
                                       (key) => (getUnitData(st)[0] ?? {})[key],
@@ -3562,8 +4883,8 @@ export default function ProviderProfilePage() {
               <button type="submit" form="publish-offer-form" disabled={publishing}
                 className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs shadow-sm hover:shadow transition-all active:scale-95 disabled:opacity-60 cursor-pointer">
                 {publishing
-                  ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Publication…</>
-                  : <><Send size={14} />Publier l'offre</>
+                  ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />{offerEditMode ? "Enregistrement…" : "Publication…"}</>
+                  : <><Send size={14} />{offerEditMode ? "Enregistrer les modifications" : "Publier l'offre"}</>
                 }
               </button>
             </div>
@@ -3573,9 +4894,14 @@ export default function ProviderProfilePage() {
 
       {/* ══ OFFER DETAIL / EDIT MODAL ════════════════════════════════════════ */}
       {editModalOpen && viewOffer && (() => {
-        const sliderImgs = viewOffer.images?.length
+        // Exclure les photos d'entités (stockées dans details.photos) du slider principal
+        const entityPhotoUrls = new Set<string>(
+          Object.values((viewOffer.details as any)?.photos ?? {}).flat() as string[]
+        );
+        const allImgs = viewOffer.images?.length
           ? viewOffer.images
           : viewOffer.cover_image ? [viewOffer.cover_image] : [];
+        const sliderImgs = allImgs.filter((url) => !entityPhotoUrls.has(url));
         const td = OFFER_TYPES.find((t) => t.value === viewOffer.offer_type) ?? OFFER_TYPES[OFFER_TYPES.length - 1];
         const safeIdx = Math.min(sliderIdx, Math.max(sliderImgs.length - 1, 0));
 
@@ -3688,6 +5014,128 @@ export default function ProviderProfilePage() {
                         <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-line">{viewOffer.description}</p>
                       </div>
                     )}
+                    {(viewOffer.details as any)?.description_longue && (
+                      <div>
+                        <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Description détaillée</p>
+                        <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-line">{(viewOffer.details as any).description_longue}</p>
+                      </div>
+                    )}
+
+                    {/* ── Détails spécifiques au(x) sous-type(s) ── */}
+                    {(() => {
+                      const details = viewOffer.details as Record<string, any> | null;
+                      if (!details) return null;
+
+                      function renderFieldValue(type: string, v: any): React.ReactNode {
+                        if (type === "boolean") {
+                          return <span className={`text-xs font-extrabold px-2 py-0.5 rounded-lg ${v ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{v ? "Oui" : "Non"}</span>;
+                        }
+                        if (type === "multiselect" && Array.isArray(v)) {
+                          return (
+                            <div className="flex flex-wrap gap-1 mt-0.5">
+                              {v.map((item: string) => (
+                                <span key={item} className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-lg">{item}</span>
+                              ))}
+                            </div>
+                          );
+                        }
+                        return <span className="text-sm font-semibold text-slate-700">{String(v)}</span>;
+                      }
+
+                      function renderFieldsFromData(data: Record<string, any>, config: { sections: any[] }) {
+                        return config.sections.map((section, si) => {
+                          const rows = section.fields.filter((f: any) => {
+                            const v = data[f.key];
+                            return v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0);
+                          });
+                          if (!rows.length) return null;
+                          return (
+                            <div key={si}>
+                              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">{section.label}</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                {rows.map((field: any) => (
+                                  <div key={field.key} className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                                    <p className="text-[9px] font-black tracking-widest text-slate-400 uppercase mb-1">{field.label}</p>
+                                    {renderFieldValue(field.type, data[field.key])}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        });
+                      }
+
+                      // ── Cas hébergement : subtypes_units + subtypes_config ──
+                      const subtypesUnits = details.subtypes_units as Record<string, Record<string, any>[]> | undefined;
+                      if (subtypesUnits) {
+                        const allSubtypes = viewOffer.offer_subtypes ?? Object.keys(subtypesUnits);
+                        const PROVIDER_SCHEMA_MAP: Record<string, string> = {
+                          chambre_standard: "Chambre standard", chambre_superieure: "Chambre supérieure",
+                          suite: "Suite", dortoir: "Dortoir", bungalow: "Bungalow",
+                          tente_glamping: "Tente glamping", gite_rural: "Gîte rural",
+                          maison_hotes: "Maison d'hôtes", riad_traditionnel: "Riad",
+                          ecolodge: "Écolodge", camping_sauvage: "Camping", ferme_agritouristique: "Ferme agritouristique",
+                        };
+
+                        return (
+                          <div className="space-y-5">
+                            {allSubtypes.map((st) => {
+                              const stConfig = OFFER_DETAIL_FIELDS[st];
+                              if (!stConfig) return null;
+                              const units = subtypesUnits[st] ?? [];
+                              const stCfg = (details.subtypes_config as Record<string, any> | undefined)?.[st] ?? {};
+                              const stLabel = PROVIDER_SCHEMA_MAP[st] ?? st;
+
+                              return (
+                                <div key={st} className="rounded-2xl border border-slate-100 overflow-hidden">
+                                  <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-100">
+                                    <p className="text-[11px] font-black tracking-widest text-slate-500 uppercase">{stLabel}</p>
+                                  </div>
+                                  <div className="p-4 space-y-4">
+                                    {/* Config partagé (check-in, restauration…) */}
+                                    {Object.keys(stCfg).length > 0 && renderFieldsFromData(stCfg, stConfig)}
+
+                                    {/* Unités */}
+                                    {units.map((unit, ui) => {
+                                      const unitKey = `${st}_unit_${ui}`;
+                                      const photosMap = details.photos as Record<string, string[]> | undefined;
+                                      // fallback sur clé ancienne format (suite) si suite_unit_0 absent
+                                      const unitPhotos = photosMap?.[unitKey] ?? photosMap?.[st] ?? [];
+                                      return (
+                                        <div key={ui} className="space-y-3">
+                                          {units.length > 1 && (
+                                            <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Unité {ui + 1}</p>
+                                          )}
+                                          {unitPhotos.length > 0 && (
+                                            <div className="grid grid-cols-3 gap-1.5">
+                                              {unitPhotos.map((url, pi) => (
+                                                <div key={pi} className={`aspect-square rounded-xl overflow-hidden border-2 ${pi === 0 ? "border-primary" : "border-transparent"}`}>
+                                                  <img src={url} alt="" className="w-full h-full object-cover" />
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
+                                          {renderFieldsFromData({ ...stCfg, ...unit }, stConfig)}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      }
+
+                      // ── Cas activité/circuit : champs plats ──
+                      const subtype = viewOffer.offer_subtype ?? viewOffer.offer_subtypes?.[0];
+                      if (!subtype) return null;
+                      const config = OFFER_DETAIL_FIELDS[subtype];
+                      if (!config) return null;
+                      const nodes = renderFieldsFromData(details, config);
+                      if (!nodes.some(Boolean)) return null;
+                      return <div className="space-y-4">{nodes}</div>;
+                    })()}
 
                     {viewOffer.inclusions && (
                       <div className="bg-emerald-50/60 border border-emerald-100/70 rounded-2xl p-4">
@@ -3759,32 +5207,8 @@ export default function ProviderProfilePage() {
                       className="px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer">
                       Fermer
                     </button>
-                    <button type="button" onClick={() => {
-                      if (!viewOffer) return;
-                      setEditForm({
-                        title:               viewOffer.title,
-                        offer_type:          viewOffer.offer_type          ?? "",
-                        description:         viewOffer.description         ?? "",
-                        price:               viewOffer.price !== null ? String(viewOffer.price) : "",
-                        duration:            viewOffer.duration            ?? "",
-                        status:              viewOffer.status,
-                        region:              viewOffer.region              ?? "",
-                        inclusions:          viewOffer.inclusions          ?? "",
-                        meeting_point:       viewOffer.meeting_point       ?? "",
-                        min_group_size:      viewOffer.min_group_size !== null ? String(viewOffer.min_group_size) : "",
-                        max_group_size:      viewOffer.max_group_size !== null ? String(viewOffer.max_group_size) : "",
-                        min_age:             viewOffer.min_age       !== null ? String(viewOffer.min_age)       : "",
-                        cancellation_policy: viewOffer.cancellation_policy ?? "",
-                      });
-                      setEditTitleError(""); setEditError("");
-                      const imgs = (viewOffer.images?.length
-                        ? viewOffer.images
-                        : viewOffer.cover_image ? [viewOffer.cover_image] : []
-                      ).filter((src) => src.startsWith("http"));
-                      setEditImages(imgs.map((src) => ({ src })));
-                      setEditCoverIdx(0);
-                      setEditMode(true);
-                    }}
+                    <button type="button"
+                      onClick={() => { if (viewOffer) openPublishModalForEdit(viewOffer); }}
                       className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs shadow-sm transition-all active:scale-95 cursor-pointer">
                       <Edit3 size={14} />Gérer
                     </button>
@@ -3974,6 +5398,136 @@ export default function ProviderProfilePage() {
                           </div>
                         </div>
                       </div>
+                      {/* ── Champs détaillés du sous-type ── */}
+                      {(() => {
+                        if (!viewOffer) return null;
+                        const subtypes = viewOffer.offer_subtypes ?? (viewOffer.offer_subtype ? [viewOffer.offer_subtype] : []);
+                        if (!subtypes.length) return null;
+                        const isHeberg = !!(editDetails.subtypes_units);
+
+                        const PROVIDER_SCHEMA_MAP: Record<string, string> = {
+                          chambre_standard: "Chambre standard", chambre_superieure: "Chambre supérieure",
+                          suite: "Suite", dortoir: "Dortoir", bungalow: "Bungalow",
+                          tente_glamping: "Tente glamping", gite_rural: "Gîte rural",
+                          maison_hotes: "Maison d'hôtes", riad_traditionnel: "Riad",
+                          ecolodge: "Écolodge", camping_sauvage: "Camping", ferme_agritouristique: "Ferme",
+                        };
+
+                        function renderDetailField(field: { key: string; label: string; type: string; options?: string[] }, val: any, onChange: (v: any) => void) {
+                          if (field.type === "boolean") {
+                            return (
+                              <button type="button" onClick={() => onChange(!val)}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${val ? "border-primary bg-primary/10 text-primary" : "border-slate-200 bg-slate-50 text-slate-500"}`}>
+                                <div className={`w-3.5 h-3.5 rounded-sm border-2 flex items-center justify-center ${val ? "border-primary bg-primary" : "border-slate-300"}`}>
+                                  {val && <Check size={9} className="text-white" />}
+                                </div>
+                                Oui
+                              </button>
+                            );
+                          }
+                          if (field.type === "select") {
+                            const opts = field.options ?? [];
+                            return (
+                              <select value={val ?? ""} onChange={(e) => onChange(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                                <option value="">— Sélectionner —</option>
+                                {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+                              </select>
+                            );
+                          }
+                          if (field.type === "multiselect") {
+                            const opts = field.options ?? [];
+                            const sel: string[] = Array.isArray(val) ? val : [];
+                            return (
+                              <div className="flex flex-wrap gap-1.5">
+                                {opts.map((o) => (
+                                  <button key={o} type="button"
+                                    onClick={() => onChange(sel.includes(o) ? sel.filter((x) => x !== o) : [...sel, o])}
+                                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all ${sel.includes(o) ? "bg-primary text-white border-primary" : "bg-white border-slate-200 text-slate-600"}`}>
+                                    {o}
+                                  </button>
+                                ))}
+                              </div>
+                            );
+                          }
+                          if (field.type === "time") {
+                            return <input type="time" value={val ?? ""} onChange={(e) => onChange(e.target.value)}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />;
+                          }
+                          if (field.type === "textarea") {
+                            return <textarea rows={2} value={val ?? ""} onChange={(e) => onChange(e.target.value)}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" />;
+                          }
+                          if (field.type === "number") {
+                            return <input type="number" value={val ?? ""} onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />;
+                          }
+                          if (field.type === "file" || field.type === "repeater") return null;
+                          return <input type="text" value={val ?? ""} onChange={(e) => onChange(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />;
+                        }
+
+                        return (
+                          <div className="space-y-4 pt-2 border-t border-slate-100">
+                            <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Détails de l'offre</p>
+                            {subtypes.map((st) => {
+                              const stConfig = OFFER_DETAIL_FIELDS[st];
+                              if (!stConfig) return null;
+                              const stLabel = PROVIDER_SCHEMA_MAP[st] ?? st;
+
+                              const units: Record<string, any>[] = isHeberg
+                                ? ((editDetails.subtypes_units as any)?.[st] ?? [{}])
+                                : [editDetails];
+
+                              return (
+                                <div key={st} className="rounded-2xl border border-slate-100 overflow-hidden">
+                                  {subtypes.length > 1 && (
+                                    <div className="bg-slate-50 px-4 py-2 border-b border-slate-100">
+                                      <p className="text-[10px] font-black tracking-widest text-slate-500 uppercase">{stLabel}</p>
+                                    </div>
+                                  )}
+                                  <div className="p-4 space-y-4">
+                                    {units.map((unit, ui) => {
+                                      const stCfg = isHeberg ? ((editDetails.subtypes_config as any)?.[st] ?? {}) : {};
+                                      const merged = { ...stCfg, ...unit };
+
+                                      function getVal(key: string) { return merged[key]; }
+                                      function setVal(key: string, v: any) {
+                                        setEditDetails((prev) => {
+                                          if (!isHeberg) return { ...prev, [key]: v };
+                                          const prevUnits: any[] = [...((prev.subtypes_units as any)?.[st] ?? [{}])];
+                                          prevUnits[ui] = { ...prevUnits[ui], [key]: v };
+                                          return { ...prev, subtypes_units: { ...(prev.subtypes_units as any), [st]: prevUnits } };
+                                        });
+                                      }
+
+                                      return (
+                                        <div key={ui} className="space-y-3">
+                                          {units.length > 1 && <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Unité {ui + 1}</p>}
+                                          {stConfig.sections.map((section, si) => (
+                                            <div key={si}>
+                                              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">{section.label}</p>
+                                              <div className="space-y-2">
+                                                {section.fields.filter((f) => f.type !== "file" && f.type !== "repeater").map((field) => (
+                                                  <div key={field.key}>
+                                                    <label className="text-[9px] font-black tracking-widest text-slate-400 uppercase mb-1 block">{field.label}</label>
+                                                    {renderDetailField(field as any, getVal(field.key), (v) => setVal(field.key, v))}
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+
                       {editError && (
                         <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
                           <span className="material-symbols-outlined text-red-500 text-base">error</span>
@@ -4258,6 +5812,7 @@ export default function ProviderProfilePage() {
                 { key: "tout",      label: "Tout",       Icon: LayoutGrid },
                 { key: "offres",    label: "Offres",     Icon: Tag },
                 { key: "activites", label: "Activités",  Icon: Sparkles },
+                { key: "circuits",  label: "Circuits",   Icon: Route },
                 { key: "reseau",    label: "Réseau",     Icon: Users },
                 { key: "apropos",   label: "À propos",   Icon: Info },
               ].map(({ key, label, Icon }) => (
@@ -4366,8 +5921,8 @@ export default function ProviderProfilePage() {
                 <div className="space-y-5">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-extrabold text-slate-800">Activités ({orgActivities.length})</h3>
-                    <button onClick={() => setEditProfileOpen(true)} className="text-primary hover:text-primary/80 text-xs font-extrabold flex items-center gap-1">
-                      <Plus size={14} />Gérer les activités
+                    <button onClick={() => openActModal("secondary")} className="text-orange-500 hover:text-orange-400 text-xs font-extrabold flex items-center gap-1 transition-colors">
+                      <Plus size={14} />Ajouter une activité secondaire
                     </button>
                   </div>
 
@@ -4457,6 +6012,97 @@ export default function ProviderProfilePage() {
                   </div>
                 ) : (
                   offers.map((offer) => <OfferCard key={offer.id} offer={offer} />)
+                )}
+              </div>
+            )}
+
+            {activeTab === "circuits" && (
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-800">Circuits multi-étapes</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Organisez des itinéraires sur plusieurs jours avec différentes destinations et activités</p>
+                  </div>
+                  <button onClick={() => openCircuitModal()} className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs shadow-sm transition-all active:scale-95 cursor-pointer">
+                    <Plus size={13} />Créer un circuit
+                  </button>
+                </div>
+
+                {circuits.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-slate-100/80 shadow-sm text-center gap-4">
+                    <div className="w-16 h-16 rounded-3xl bg-primary/10 flex items-center justify-center">
+                      <Route size={28} className="text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-slate-800 font-extrabold text-base">Aucun circuit créé</p>
+                      <p className="text-slate-400 text-sm mt-1 max-w-xs">Créez votre premier circuit multi-étapes avec des destinations, activités et hébergements.</p>
+                    </div>
+                    <button onClick={() => openCircuitModal()} className="flex items-center gap-1.5 px-5 py-2.5 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs shadow-sm transition-all cursor-pointer">
+                      <Plus size={13} />Créer mon premier circuit
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {circuits.map((circuit) => {
+                      const catLabels = [...new Set(circuit.etapes.map((e) => PROVIDER_SCHEMA.find((c) => c.value === e.categorie)?.label ?? e.categorie))];
+                      return (
+                        <div key={circuit.id} className="bg-white rounded-3xl border border-slate-100/80 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+                          <div className="flex gap-0">
+                            {/* Cover */}
+                            <div className="relative w-40 shrink-0 bg-gradient-to-br from-primary/20 to-emerald-100 flex items-center justify-center">
+                              {circuit.cover_image
+                                ? <img src={circuit.cover_image} alt="" className="w-full h-full object-cover absolute inset-0" />
+                                : <Route size={32} className="text-primary/40" />}
+                            </div>
+                            {/* Info */}
+                            <div className="flex-1 p-5">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <h4 className="text-base font-extrabold text-slate-800 leading-tight">{circuit.title}</h4>
+                                  {circuit.description && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{circuit.description}</p>}
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button onClick={() => openCircuitModal(circuit)} className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-primary/10 text-slate-500 hover:text-primary flex items-center justify-center transition-colors cursor-pointer">
+                                    <Edit3 size={14} />
+                                  </button>
+                                  <button onClick={() => { if (confirm("Supprimer ce circuit ?")) setCircuits((prev) => prev.filter((c) => c.id !== circuit.id)); }} className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-500 flex items-center justify-center transition-colors cursor-pointer">
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-2 mt-3">
+                                <span className="flex items-center gap-1 text-[10px] font-black tracking-widest uppercase text-primary bg-primary/10 px-2.5 py-1 rounded-xl">
+                                  <Calendar size={10} />{circuit.nb_jours} jour{circuit.nb_jours > 1 ? "s" : ""}
+                                </span>
+                                <span className="flex items-center gap-1 text-[10px] font-black tracking-widest uppercase text-slate-500 bg-slate-100 px-2.5 py-1 rounded-xl">
+                                  <MapPin size={10} />{circuit.etapes.length} étape{circuit.etapes.length > 1 ? "s" : ""}
+                                </span>
+                                {catLabels.slice(0, 3).map((l) => (
+                                  <span key={l} className="text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-100 px-2 py-1 rounded-xl">{l}</span>
+                                ))}
+                              </div>
+                              {/* Étapes preview */}
+                              <div className="mt-3 space-y-1">
+                                {circuit.etapes.slice(0, 3).map((etape, i) => {
+                                  const cat = PROVIDER_SCHEMA.find((c) => c.value === etape.categorie);
+                                  const stLabels = etape.subtypes.map((sv) => cat?.subtypes.find((s) => s.value === sv)?.label ?? sv);
+                                  return (
+                                    <div key={etape.id} className="flex items-center gap-2 text-xs">
+                                      <span className="w-5 h-5 rounded-full bg-primary/10 text-primary font-black flex items-center justify-center text-[10px] shrink-0">{etape.jour}</span>
+                                      <span className="font-semibold text-slate-700 truncate">{etape.destination}</span>
+                                      <span className="text-slate-400 shrink-0">·</span>
+                                      <span className="text-slate-400 truncate">{stLabels.join(", ")}</span>
+                                    </div>
+                                  );
+                                })}
+                                {circuit.etapes.length > 3 && <p className="text-[10px] text-slate-400 font-semibold">+{circuit.etapes.length - 3} étape{circuit.etapes.length - 3 > 1 ? "s" : ""}…</p>}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             )}

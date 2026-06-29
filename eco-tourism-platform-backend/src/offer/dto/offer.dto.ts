@@ -270,5 +270,26 @@ export class UpdateOfferDto {
   status?: string;
 
   @IsOptional()
+  @IsString()
+  confirmation_mode?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Type(() => Number)
+  confirmation_deadline_hours?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  @Type(() => Number)
+  deposit_percentage?: number;
+
+  @IsOptional()
+  @IsString()
+  langue_offre?: string;
+
+  @IsOptional()
   details?: Record<string, unknown>;
 }

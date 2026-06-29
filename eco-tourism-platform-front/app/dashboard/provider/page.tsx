@@ -569,27 +569,13 @@ export default function ProviderDashboardPage() {
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-xl font-bold">Mes Offres</h3>
-                    <button
-                      onClick={() => router.push("/offers/new")}
-                      className="flex items-center gap-2 px-4 py-2 bg-primary text-slate-900 rounded-xl font-extrabold text-sm shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Nouvelle offre
-                    </button>
                   </div>
 
                   {offers.length === 0 ? (
                     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-12 flex flex-col items-center justify-center text-center">
                       <span className="material-symbols-outlined text-slate-300 text-5xl mb-3">storefront</span>
                       <p className="text-slate-800 dark:text-slate-200 font-extrabold text-lg mb-2">Aucune offre créée</p>
-                      <p className="text-slate-400 font-medium text-sm mb-5">Créez votre première offre pour la présenter aux voyageurs.</p>
-                      <button
-                        onClick={() => router.push("/offers/new")}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-primary text-slate-900 rounded-xl font-extrabold text-sm shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Créer ma première offre
-                      </button>
+                      <p className="text-slate-400 font-medium text-sm">Rendez-vous sur votre profil pour publier une offre.</p>
                     </div>
                   ) : (
                     <div className="space-y-3">
