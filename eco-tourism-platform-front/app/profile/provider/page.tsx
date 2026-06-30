@@ -27,6 +27,9 @@ const MapPicker = dynamic(
 const MapView = dynamic(() => import("@/components/map/MapView"),
   { ssr: false, loading: () => <div className="h-[200px] rounded-xl bg-slate-100 animate-pulse" /> }
 );
+const CircuitRouteMap = dynamic(() => import("@/components/map/CircuitRouteMap"),
+  { ssr: false, loading: () => <div className="h-[200px] rounded-xl bg-slate-100 animate-pulse" /> }
+);
 
 function LocationMap({ lat, lng, address }: { lat: number | null; lng: number | null; address: string }) {
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
@@ -343,6 +346,8 @@ type Tab = "tout" | "offres" | "activites" | "circuits" | "reseau" | "apropos";
 type CircuitEtape = {
   id: string;
   jour: number;
+  heure_debut: string;
+  heure_fin: string;
   destination: string;
   address: string;
   lat: number | null;
@@ -361,6 +366,24 @@ type CircuitEtape = {
   entity_photos: Record<string, string[]>;
 };
 
+type CircuitAvailability = {
+  mode: string;
+  specific_dates?: string[];
+  weekdays?: number[];
+  avail_start?: string;
+  avail_end?: string;
+  saisons?: string[];
+  heure_debut?: string;
+  heure_fin?: string;
+  delai_reponse?: string;
+};
+
+type CircuitHebergement = {
+  inclus: boolean;
+  type?: "same" | "per_day";
+  etape?: CircuitEtape;
+};
+
 type Circuit = {
   id: string;
   title: string;
@@ -368,6 +391,8 @@ type Circuit = {
   nb_jours: number;
   cover_image: string | null;
   etapes: CircuitEtape[];
+  availability?: CircuitAvailability;
+  hebergement?: CircuitHebergement;
   created_at: string;
 };
 
@@ -440,12 +465,28 @@ export default function ProviderProfilePage() {
   const [circuitSaving,       setCircuitSaving]       = useState(false);
   const [circuitFormError,    setCircuitFormError]    = useState("");
   const [editingCircuit,      setEditingCircuit]      = useState<Circuit | null>(null);
+  const [viewingCircuit,      setViewingCircuit]      = useState<Circuit | null>(null);
   const [circuitTitle,        setCircuitTitle]        = useState("");
   const [circuitDescription,  setCircuitDescription]  = useState("");
   const [circuitNbJours,      setCircuitNbJours]      = useState(1);
   const [circuitCoverImg,     setCircuitCoverImg]     = useState<{ file: File; preview: string } | null>(null);
   const [circuitCoverExisting,setCircuitCoverExisting]= useState<string | null>(null);
   const [circuitEtapes,       setCircuitEtapes]       = useState<CircuitEtape[]>([]);
+  // Circuit-level availability
+  const [circuitAvailMode,    setCircuitAvailMode]    = useState("specific");
+  const [circuitAvailDates,   setCircuitAvailDates]   = useState<string[]>([]);
+  const [circuitAvailNewDate, setCircuitAvailNewDate] = useState("");
+  const [circuitAvailWeekdays,setCircuitAvailWeekdays]= useState<number[]>([]);
+  const [circuitAvailStart,   setCircuitAvailStart]   = useState("");
+  const [circuitAvailEnd,     setCircuitAvailEnd]     = useState("");
+  const [circuitAvailSaisons, setCircuitAvailSaisons] = useState<string[]>([]);
+  const [circuitAvailHDebut,  setCircuitAvailHDebut]  = useState("");
+  const [circuitAvailHFin,    setCircuitAvailHFin]    = useState("");
+  const [circuitAvailDelai,    setCircuitAvailDelai]    = useState("24h");
+  // Circuit-level hébergement
+  const [circuitHebergInclus,  setCircuitHebergInclus]  = useState(false);
+  const [circuitHebergType,    setCircuitHebergType]    = useState<"same" | "per_day">("same");
+  const [circuitHebergEtape,   setCircuitHebergEtape]   = useState<CircuitEtape | null>(null);
   // États du formulaire d'une nouvelle étape
   const [etapeFormOpen,       setEtapeFormOpen]       = useState(false);
   const [etapeJour,           setEtapeJour]           = useState(1);
@@ -471,6 +512,9 @@ export default function ProviderProfilePage() {
   const [etapeActiveSubtypeTab,  setEtapeActiveSubtypeTab]  = useState<Record<string, number>>({});
   const [etapeSubtypeFormConfig, setEtapeSubtypeFormConfig] = useState<Record<string, Record<string, any>>>({});
   const [etapeSubtypeDetails,    setEtapeSubtypeDetails]    = useState<Record<string, Record<string, any>>>({});
+  const [etapeHeureDebut,        setEtapeHeureDebut]        = useState("");
+  const [etapeHeureFin,          setEtapeHeureFin]          = useState("");
+  const [editingEtapeId,         setEditingEtapeId]         = useState<string | null>(null);
 
   // ── Activity detail/edit modal ───────────────────────────────────────────
   const [actDetailOpen,  setActDetailOpen]  = useState(false);
@@ -693,19 +737,42 @@ export default function ProviderProfilePage() {
       setCircuitNbJours(circuit.nb_jours);
       setCircuitCoverExisting(circuit.cover_image);
       setCircuitEtapes([...circuit.etapes]);
+      const av = circuit.availability;
+      setCircuitAvailMode(av?.mode ?? "specific");
+      setCircuitAvailDates(av?.specific_dates ?? []);
+      setCircuitAvailWeekdays(av?.weekdays ?? []);
+      setCircuitAvailStart(av?.avail_start ?? "");
+      setCircuitAvailEnd(av?.avail_end ?? "");
+      setCircuitAvailSaisons(av?.saisons ?? []);
+      setCircuitAvailHDebut(av?.heure_debut ?? "");
+      setCircuitAvailHFin(av?.heure_fin ?? "");
+      setCircuitAvailDelai(av?.delai_reponse ?? "24h");
+      const hb = circuit.hebergement;
+      setCircuitHebergInclus(hb?.inclus ?? false);
+      setCircuitHebergType(hb?.type ?? "same");
+      setCircuitHebergEtape(hb?.etape ?? null);
     } else {
       setEditingCircuit(null);
       setCircuitTitle(""); setCircuitDescription("");
       setCircuitNbJours(1); setCircuitCoverExisting(null);
       setCircuitEtapes([]);
+      setCircuitAvailMode("specific"); setCircuitAvailDates([]);
+      setCircuitAvailWeekdays([]); setCircuitAvailStart(""); setCircuitAvailEnd("");
+      setCircuitAvailSaisons([]); setCircuitAvailHDebut(""); setCircuitAvailHFin("");
+      setCircuitAvailDelai("24h");
+      setCircuitHebergInclus(false); setCircuitHebergType("same");
+      setCircuitHebergEtape(null);
     }
+    setCircuitAvailNewDate("");
     setCircuitCoverImg(null); setCircuitFormError("");
     setEtapeFormOpen(false); resetEtapeForm();
     setCircuitModalOpen(true);
   }
 
+  function toMinutes(t: string) { const [h, m] = t.split(":").map(Number); return h * 60 + m; }
+
   function resetEtapeForm() {
-    setEtapeJour(circuitEtapes.length + 1);
+    setEtapeJour(1);
     setEtapeDestination(""); setEtapeAddress("");
     setEtapeLat(null); setEtapeLng(null);
     setEtapeCategorie("");
@@ -717,15 +784,55 @@ export default function ProviderProfilePage() {
     setEtapeSubtypeNbUnites({}); setEtapeSubtypeUnitDetails({});
     setEtapeActiveSubtypeTab({}); setEtapeSubtypeFormConfig({});
     setEtapeSubtypeDetails({});
+    setEtapeHeureDebut(""); setEtapeHeureFin("");
+    setEditingEtapeId(null);
   }
 
-  async function addEtape() {
-    if (!etapeLat || !etapeLng)      { setEtapeFormError("Positionnez la destination sur la carte."); return; }
+  function openCircuitHebergConfig() {
+    resetEtapeForm();
+    setEtapeJour(-1);
+    setEtapeCategorie('hebergement');
+    if (circuitHebergEtape) {
+      setEditingEtapeId(circuitHebergEtape.id);
+      setEtapeSubtypes(circuitHebergEtape.subtypes);
+      setEtapeTitre(circuitHebergEtape.titre);
+      setEtapeDescCourte(circuitHebergEtape.description_courte);
+      setEtapeDescLongue(circuitHebergEtape.description_longue);
+      setEtapeSubtypeUnitDetails(circuitHebergEtape.unit_details ?? {});
+      setEtapeSubtypeNbUnites(circuitHebergEtape.nb_unites ?? {});
+      setEtapeSubtypeFormConfig(circuitHebergEtape.form_config ?? {});
+      setEtapeEntityExistingImages(circuitHebergEtape.entity_photos ?? {});
+    }
+    setEtapeFormOpen(true);
+  }
+
+  async function addEtape(keepOpen = false) {
+    const isCircuitHeberg = etapeJour === -1;
+    if (!etapeLat || !etapeLng) { setEtapeFormError("Positionnez la destination sur la carte."); return; }
     if (!etapeCategorie)              { setEtapeFormError("Choisissez un type d'activité."); return; }
     if (etapeSubtypes.length === 0)   { setEtapeFormError("Choisissez au moins un sous-type."); return; }
-    if (!etapeTitre.trim())           { setEtapeFormError("Le titre de l'étape est requis."); return; }
+    if (!etapeTitre.trim())           { setEtapeFormError("Le titre est requis."); return; }
+    if (!isCircuitHeberg) {
+      if (!etapeHeureDebut)             { setEtapeFormError("L'heure de début est requise."); return; }
+      if (!etapeHeureFin)               { setEtapeFormError("L'heure de fin est requise."); return; }
+      if (toMinutes(etapeHeureFin) <= toMinutes(etapeHeureDebut)) {
+        setEtapeFormError("L'heure de fin doit être après l'heure de début."); return;
+      }
+      const newStart = toMinutes(etapeHeureDebut);
+      const newEnd   = toMinutes(etapeHeureFin);
+      const conflict = circuitEtapes.find((e) =>
+        e.jour === etapeJour &&
+        e.id !== editingEtapeId &&
+        e.heure_debut && e.heure_fin &&
+        toMinutes(e.heure_debut) < newEnd &&
+        toMinutes(e.heure_fin)   > newStart
+      );
+      if (conflict) {
+        setEtapeFormError(`Conflit horaire avec "${conflict.titre || conflict.destination}" (${conflict.heure_debut} – ${conflict.heure_fin}).`);
+        return;
+      }
+    }
     const displayName = etapeDestination.trim() || etapeAddress.split(",")[0].trim();
-    // Upload entity-keyed photos et fusionner avec les existantes
     const finalEntityPhotos: Record<string, string[]> = { ...etapeEntityExistingImages };
     try {
       for (const [entityKey, imgs] of Object.entries(etapeEntityImages)) {
@@ -738,11 +845,12 @@ export default function ProviderProfilePage() {
         finalEntityPhotos[entityKey] = [...existing, ...newOrdered];
       }
     } catch { setEtapeFormError("Erreur upload photos."); return; }
-    const uploadedEntityPhotos = finalEntityPhotos;
     const allEntityUrls = Object.values(finalEntityPhotos).flat();
     const newEtape: CircuitEtape = {
-      id: crypto.randomUUID(),
+      id: (isCircuitHeberg ? circuitHebergEtape?.id : editingEtapeId) ?? crypto.randomUUID(),
       jour: etapeJour,
+      heure_debut: isCircuitHeberg ? '' : etapeHeureDebut,
+      heure_fin:   isCircuitHeberg ? '' : etapeHeureFin,
       destination: displayName,
       address: etapeAddress,
       lat: etapeLat,
@@ -758,11 +866,28 @@ export default function ProviderProfilePage() {
       unit_details: etapeSubtypeUnitDetails,
       nb_unites: etapeSubtypeNbUnites,
       form_config: etapeSubtypeFormConfig,
-      entity_photos: uploadedEntityPhotos,
+      entity_photos: finalEntityPhotos,
     };
-    setCircuitEtapes((prev) => [...prev.filter((e) => e.jour !== etapeJour), newEtape].sort((a, b) => a.jour - b.jour));
-    setEtapeFormOpen(false);
-    resetEtapeForm();
+    if (isCircuitHeberg) {
+      setCircuitHebergEtape(newEtape);
+      setEtapeFormOpen(false);
+      resetEtapeForm();
+      return;
+    }
+    if (editingEtapeId) {
+      setCircuitEtapes((prev) => prev.map((e) => e.id === editingEtapeId ? newEtape : e));
+    } else {
+      setCircuitEtapes((prev) => [...prev, newEtape].sort((a, b) => a.jour - b.jour || toMinutes(a.heure_debut || "00:00") - toMinutes(b.heure_debut || "00:00")));
+    }
+    if (keepOpen) {
+      const savedJour = etapeJour;
+      resetEtapeForm();
+      setEtapeJour(savedJour);
+      setEtapeFormOpen(true);
+    } else {
+      setEtapeFormOpen(false);
+      resetEtapeForm();
+    }
   }
 
   async function saveCircuit() {
@@ -774,11 +899,26 @@ export default function ProviderProfilePage() {
     try {
       let coverUrl = circuitCoverExisting;
       if (circuitCoverImg) coverUrl = await uploadImage(circuitCoverImg.file);
+      const availability: CircuitAvailability = {
+        mode: circuitAvailMode,
+        ...(circuitAvailMode === 'specific' && { specific_dates: circuitAvailDates }),
+        ...(circuitAvailMode === 'weekly' && { weekdays: circuitAvailWeekdays, avail_start: circuitAvailStart, avail_end: circuitAvailEnd }),
+        ...(circuitAvailMode === 'period' && { avail_start: circuitAvailStart, avail_end: circuitAvailEnd }),
+        ...(circuitAvailMode === 'season' && { saisons: circuitAvailSaisons }),
+        ...(circuitAvailMode === 'on_demand' && { delai_reponse: circuitAvailDelai }),
+        ...(circuitAvailMode !== 'on_demand' && circuitAvailHDebut && { heure_debut: circuitAvailHDebut }),
+        ...(circuitAvailMode !== 'on_demand' && circuitAvailHFin && { heure_fin: circuitAvailHFin }),
+      };
+      const hebergement: CircuitHebergement = {
+        inclus: circuitHebergInclus,
+        ...(circuitHebergInclus && { type: circuitHebergType }),
+        ...(circuitHebergInclus && circuitHebergType === 'same' && circuitHebergEtape && { etape: circuitHebergEtape }),
+      };
       if (editingCircuit) {
-        const updated: Circuit = { ...editingCircuit, title: circuitTitle, description: circuitDescription, nb_jours: circuitNbJours, cover_image: coverUrl, etapes: circuitEtapes };
+        const updated: Circuit = { ...editingCircuit, title: circuitTitle, description: circuitDescription, nb_jours: circuitNbJours, cover_image: coverUrl, etapes: circuitEtapes, availability, hebergement };
         setCircuits((prev) => prev.map((c) => c.id === updated.id ? updated : c));
       } else {
-        const created: Circuit = { id: crypto.randomUUID(), title: circuitTitle, description: circuitDescription, nb_jours: circuitNbJours, cover_image: coverUrl, etapes: circuitEtapes, created_at: new Date().toISOString() };
+        const created: Circuit = { id: crypto.randomUUID(), title: circuitTitle, description: circuitDescription, nb_jours: circuitNbJours, cover_image: coverUrl, etapes: circuitEtapes, availability, hebergement, created_at: new Date().toISOString() };
         setCircuits((prev) => [created, ...prev]);
       }
       if (circuitCoverImg) URL.revokeObjectURL(circuitCoverImg.preview);
@@ -2006,6 +2146,347 @@ export default function ProviderProfilePage() {
     )}
 
     {/* ══ CIRCUIT MODAL ════════════════════════════════════════════════════ */}
+    {/* ── Modal Détails Circuit ── */}
+    {viewingCircuit && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setViewingCircuit(null)}>
+        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+
+          {/* Header with cover */}
+          <div className="relative shrink-0">
+            {viewingCircuit.cover_image
+              ? <img src={viewingCircuit.cover_image} alt="" className="w-full h-40 object-cover" />
+              : <div className="w-full h-40 bg-gradient-to-br from-primary/20 to-emerald-100 flex items-center justify-center"><Route size={40} className="text-primary/30" /></div>
+            }
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 px-6 pb-4">
+              <h3 className="text-xl font-extrabold text-white leading-tight">{viewingCircuit.title}</h3>
+              <div className="flex items-center gap-3 mt-1">
+                <span className="flex items-center gap-1 text-[11px] font-black text-white/90">
+                  <Calendar size={11} />{viewingCircuit.nb_jours} jour{viewingCircuit.nb_jours > 1 ? "s" : ""}
+                </span>
+                <span className="flex items-center gap-1 text-[11px] font-black text-white/90">
+                  <MapPin size={11} />{viewingCircuit.etapes.length} étape{viewingCircuit.etapes.length > 1 ? "s" : ""}
+                </span>
+              </div>
+            </div>
+            <button onClick={() => setViewingCircuit(null)} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors cursor-pointer">
+              <X size={15} />
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+            {/* Description */}
+            {viewingCircuit.description && (
+              <div>
+                <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1">Description</p>
+                <p className="text-sm text-slate-600 leading-relaxed">{viewingCircuit.description}</p>
+              </div>
+            )}
+
+            {/* Disponibilité */}
+            {viewingCircuit.availability && (
+              <div>
+                <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Disponibilité</p>
+                <div className="bg-slate-50 rounded-2xl p-4 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Calendar size={13} className="text-primary shrink-0" />
+                    <span className="text-sm font-semibold text-slate-700">
+                      {AVAILABILITY_TYPES.find((a) => a.value === viewingCircuit.availability?.mode)?.label ?? viewingCircuit.availability.mode}
+                    </span>
+                  </div>
+                  {viewingCircuit.availability.mode === "specific" && viewingCircuit.availability.specific_dates && (
+                    <div className="flex flex-wrap gap-1.5 pl-5">
+                      {viewingCircuit.availability.specific_dates.map((d) => (
+                        <span key={d} className="text-[11px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-lg">{d}</span>
+                      ))}
+                    </div>
+                  )}
+                  {viewingCircuit.availability.mode === "weekly" && viewingCircuit.availability.weekdays && (
+                    <div className="flex flex-wrap gap-1.5 pl-5">
+                      {viewingCircuit.availability.weekdays.map((d) => (
+                        <span key={d} className="text-[11px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-lg">
+                          {["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"][d]}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {viewingCircuit.availability.mode === "period" && (viewingCircuit.availability.avail_start || viewingCircuit.availability.avail_end) && (
+                    <p className="text-xs text-slate-500 pl-5">{viewingCircuit.availability.avail_start} → {viewingCircuit.availability.avail_end}</p>
+                  )}
+                  {viewingCircuit.availability.mode === "season" && viewingCircuit.availability.saisons && (
+                    <div className="flex flex-wrap gap-1.5 pl-5">
+                      {viewingCircuit.availability.saisons.map((s) => (
+                        <span key={s} className="text-[11px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-lg">{s}</span>
+                      ))}
+                    </div>
+                  )}
+                  {viewingCircuit.availability.heure_debut && viewingCircuit.availability.heure_fin && (
+                    <div className="flex items-center gap-2 pl-5">
+                      <Clock size={12} className="text-slate-400" />
+                      <span className="text-xs text-slate-500">{viewingCircuit.availability.heure_debut} – {viewingCircuit.availability.heure_fin}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Hébergement */}
+            {viewingCircuit.hebergement && (
+              <div>
+                <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Hébergement</p>
+                <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
+                  {!viewingCircuit.hebergement.inclus ? (
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                      <span className="material-symbols-outlined text-[16px]">hotel_class</span>Non inclus
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                        <span className="material-symbols-outlined text-[16px] text-primary">hotel</span>
+                        {viewingCircuit.hebergement.type === "same" ? "Même hébergement sur tout le circuit" : "Hébergement variable par jour (voir programme)"}
+                      </div>
+                      {viewingCircuit.hebergement.type === "same" && viewingCircuit.hebergement.etape && (() => {
+                        const hb = viewingCircuit.hebergement!.etape!;
+                        const hbCat = PROVIDER_SCHEMA.find((c) => c.value === "hebergement");
+                        return (
+                          <div className="space-y-3 pt-1">
+                            {/* Titre + localisation */}
+                            <div>
+                              <p className="text-sm font-extrabold text-slate-800">{hb.titre}</p>
+                              {hb.destination && (
+                                <div className="flex items-center gap-1 text-[11px] text-slate-400 mt-0.5">
+                                  <MapPin size={10} />{hb.destination}
+                                </div>
+                              )}
+                            </div>
+                            {/* Descriptions */}
+                            {hb.description_courte && <p className="text-xs text-slate-600">{hb.description_courte}</p>}
+                            {hb.description_longue && <p className="text-xs text-slate-500">{hb.description_longue}</p>}
+                            {/* Sous-types avec photos + tarifs */}
+                            {hb.subtypes.length > 0 && (
+                              <div className="space-y-2">
+                                {hb.subtypes.map((sv) => {
+                                  const stLabel = hbCat?.subtypes.find((s) => s.value === sv)?.label ?? sv;
+                                  const nbU = hb.nb_unites?.[sv] ?? 1;
+                                  const cfg = hb.form_config?.[sv] ?? {};
+                                  const entityPhotos = hb.entity_photos?.[sv] ?? hb.entity_photos?.[`${sv}_unit_0`] ?? [];
+                                  const hasPrice = cfg.prixGroupe || cfg.prixEnfant;
+                                  return (
+                                    <div key={sv} className="bg-white rounded-xl border border-slate-100 p-3 space-y-2">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-[11px] font-extrabold text-slate-700">{stLabel}</span>
+                                        {nbU > 1 && <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg">{nbU} unités</span>}
+                                      </div>
+                                      {entityPhotos.length > 0 && (
+                                        <div className="flex gap-1.5 overflow-x-auto">
+                                          {entityPhotos.slice(0, 4).map((url, pi) => (
+                                            <img key={pi} src={url} alt="" className="w-14 h-14 rounded-lg object-cover shrink-0" />
+                                          ))}
+                                        </div>
+                                      )}
+                                      {hasPrice && (
+                                        <div className="flex flex-wrap gap-2">
+                                          {cfg.prixGroupe && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg">{cfg.prixGroupe} DT{cfg.nbPersonnesGroupe ? ` / ${cfg.nbPersonnesGroupe} pers.` : ''}</span>}
+                                          {cfg.prixEnfant && <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-lg">{cfg.prixEnfant} DT enfant{cfg.ageMaxEnfant ? ` (≤${cfg.ageMaxEnfant} ans)` : ''}</span>}
+                                          {cfg.suppPrivatisation && <span className="text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-100 px-2 py-0.5 rounded-lg">+{cfg.suppPrivatisation} DT privatisation</span>}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Étapes par jour */}
+            <div>
+              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-3">Programme jour par jour</p>
+              {viewingCircuit.etapes.length === 0 ? (
+                <p className="text-sm text-slate-400 italic">Aucune étape configurée.</p>
+              ) : (
+                <div className="space-y-4">
+                  {Array.from({ length: viewingCircuit.nb_jours }, (_, i) => i + 1).map((jour) => {
+                    const etapesJour = viewingCircuit.etapes.filter((e) => e.jour === jour).sort((a, b) => {
+                      const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+                      return toMin(a.heure_debut || '00:00') - toMin(b.heure_debut || '00:00');
+                    });
+                    return (
+                      <div key={jour} className="border border-slate-100 rounded-2xl overflow-hidden">
+                        {/* Jour header */}
+                        <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 border-b border-slate-100">
+                          <div className="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-black shrink-0">{jour}</div>
+                          <p className="text-xs font-extrabold text-slate-700">Jour {jour}</p>
+                          <span className="ml-auto text-[10px] text-slate-400 font-semibold">{etapesJour.length} activité{etapesJour.length > 1 ? 's' : ''}</span>
+                        </div>
+                        {etapesJour.length === 0 ? (
+                          <p className="text-[11px] text-slate-300 italic px-4 py-3">Aucune activité ce jour.</p>
+                        ) : (
+                          <div className="divide-y divide-slate-100">
+                            {etapesJour.map((etape) => {
+                              const cat = PROVIDER_SCHEMA.find((c) => c.value === etape.categorie);
+                              const allPhotos = Object.values(etape.entity_photos ?? {}).flat();
+                              const coverPhoto = allPhotos[0] ?? etape.photos?.[0];
+                              return (
+                                <div key={etape.id} className="p-4 space-y-3">
+                                  {/* Top row: categorie + horaires */}
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[10px] font-black tracking-widest uppercase text-primary bg-primary/10 px-2 py-0.5 rounded-lg">{cat?.label ?? etape.categorie}</span>
+                                    {etape.heure_debut && etape.heure_fin && (
+                                      <span className="flex items-center gap-1 text-[10px] text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded-lg">
+                                        <Clock size={9} />{etape.heure_debut} – {etape.heure_fin}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Photo + titre + localisation */}
+                                  <div className="flex gap-3">
+                                    {coverPhoto && (
+                                      <img src={coverPhoto} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" />
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-extrabold text-slate-800 leading-tight">{etape.titre || etape.destination}</p>
+                                      {etape.destination && etape.titre && (
+                                        <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
+                                          <MapPin size={9} />{etape.destination}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Descriptions */}
+                                  {etape.description_courte && (
+                                    <p className="text-xs text-slate-600 leading-relaxed">{etape.description_courte}</p>
+                                  )}
+                                  {etape.description_longue && (
+                                    <p className="text-xs text-slate-500 leading-relaxed">{etape.description_longue}</p>
+                                  )}
+
+                                  {/* Sous-types avec leurs détails */}
+                                  {etape.subtypes.length > 0 && (
+                                    <div className="space-y-2">
+                                      {etape.subtypes.map((sv) => {
+                                        const stDef = cat?.subtypes.find((s) => s.value === sv);
+                                        const stLabel = stDef?.label ?? sv;
+                                        const nbU = etape.nb_unites?.[sv] ?? 1;
+                                        const cfg = etape.form_config?.[sv] ?? {};
+                                        const entityPhotos = etape.entity_photos?.[sv] ?? etape.entity_photos?.[`${sv}_unit_0`] ?? [];
+                                        const hasPrice = cfg.prixGroupe || cfg.prixEnfant;
+                                        return (
+                                          <div key={sv} className="bg-slate-50 rounded-xl p-3 space-y-2">
+                                            <div className="flex items-center justify-between gap-2">
+                                              <span className="text-[11px] font-extrabold text-slate-700">{stLabel}</span>
+                                              {nbU > 1 && (
+                                                <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-lg">{nbU} unités</span>
+                                              )}
+                                            </div>
+                                            {/* Mini photo gallery per subtype */}
+                                            {entityPhotos.length > 0 && (
+                                              <div className="flex gap-1.5 overflow-x-auto">
+                                                {entityPhotos.slice(0, 4).map((url, pi) => (
+                                                  <img key={pi} src={url} alt="" className="w-14 h-14 rounded-lg object-cover shrink-0" />
+                                                ))}
+                                              </div>
+                                            )}
+                                            {/* Tarif */}
+                                            {hasPrice && (
+                                              <div className="flex flex-wrap gap-2">
+                                                {cfg.prixGroupe && (
+                                                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg">
+                                                    {cfg.prixGroupe} DT{cfg.nbPersonnesGroupe ? ` / ${cfg.nbPersonnesGroupe} pers.` : ' groupe'}
+                                                  </span>
+                                                )}
+                                                {cfg.prixEnfant && (
+                                                  <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-lg">
+                                                    {cfg.prixEnfant} DT enfant{cfg.ageMaxEnfant ? ` (≤${cfg.ageMaxEnfant} ans)` : ''}
+                                                  </span>
+                                                )}
+                                                {cfg.suppPrivatisation && (
+                                                  <span className="text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-100 px-2 py-0.5 rounded-lg">
+                                                    +{cfg.suppPrivatisation} DT privatisation
+                                                  </span>
+                                                )}
+                                              </div>
+                                            )}
+                                            {/* Disponibilité spécifique */}
+                                            {cfg.availMode && cfg.availMode !== 'specific' && (
+                                              <div className="text-[10px] text-slate-400 font-semibold">
+                                                Dispo : {AVAILABILITY_TYPES.find((a) => a.value === cfg.availMode)?.label ?? cfg.availMode}
+                                                {cfg.availStart && cfg.availEnd && ` · ${cfg.availStart} → ${cfg.availEnd}`}
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+
+                                  {/* Prix global de l'étape */}
+                                  {etape.prix !== null && etape.prix !== undefined && (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[10px] font-black text-slate-400 uppercase">Prix indicatif</span>
+                                      <span className="text-sm font-extrabold text-primary">{etape.prix} DT</span>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Carte du tracé */}
+            {(() => {
+              const pts = viewingCircuit.etapes
+                .filter((e) => e.lat !== null && e.lng !== null)
+                .sort((a, b) => a.jour - b.jour)
+                .map((e) => ({ jour: e.jour, lat: e.lat as number, lng: e.lng as number, destination: e.destination }));
+              const hbEtape = viewingCircuit.hebergement?.inclus && viewingCircuit.hebergement.type === "same" ? viewingCircuit.hebergement.etape : null;
+              const hb = (hbEtape?.lat && hbEtape?.lng)
+                ? { lat: hbEtape.lat as number, lng: hbEtape.lng as number, nom: hbEtape.titre || hbEtape.destination || "Hébergement" }
+                : undefined;
+              if (pts.length === 0 && !hb) return null;
+              return (
+                <div>
+                  <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Tracé du circuit</p>
+                  <CircuitRouteMap points={pts} hebergementPoint={hb} />
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-4 border-t border-slate-100 shrink-0 flex items-center justify-between gap-3">
+            <button
+              onClick={() => { setViewingCircuit(null); openCircuitModal(viewingCircuit); }}
+              className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold rounded-2xl text-xs transition-all cursor-pointer"
+            >
+              <Edit3 size={12} />Modifier
+            </button>
+            <button
+              onClick={() => setViewingCircuit(null)}
+              className="px-5 py-2 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs transition-all cursor-pointer"
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {circuitModalOpen && (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
         <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
@@ -2077,55 +2558,166 @@ export default function ProviderProfilePage() {
               </div>
             </div>
 
+            {/* ── Disponibilité du circuit ── */}
+            <div className="space-y-3">
+              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Disponibilité</p>
+              <div className="grid grid-cols-2 gap-2">
+                {AVAILABILITY_TYPES.map((m) => (
+                  <button key={m.value} type="button" onClick={() => setCircuitAvailMode(m.value)}
+                    className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border-2 text-[10px] font-bold transition-all ${circuitAvailMode === m.value ? 'border-primary bg-primary/10 text-slate-900' : 'border-slate-200 bg-white text-slate-500 hover:border-primary/30'}`}>
+                    <span className={`material-symbols-outlined text-sm ${circuitAvailMode === m.value ? 'text-primary' : 'text-slate-400'}`}>{m.icon}</span>{m.label}
+                  </button>
+                ))}
+              </div>
+
+              {circuitAvailMode === 'specific' && (
+                <div className="space-y-1.5">
+                  <div className="flex gap-2">
+                    <input type="date" value={circuitAvailNewDate} onChange={(e) => setCircuitAvailNewDate(e.target.value)}
+                      className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                    <button type="button" onClick={() => {
+                      if (circuitAvailNewDate && !circuitAvailDates.includes(circuitAvailNewDate)) {
+                        setCircuitAvailDates((prev) => [...prev, circuitAvailNewDate].sort());
+                        setCircuitAvailNewDate("");
+                      }
+                    }} className="px-3 py-2 bg-primary text-white rounded-xl text-xs font-extrabold hover:bg-primary/90">Ajouter</button>
+                  </div>
+                  {circuitAvailDates.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {circuitAvailDates.map((d) => (
+                        <span key={d} className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded-full text-[10px] font-bold border border-primary/20">
+                          {d}<button type="button" onClick={() => setCircuitAvailDates((prev) => prev.filter((x) => x !== d))}><X size={8} /></button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {circuitAvailMode === 'weekly' && (
+                <div className="space-y-1.5">
+                  <div className="flex gap-1">
+                    {['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map((day, i) => (
+                      <button key={i} type="button"
+                        onClick={() => setCircuitAvailWeekdays((prev) => prev.includes(i) ? prev.filter((d) => d !== i) : [...prev, i])}
+                        className={`flex-1 py-1.5 rounded-lg text-[9px] font-black border-2 transition-all ${circuitAvailWeekdays.includes(i) ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{day}</button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début</label><input type="date" value={circuitAvailStart} onChange={(e) => setCircuitAvailStart(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                    <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin</label><input type="date" value={circuitAvailEnd} onChange={(e) => setCircuitAvailEnd(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                  </div>
+                </div>
+              )}
+
+              {circuitAvailMode === 'period' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début *</label><input type="date" value={circuitAvailStart} onChange={(e) => setCircuitAvailStart(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                  <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin *</label><input type="date" value={circuitAvailEnd} onChange={(e) => setCircuitAvailEnd(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                </div>
+              )}
+
+              {circuitAvailMode === 'on_demand' && (
+                <div className="flex gap-2">
+                  {['24h','48h','72h'].map((d) => (
+                    <button key={d} type="button" onClick={() => setCircuitAvailDelai(d)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border-2 transition-all ${circuitAvailDelai === d ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 bg-white text-slate-500'}`}>{d}</button>
+                  ))}
+                </div>
+              )}
+
+              {circuitAvailMode === 'season' && (
+                <div className="flex gap-1.5">
+                  {SAISONS.map((s) => (
+                    <button key={s} type="button"
+                      onClick={() => setCircuitAvailSaisons((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s])}
+                      className={`flex-1 py-1.5 rounded-xl text-[9px] font-black border-2 transition-all ${circuitAvailSaisons.includes(s) ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{s}</button>
+                  ))}
+                </div>
+              )}
+
+              {circuitAvailMode !== 'on_demand' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Heure début</label><input type="time" value={circuitAvailHDebut} onChange={(e) => setCircuitAvailHDebut(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                  <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Heure fin</label><input type="time" value={circuitAvailHFin} onChange={(e) => setCircuitAvailHFin(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                </div>
+              )}
+            </div>
+
+            {/* ── Hébergement du circuit ── */}
+            <div className="space-y-3">
+              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Hébergement</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setCircuitHebergInclus(false)}
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-xs font-bold transition-all ${!circuitHebergInclus ? 'border-primary bg-primary/10 text-slate-900' : 'border-slate-200 bg-white text-slate-500 hover:border-primary/30'}`}>
+                  <span className={`material-symbols-outlined text-sm ${!circuitHebergInclus ? 'text-primary' : 'text-slate-400'}`}>hotel_class</span>
+                  Non inclus
+                </button>
+                <button type="button" onClick={() => setCircuitHebergInclus(true)}
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-xs font-bold transition-all ${circuitHebergInclus ? 'border-primary bg-primary/10 text-slate-900' : 'border-slate-200 bg-white text-slate-500 hover:border-primary/30'}`}>
+                  <span className={`material-symbols-outlined text-sm ${circuitHebergInclus ? 'text-primary' : 'text-slate-400'}`}>hotel</span>
+                  Hébergement inclus
+                </button>
+              </div>
+
+              {circuitHebergInclus && (
+                <div className="space-y-3 pl-2 border-l-2 border-primary/20">
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { value: "same",    label: "Même sur tout le circuit", icon: "sync" },
+                      { value: "per_day", label: "Variable par jour",         icon: "calendar_view_day" },
+                    ] as const).map((opt) => (
+                      <button key={opt.value} type="button" onClick={() => setCircuitHebergType(opt.value)}
+                        className={`flex items-center gap-1.5 px-2.5 py-2.5 rounded-xl border-2 text-[10px] font-bold transition-all ${circuitHebergType === opt.value ? 'border-primary bg-primary/10 text-slate-900' : 'border-slate-200 bg-white text-slate-500 hover:border-primary/30'}`}>
+                        <span className={`material-symbols-outlined text-sm ${circuitHebergType === opt.value ? 'text-primary' : 'text-slate-400'}`}>{opt.icon}</span>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {circuitHebergType === 'same' && (
+                    <p className="text-[10px] text-slate-400">
+                      <span className="material-symbols-outlined text-[12px] align-middle mr-0.5">info</span>
+                      Configurez l'hébergement dans le slot "Hébergement du circuit" ci-dessous. Il est retiré des activités par jour.
+                    </p>
+                  )}
+
+                  {circuitHebergType === 'per_day' && (
+                    <p className="text-[10px] text-slate-400">
+                      <span className="material-symbols-outlined text-[12px] align-middle mr-0.5">info</span>
+                      Configurez l'hébergement dans chaque jour directement.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* ── Étapes — un slot par jour ── */}
             <div className="space-y-4">
               <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
                 Étapes ({circuitEtapes.length}/{circuitNbJours} jours configurés)
               </p>
 
-              {Array.from({ length: circuitNbJours }, (_, i) => {
-                const jour = i + 1;
-                const etape = circuitEtapes.find((e) => e.jour === jour);
+              {[
+                ...(circuitHebergInclus && circuitHebergType === 'same' ? [-1] : []),
+                ...Array.from({ length: circuitNbJours }, (_, i) => i + 1),
+              ].map((jour) => {
+                const isCircuitHebergSlot = jour === -1;
+                const activitesJour = isCircuitHebergSlot
+                  ? (circuitHebergEtape ? [circuitHebergEtape] : [])
+                  : circuitEtapes.filter((e) => e.jour === jour);
                 const isFormOpenForThisJour = etapeFormOpen && etapeJour === jour;
-                const cat = etape ? PROVIDER_SCHEMA.find((c) => c.value === etape.categorie) : null;
-                const stLabels = etape ? etape.subtypes.map((sv) => cat?.subtypes.find((s) => s.value === sv)?.label ?? sv) : [];
 
                 return (
                   <div key={jour} className="space-y-2">
                     {/* Jour header */}
                     <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-full font-black text-xs flex items-center justify-center shrink-0 ${etape ? "bg-primary text-white" : "bg-slate-100 text-slate-400"}`}>{jour}</div>
-                      <p className="text-xs font-extrabold text-slate-600">Jour {jour}</p>
-                      {etape && !isFormOpenForThisJour && (
-                        <div className="flex gap-1 ml-auto">
-                          <button type="button" onClick={() => {
-                            resetEtapeForm();
-                            setEtapeJour(jour);
-                            setEtapeDestination(etape.destination);
-                            setEtapeAddress(etape.address);
-                            setEtapeLat(etape.lat);
-                            setEtapeLng(etape.lng);
-                            setEtapeCategorie(etape.categorie);
-                            setEtapeSubtypes(etape.subtypes);
-                            setEtapeTitre(etape.titre);
-                            setEtapeDescCourte(etape.description_courte);
-                            setEtapeDescLongue(etape.description_longue);
-                            setEtapePrix(etape.prix?.toString() ?? '');
-                            setEtapeSubtypeDetails(etape.fields ?? {});
-                            setEtapeSubtypeUnitDetails(etape.unit_details ?? {});
-                            setEtapeSubtypeNbUnites(etape.nb_unites ?? {});
-                            setEtapeSubtypeFormConfig(etape.form_config ?? {});
-                            setEtapeEntityExistingImages(etape.entity_photos ?? {});
-                            setEtapeFormOpen(true);
-                            setEtapeFormError('');
-                          }} className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-primary flex items-center justify-center transition-colors cursor-pointer">
-                            <Edit3 size={10} />
-                          </button>
-                          <button type="button" onClick={() => setCircuitEtapes((prev) => prev.filter((e) => e.jour !== jour))}
-                            className="w-6 h-6 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 flex items-center justify-center transition-colors cursor-pointer">
-                            <X size={10} />
-                          </button>
-                        </div>
+                      <div className={`w-7 h-7 rounded-full font-black text-xs flex items-center justify-center shrink-0 ${activitesJour.length > 0 ? "bg-primary text-white" : "bg-slate-100 text-slate-400"}`}>
+                        {isCircuitHebergSlot ? <span className="material-symbols-outlined text-[13px]">hotel</span> : jour}
+                      </div>
+                      <p className="text-xs font-extrabold text-slate-600">{isCircuitHebergSlot ? "Hébergement du circuit" : `Jour ${jour}`}</p>
+                      {isFormOpenForThisJour && activitesJour.length > 0 && (
+                        <span className="ml-auto text-[10px] text-slate-400 font-semibold">{activitesJour.length} activité{activitesJour.length > 1 ? "s" : ""}</span>
                       )}
                       {isFormOpenForThisJour && (
                         <button type="button" onClick={() => { setEtapeFormOpen(false); resetEtapeForm(); }}
@@ -2133,41 +2725,113 @@ export default function ProviderProfilePage() {
                       )}
                     </div>
 
-                    {/* Etape configurée */}
-                    {etape && !isFormOpenForThisJour && (
-                      <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100 ml-9">
-                        {etape.photos[0] && <img src={etape.photos[0]} alt="" className="w-10 h-10 rounded-xl object-cover shrink-0" />}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-extrabold text-slate-800 truncate">{etape.titre || etape.destination}</p>
-                          <p className="text-[10px] text-slate-400 font-semibold truncate">{etape.destination} · {cat?.label}{stLabels.length > 0 && ` · ${stLabels.join(", ")}`}</p>
-                          {etape.prix != null && <p className="text-[10px] font-black text-primary mt-0.5">{etape.prix} TND</p>}
+                    {/* Liste des activités */}
+                    {activitesJour.map((act) => {
+                      const actCat = PROVIDER_SCHEMA.find((c) => c.value === act.categorie);
+                      const actStLabels = act.subtypes.map((sv) => actCat?.subtypes.find((s) => s.value === sv)?.label ?? sv);
+                      const firstPhoto = Object.values(act.entity_photos ?? {}).flat()[0] ?? act.photos?.[0];
+                      return (
+                        <div key={act.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100 ml-9">
+                          {firstPhoto && <img src={firstPhoto} alt="" className="w-10 h-10 rounded-xl object-cover shrink-0" />}
+                          <div className="flex-1 min-w-0">
+                            {(act.heure_debut || act.heure_fin) && (
+                              <p className="text-[10px] font-black text-primary mb-0.5">{act.heure_debut || "?"} → {act.heure_fin || "?"}</p>
+                            )}
+                            <p className="text-sm font-extrabold text-slate-800 truncate">{act.titre || act.destination}</p>
+                            <p className="text-[10px] text-slate-400 font-semibold truncate">{act.destination} · {actCat?.label}{actStLabels.length > 0 && ` · ${actStLabels.join(", ")}`}</p>
+                            {act.prix != null && <p className="text-[10px] font-black text-primary mt-0.5">{act.prix} TND</p>}
+                          </div>
+                          <div className="flex flex-col gap-1 shrink-0">
+                            <button type="button" onClick={() => {
+                              if (isCircuitHebergSlot) { openCircuitHebergConfig(); return; }
+                              resetEtapeForm();
+                              setEditingEtapeId(act.id);
+                              setEtapeJour(jour);
+                              setEtapeDestination(act.destination);
+                              setEtapeAddress(act.address);
+                              setEtapeLat(act.lat); setEtapeLng(act.lng);
+                              setEtapeCategorie(act.categorie);
+                              setEtapeSubtypes(act.subtypes);
+                              setEtapeTitre(act.titre);
+                              setEtapeDescCourte(act.description_courte);
+                              setEtapeDescLongue(act.description_longue);
+                              setEtapePrix(act.prix?.toString() ?? '');
+                              setEtapeHeureDebut(act.heure_debut ?? '');
+                              setEtapeHeureFin(act.heure_fin ?? '');
+                              setEtapeSubtypeDetails(act.fields ?? {});
+                              setEtapeSubtypeUnitDetails(act.unit_details ?? {});
+                              setEtapeSubtypeNbUnites(act.nb_unites ?? {});
+                              setEtapeSubtypeFormConfig(act.form_config ?? {});
+                              setEtapeEntityExistingImages(act.entity_photos ?? {});
+                              setEtapeFormOpen(true); setEtapeFormError('');
+                            }} className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-primary flex items-center justify-center transition-colors cursor-pointer">
+                              <Edit3 size={10} />
+                            </button>
+                            <button type="button" onClick={() => {
+                              if (isCircuitHebergSlot) { setCircuitHebergEtape(null); return; }
+                              setCircuitEtapes((prev) => prev.filter((e) => e.id !== act.id));
+                            }} className="w-6 h-6 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 flex items-center justify-center transition-colors cursor-pointer">
+                              <X size={10} />
+                            </button>
+                          </div>
                         </div>
+                      );
+                    })}
+
+                    {/* Slot vide ou bouton ajouter — toujours dans la zone indentée */}
+                    {!isFormOpenForThisJour && (
+                      <div className="ml-9">
+                        {activitesJour.length === 0 ? (
+                          <div className="flex items-center justify-between px-4 py-3 border-2 border-dashed border-slate-200 rounded-2xl">
+                            <p className="text-xs text-slate-400 font-semibold">Non configuré</p>
+                            <button type="button"
+                              onClick={() => isCircuitHebergSlot ? openCircuitHebergConfig() : (resetEtapeForm(), setEditingEtapeId(null), setEtapeJour(jour), setEtapeFormOpen(true), setEtapeFormError(''))}
+                              className="text-[11px] font-extrabold text-primary hover:text-primary/80 cursor-pointer">
+                              Configurer →
+                            </button>
+                          </div>
+                        ) : !isCircuitHebergSlot ? (
+                          <button type="button"
+                            onClick={() => { resetEtapeForm(); setEditingEtapeId(null); setEtapeJour(jour); setEtapeFormOpen(true); setEtapeFormError(''); }}
+                            className="w-full py-2 border-2 border-dashed border-primary/30 rounded-xl text-[11px] font-extrabold text-primary hover:bg-primary/5 transition-colors cursor-pointer">
+                            + Ajouter une activité pour ce jour
+                          </button>
+                        ) : null}
                       </div>
                     )}
 
-                    {/* Slot non configuré */}
-                    {!etape && !isFormOpenForThisJour && (
-                      <div className="ml-9 flex items-center justify-between px-4 py-3 border-2 border-dashed border-slate-200 rounded-2xl">
-                        <p className="text-xs text-slate-400 font-semibold">Non configuré</p>
-                        <button type="button"
-                          onClick={() => { resetEtapeForm(); setEtapeJour(jour); setEtapeFormOpen(true); setEtapeFormError(''); }}
-                          className="text-[11px] font-extrabold text-primary hover:text-primary/80 cursor-pointer">
-                          Configurer →
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Formulaire étape pour ce jour */}
+                    {/* Formulaire activité */}
                     {isFormOpenForThisJour && (
                       <div className="ml-9 border-2 border-primary/20 rounded-2xl p-5 bg-primary/5 space-y-4">
-                        <p className="text-[10px] font-black tracking-widest text-primary uppercase">Configuration — Jour {jour}</p>
+                        <p className="text-[10px] font-black tracking-widest text-primary uppercase">
+                          {isCircuitHebergSlot ? (editingEtapeId ? "Modifier l'hébergement" : "Configurer l'hébergement") : (editingEtapeId ? "Modifier l'activité" : "Nouvelle activité") + ` — Jour ${jour}`}
+                        </p>
 
-                        <div>
+                        {/* Horaires dans le circuit — masqués pour l'hébergement circuit */}
+                        {!isCircuitHebergSlot && <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">
+                            Plage horaire dans le circuit <span className="text-red-400">*</span>
+                          </label>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-[9px] text-slate-400 mb-0.5 block">Début</label>
+                              <input type="time" value={etapeHeureDebut} onChange={(e) => setEtapeHeureDebut(e.target.value)}
+                                className={`w-full bg-white border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${!etapeHeureDebut && etapeFormError ? "border-red-300" : "border-slate-200"}`} />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-slate-400 mb-0.5 block">Fin</label>
+                              <input type="time" value={etapeHeureFin} onChange={(e) => setEtapeHeureFin(e.target.value)}
+                                className={`w-full bg-white border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${!etapeHeureFin && etapeFormError ? "border-red-300" : "border-slate-200"}`} />
+                            </div>
+                          </div>
+                        </div>}
+
+                        {!isCircuitHebergSlot && <div>
                           <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Nom affiché (optionnel)</label>
                           <input type="text" placeholder="Ex : Ain Draham" value={etapeDestination}
                             onChange={(e) => setEtapeDestination(e.target.value)}
                             className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-slate-300" />
-                        </div>
+                        </div>}
 
                   {/* Carte */}
                   <div>
@@ -2189,11 +2853,11 @@ export default function ProviderProfilePage() {
                     )}
                   </div>
 
-                  {/* Catégorie */}
-                  <div>
+                  {/* Catégorie — masquée pour hébergement circuit (pré-défini à 'hebergement') */}
+                  {!isCircuitHebergSlot && <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Type d'activité *</label>
                     <div className="grid grid-cols-4 gap-1.5">
-                      {PROVIDER_SCHEMA.map((cat) => {
+                      {PROVIDER_SCHEMA.filter((cat) => !(circuitHebergInclus && circuitHebergType === 'same' && cat.value === 'hebergement')).map((cat) => {
                         const active = etapeCategorie === cat.value;
                         return (
                           <button key={cat.value} type="button"
@@ -2205,7 +2869,7 @@ export default function ProviderProfilePage() {
                         );
                       })}
                     </div>
-                  </div>
+                  </div>}
 
                   {/* Sous-types — multi-sélection */}
                   {etapeCategorie && (() => {
@@ -2617,53 +3281,6 @@ export default function ProviderProfilePage() {
                               );
                             })}
                           </div>
-                          <div className="mb-3 pb-3 border-b border-slate-200">
-                            <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Disponibilité de cette unité</p>
-                            <div className="grid grid-cols-2 gap-1.5 mb-2">
-                              {AVAILABILITY_TYPES.map((m) => (
-                                <button key={m.value} type="button" onClick={() => uSet('availMode', m.value)}
-                                  className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border-2 text-[10px] font-bold transition-all ${uMode === m.value ? 'border-primary bg-primary/10 text-slate-900' : 'border-slate-200 bg-white text-slate-500 hover:border-primary/30'}`}>
-                                  <span className={`material-symbols-outlined text-sm ${uMode === m.value ? 'text-primary' : 'text-slate-400'}`}>{m.icon}</span>{m.label}
-                                </button>
-                              ))}
-                            </div>
-                            {uMode === 'specific' && (
-                              <div className="space-y-1.5">
-                                <div className="flex gap-2">
-                                  <input type="date" value={(uGet('newSpecificDate') as string) ?? ''} onChange={(e) => uSet('newSpecificDate', e.target.value)} className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                                  <button type="button" onClick={() => { const d = (uGet('newSpecificDate') as string) ?? ''; if (d && !uDates.includes(d)) { uSet('specificDates', [...uDates, d].sort()); uSet('newSpecificDate', ''); } }} className="px-3 py-2 bg-primary text-white rounded-xl text-xs font-extrabold">Ajouter</button>
-                                </div>
-                                {uDates.length > 0 && <div className="flex flex-wrap gap-1">{uDates.map((d) => <span key={d} className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded-full text-[10px] font-bold border border-primary/20">{d}<button type="button" onClick={() => uSet('specificDates', uDates.filter((x) => x !== d))}><X size={8} /></button></span>)}</div>}
-                              </div>
-                            )}
-                            {uMode === 'weekly' && (
-                              <div className="space-y-1.5">
-                                <div className="flex gap-1">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map((day, i) => <button key={i} type="button" onClick={() => uSet('availWeekdays', uWeekdays.includes(i) ? uWeekdays.filter((d) => d !== i) : [...uWeekdays, i])} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black border-2 transition-all ${uWeekdays.includes(i) ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{day}</button>)}</div>
-                                <div className="grid grid-cols-2 gap-2">
-                                  <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début</label><input type="date" value={(uGet('availStart') as string) ?? ''} onChange={(e) => uSet('availStart', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                                  <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin</label><input type="date" value={(uGet('availEnd') as string) ?? ''} onChange={(e) => uSet('availEnd', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                                </div>
-                              </div>
-                            )}
-                            {uMode === 'period' && (
-                              <div className="grid grid-cols-2 gap-2">
-                                <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début *</label><input type="date" value={(uGet('availStart') as string) ?? ''} onChange={(e) => uSet('availStart', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                                <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin *</label><input type="date" value={(uGet('availEnd') as string) ?? ''} onChange={(e) => uSet('availEnd', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                              </div>
-                            )}
-                            {uMode === 'on_demand' && (
-                              <div className="flex gap-2">{['24h','48h','72h'].map((d) => <button key={d} type="button" onClick={() => uSet('delaiReponse', d)} className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border-2 transition-all ${(uGet('delaiReponse') ?? '24h') === d ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 bg-white text-slate-500'}`}>{d}</button>)}</div>
-                            )}
-                            {uMode === 'season' && (
-                              <div className="flex gap-1.5">{SAISONS.map((s) => <button key={s} type="button" onClick={() => uSet('saisons', uSaisons.includes(s) ? uSaisons.filter((x) => x !== s) : [...uSaisons, s])} className={`flex-1 py-1.5 rounded-xl text-[9px] font-black border-2 transition-all ${uSaisons.includes(s) ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{s}</button>)}</div>
-                            )}
-                            {uMode !== 'on_demand' && (
-                              <div className="grid grid-cols-2 gap-2 mt-2">
-                                <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Heure début</label><input type="time" value={(uGet('heureDebut') as string) ?? ''} onChange={(e) => uSet('heureDebut', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                                <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Heure fin</label><input type="time" value={(uGet('heureFin') as string) ?? ''} onChange={(e) => uSet('heureFin', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                              </div>
-                            )}
-                          </div>
                           <div className="mb-3 pb-3 border-b border-slate-200 space-y-3">
                             <div>
                               <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Prix / nuit (TND)</label>
@@ -2716,7 +3333,6 @@ export default function ProviderProfilePage() {
                             )}
                             {isEtapeHeberg ? (
                               <>
-                                {eGetNb(st) === 1 && renderEtapeAvailBloc(st)}
                                 {renderEtapePricingBloc(st)}
                                 {renderEtapeNbUnites(st)}
                                 {eGetNb(st) > 1
@@ -2741,7 +3357,6 @@ export default function ProviderProfilePage() {
                                   (key) => (etapeSubtypeDetails[st] ?? {})[key],
                                   (key, val) => setEtapeSubtypeDetails((prev) => ({ ...prev, [st]: { ...(prev[st] ?? {}), [key]: val } })),
                                 )}
-                                {renderEtapeAvailBloc(st)}
                               </>
                             )}
                           </div>
@@ -2752,11 +3367,18 @@ export default function ProviderProfilePage() {
 
                   {etapeFormError && <p className="text-xs font-semibold text-red-500">{etapeFormError}</p>}
 
-                  <div className="flex gap-2 pt-1">
-                    <button type="button" onClick={() => { setEtapeFormOpen(false); resetEtapeForm(); }} className="flex-1 py-2 text-xs font-bold text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer">Annuler</button>
-                    <button type="button" onClick={addEtape} className="flex-1 py-2 text-xs font-extrabold text-white bg-primary hover:bg-primary/90 rounded-xl cursor-pointer">
-                      <Check size={12} className="inline mr-1" />{circuitEtapes.find((e) => e.jour === etapeJour) ? "Mettre à jour" : "Confirmer ce jour"}
-                    </button>
+                  <div className="flex flex-col gap-2 pt-1">
+                    {!editingEtapeId && !isCircuitHebergSlot && (
+                      <button type="button" onClick={() => addEtape(true)} className="w-full py-2 text-xs font-extrabold text-primary border-2 border-primary/30 hover:bg-primary/5 rounded-xl cursor-pointer">
+                        + Ajouter et configurer une autre activité
+                      </button>
+                    )}
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => { setEtapeFormOpen(false); resetEtapeForm(); }} className="flex-1 py-2 text-xs font-bold text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer">Annuler</button>
+                      <button type="button" onClick={() => addEtape(false)} className="flex-1 py-2 text-xs font-extrabold text-white bg-primary hover:bg-primary/90 rounded-xl cursor-pointer">
+                        <Check size={12} className="inline mr-1" />{isCircuitHebergSlot ? (editingEtapeId ? "Mettre à jour" : "Enregistrer") : (editingEtapeId ? "Mettre à jour" : "Ajouter")}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -2764,6 +3386,26 @@ export default function ProviderProfilePage() {
           );
         })}
       </div>
+
+            {/* ── Circuit route map ── */}
+            {(() => {
+              const mappedPoints = circuitEtapes
+                .filter((e) => e.lat !== null && e.lng !== null)
+                .sort((a, b) => a.jour - b.jour)
+                .map((e) => ({ jour: e.jour, lat: e.lat as number, lng: e.lng as number, destination: e.destination }));
+              const hb = (circuitHebergInclus && circuitHebergType === 'same' && circuitHebergEtape?.lat && circuitHebergEtape?.lng)
+                ? { lat: circuitHebergEtape.lat as number, lng: circuitHebergEtape.lng as number, nom: circuitHebergEtape.titre || circuitHebergEtape.destination || 'Hébergement' }
+                : undefined;
+              if (mappedPoints.length === 0 && !hb) return null;
+              return (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
+                    Tracé du circuit
+                  </p>
+                  <CircuitRouteMap points={mappedPoints} hebergementPoint={hb} />
+                </div>
+              );
+            })()}
 
             {circuitFormError && (
               <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
@@ -6097,6 +6739,12 @@ export default function ProviderProfilePage() {
                                 })}
                                 {circuit.etapes.length > 3 && <p className="text-[10px] text-slate-400 font-semibold">+{circuit.etapes.length - 3} étape{circuit.etapes.length - 3 > 1 ? "s" : ""}…</p>}
                               </div>
+                              <button
+                                onClick={() => setViewingCircuit(circuit)}
+                                className="mt-3 flex items-center gap-1.5 text-[11px] font-extrabold text-primary hover:text-primary/80 transition-colors cursor-pointer"
+                              >
+                                <Info size={12} />Voir les détails
+                              </button>
                             </div>
                           </div>
                         </div>
