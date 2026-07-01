@@ -717,17 +717,13 @@ export default function ProviderProfilePage() {
     return () => clearTimeout(t);
   }, [netSearch, token]);
 
-  // ── Circuits localStorage ──────────────────────────────────────────────────
+  // ── Circuits — chargés depuis l'API ────────────────────────────────────────
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("eco_circuits");
-      if (stored) setCircuits(JSON.parse(stored));
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    try { localStorage.setItem("eco_circuits", JSON.stringify(circuits)); } catch {}
-  }, [circuits]);
+    if (!token) return;
+    apiFetch<Circuit[]>("/circuits/mine", { headers: { Authorization: `Bearer ${token}` } })
+      .then((data) => setCircuits(data.map((c) => ({ ...c, created_at: typeof c.created_at === 'string' ? c.created_at : new Date(c.created_at).toISOString() }))))
+      .catch(() => {});
+  }, [token]);
 
   function openCircuitModal(circuit?: Circuit) {
     if (circuit) {
@@ -914,12 +910,21 @@ export default function ProviderProfilePage() {
         ...(circuitHebergInclus && { type: circuitHebergType }),
         ...(circuitHebergInclus && circuitHebergType === 'same' && circuitHebergEtape && { etape: circuitHebergEtape }),
       };
+      const body = { title: circuitTitle, description: circuitDescription, nb_jours: circuitNbJours, cover_image: coverUrl, etapes: circuitEtapes, availability, hebergement };
       if (editingCircuit) {
-        const updated: Circuit = { ...editingCircuit, title: circuitTitle, description: circuitDescription, nb_jours: circuitNbJours, cover_image: coverUrl, etapes: circuitEtapes, availability, hebergement };
-        setCircuits((prev) => prev.map((c) => c.id === updated.id ? updated : c));
+        const updated = await apiFetch<Circuit>(`/circuits/${editingCircuit.id}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        setCircuits((prev) => prev.map((c) => c.id === updated.id ? { ...updated, created_at: typeof updated.created_at === 'string' ? updated.created_at : new Date(updated.created_at).toISOString() } : c));
       } else {
-        const created: Circuit = { id: crypto.randomUUID(), title: circuitTitle, description: circuitDescription, nb_jours: circuitNbJours, cover_image: coverUrl, etapes: circuitEtapes, availability, hebergement, created_at: new Date().toISOString() };
-        setCircuits((prev) => [created, ...prev]);
+        const created = await apiFetch<Circuit>("/circuits", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        setCircuits((prev) => [{ ...created, created_at: typeof created.created_at === 'string' ? created.created_at : new Date(created.created_at).toISOString() }, ...prev]);
       }
       if (circuitCoverImg) URL.revokeObjectURL(circuitCoverImg.preview);
       setCircuitModalOpen(false);
@@ -2198,9 +2203,15 @@ export default function ProviderProfilePage() {
                   </div>
                   {viewingCircuit.availability.mode === "specific" && viewingCircuit.availability.specific_dates && (
                     <div className="flex flex-wrap gap-1.5 pl-5">
-                      {viewingCircuit.availability.specific_dates.map((d) => (
-                        <span key={d} className="text-[11px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-lg">{d}</span>
-                      ))}
+                      {viewingCircuit.availability.specific_dates.map((slot) => {
+                        const [start, end] = slot.includes(':') ? slot.split(':') : [slot, slot];
+                        const fmt = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+                        return (
+                          <span key={slot} className="flex items-center gap-1 text-[11px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-lg">
+                            <Calendar size={9} />{fmt(start)}{start !== end ? ` → ${fmt(end)}` : ''}
+                          </span>
+                        );
+                      })}
                     </div>
                   )}
                   {viewingCircuit.availability.mode === "weekly" && viewingCircuit.availability.weekdays && (
@@ -2527,6 +2538,12 @@ export default function ProviderProfilePage() {
                         if (etapeFormOpen && etapeJour > n) { setEtapeFormOpen(false); resetEtapeForm(); }
                       }
                       setCircuitNbJours(n);
+                      // sync availability end date if in period mode
+                      if (circuitAvailMode === 'period' && circuitAvailStart) {
+                        const d = new Date(circuitAvailStart);
+                        d.setDate(d.getDate() + n - 1);
+                        setCircuitAvailEnd(d.toISOString().split('T')[0]);
+                      }
                     }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                 </div>
@@ -2572,23 +2589,40 @@ export default function ProviderProfilePage() {
 
               {circuitAvailMode === 'specific' && (
                 <div className="space-y-1.5">
+                  <p className="text-[10px] text-slate-400 font-semibold">
+                    Choisissez la <span className="font-black text-slate-500">date de départ</span> — le circuit durera automatiquement {circuitNbJours} jour{circuitNbJours > 1 ? 's' : ''}.
+                  </p>
                   <div className="flex gap-2">
                     <input type="date" value={circuitAvailNewDate} onChange={(e) => setCircuitAvailNewDate(e.target.value)}
                       className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                     <button type="button" onClick={() => {
-                      if (circuitAvailNewDate && !circuitAvailDates.includes(circuitAvailNewDate)) {
-                        setCircuitAvailDates((prev) => [...prev, circuitAvailNewDate].sort());
+                      if (!circuitAvailNewDate) return;
+                      if (circuitAvailDates.includes(circuitAvailNewDate)) return;
+                      // compute end date = start + nb_jours - 1
+                      const start = new Date(circuitAvailNewDate);
+                      const end = new Date(start);
+                      end.setDate(end.getDate() + circuitNbJours - 1);
+                      const endStr = end.toISOString().split('T')[0];
+                      // store as "startDate:endDate" to carry the range
+                      const slot = `${circuitAvailNewDate}:${endStr}`;
+                      if (!circuitAvailDates.includes(slot)) {
+                        setCircuitAvailDates((prev) => [...prev, slot].sort());
                         setCircuitAvailNewDate("");
                       }
                     }} className="px-3 py-2 bg-primary text-white rounded-xl text-xs font-extrabold hover:bg-primary/90">Ajouter</button>
                   </div>
                   {circuitAvailDates.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {circuitAvailDates.map((d) => (
-                        <span key={d} className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded-full text-[10px] font-bold border border-primary/20">
-                          {d}<button type="button" onClick={() => setCircuitAvailDates((prev) => prev.filter((x) => x !== d))}><X size={8} /></button>
-                        </span>
-                      ))}
+                    <div className="flex flex-wrap gap-1.5">
+                      {circuitAvailDates.map((slot) => {
+                        const [start, end] = slot.includes(':') ? slot.split(':') : [slot, slot];
+                        const fmt = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+                        return (
+                          <span key={slot} className="flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 text-primary rounded-full text-[10px] font-bold border border-primary/20">
+                            <Calendar size={9} />{fmt(start)}{start !== end ? ` → ${fmt(end)}` : ''}
+                            <button type="button" onClick={() => setCircuitAvailDates((prev) => prev.filter((x) => x !== slot))}><X size={8} /></button>
+                          </span>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -2611,9 +2645,46 @@ export default function ProviderProfilePage() {
               )}
 
               {circuitAvailMode === 'period' && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début *</label><input type="date" value={circuitAvailStart} onChange={(e) => setCircuitAvailStart(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                  <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin *</label><input type="date" value={circuitAvailEnd} onChange={(e) => setCircuitAvailEnd(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début *</label>
+                      <input type="date" value={circuitAvailStart}
+                        onChange={(e) => {
+                          const start = e.target.value;
+                          setCircuitAvailStart(start);
+                          // auto-calculate end from nb_jours
+                          if (start && circuitNbJours > 0) {
+                            const d = new Date(start);
+                            d.setDate(d.getDate() + circuitNbJours - 1);
+                            setCircuitAvailEnd(d.toISOString().split('T')[0]);
+                          }
+                        }}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin *</label>
+                      <input type="date" value={circuitAvailEnd}
+                        onChange={(e) => {
+                          const end = e.target.value;
+                          setCircuitAvailEnd(end);
+                          // sync nb_jours from the date range
+                          if (circuitAvailStart && end && end >= circuitAvailStart) {
+                            const diff = Math.round((new Date(end).getTime() - new Date(circuitAvailStart).getTime()) / 86400000) + 1;
+                            if (diff !== circuitNbJours) {
+                              if (diff < circuitNbJours) setCircuitEtapes((prev) => prev.filter((ep) => ep.jour <= diff));
+                              setCircuitNbJours(diff);
+                            }
+                          }
+                        }}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                    </div>
+                  </div>
+                  {circuitAvailStart && circuitAvailEnd && (
+                    <p className="text-[10px] text-primary font-bold">
+                      Circuit de {circuitNbJours} jour{circuitNbJours > 1 ? 's' : ''} · {circuitAvailStart} → {circuitAvailEnd}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -6707,7 +6778,7 @@ export default function ProviderProfilePage() {
                                   <button onClick={() => openCircuitModal(circuit)} className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-primary/10 text-slate-500 hover:text-primary flex items-center justify-center transition-colors cursor-pointer">
                                     <Edit3 size={14} />
                                   </button>
-                                  <button onClick={() => { if (confirm("Supprimer ce circuit ?")) setCircuits((prev) => prev.filter((c) => c.id !== circuit.id)); }} className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-500 flex items-center justify-center transition-colors cursor-pointer">
+                                  <button onClick={async () => { if (!confirm("Supprimer ce circuit ?")) return; try { await apiFetch(`/circuits/${circuit.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }); setCircuits((prev) => prev.filter((c) => c.id !== circuit.id)); } catch {} }} className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-500 flex items-center justify-center transition-colors cursor-pointer">
                                     <Trash2 size={14} />
                                   </button>
                                 </div>
