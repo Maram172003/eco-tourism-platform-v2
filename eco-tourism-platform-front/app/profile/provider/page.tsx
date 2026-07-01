@@ -794,6 +794,7 @@ export default function ProviderProfilePage() {
       setEtapeTitre(circuitHebergEtape.titre);
       setEtapeDescCourte(circuitHebergEtape.description_courte);
       setEtapeDescLongue(circuitHebergEtape.description_longue);
+      setEtapeSubtypeDetails(circuitHebergEtape.fields ?? {});
       setEtapeSubtypeUnitDetails(circuitHebergEtape.unit_details ?? {});
       setEtapeSubtypeNbUnites(circuitHebergEtape.nb_unites ?? {});
       setEtapeSubtypeFormConfig(circuitHebergEtape.form_config ?? {});
@@ -2275,35 +2276,82 @@ export default function ProviderProfilePage() {
                             {/* Descriptions */}
                             {hb.description_courte && <p className="text-xs text-slate-600">{hb.description_courte}</p>}
                             {hb.description_longue && <p className="text-xs text-slate-500">{hb.description_longue}</p>}
-                            {/* Sous-types avec photos + tarifs */}
+                            {/* Sous-types avec photos + tarifs + détails par unité */}
                             {hb.subtypes.length > 0 && (
-                              <div className="space-y-2">
+                              <div className="space-y-3">
                                 {hb.subtypes.map((sv) => {
                                   const stLabel = hbCat?.subtypes.find((s) => s.value === sv)?.label ?? sv;
                                   const nbU = hb.nb_unites?.[sv] ?? 1;
                                   const cfg = hb.form_config?.[sv] ?? {};
-                                  const entityPhotos = hb.entity_photos?.[sv] ?? hb.entity_photos?.[`${sv}_unit_0`] ?? [];
-                                  const hasPrice = cfg.prixGroupe || cfg.prixEnfant;
-                                  return (
-                                    <div key={sv} className="bg-white rounded-xl border border-slate-100 p-3 space-y-2">
-                                      <div className="flex items-center justify-between gap-2">
-                                        <span className="text-[11px] font-extrabold text-slate-700">{stLabel}</span>
-                                        {nbU > 1 && <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg">{nbU} unités</span>}
+                                  const fieldConfig = OFFER_DETAIL_FIELDS[sv];
+                                  const hasPrice = cfg.prixGroupe || cfg.prixEnfant || cfg.suppPrivatisation;
+
+                                  const renderFieldRows = (data: Record<string, any>) => {
+                                    if (!fieldConfig || Object.keys(data).length === 0) return null;
+                                    const rows: { label: string; display: string }[] = [];
+                                    fieldConfig.sections.forEach((sec) => {
+                                      sec.fields.forEach((f) => {
+                                        const v = data[f.key];
+                                        if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) return;
+                                        if (f.type === 'boolean') { rows.push({ label: f.label, display: v ? 'Oui' : 'Non' }); return; }
+                                        if (Array.isArray(v)) { rows.push({ label: f.label, display: v.join(', ') }); return; }
+                                        rows.push({ label: f.label, display: String(v) });
+                                      });
+                                    });
+                                    if (rows.length === 0) return null;
+                                    return (
+                                      <div className="space-y-1 pt-1 border-t border-slate-100">
+                                        {rows.map((r) => (
+                                          <div key={r.label} className="flex items-start gap-2">
+                                            <span className="text-[10px] text-slate-400 font-semibold shrink-0 min-w-[100px]">{r.label}</span>
+                                            <span className="text-[10px] text-slate-700 font-bold">{r.display}</span>
+                                          </div>
+                                        ))}
                                       </div>
-                                      {entityPhotos.length > 0 && (
-                                        <div className="flex gap-1.5 overflow-x-auto">
-                                          {entityPhotos.slice(0, 4).map((url, pi) => (
-                                            <img key={pi} src={url} alt="" className="w-14 h-14 rounded-lg object-cover shrink-0" />
-                                          ))}
-                                        </div>
-                                      )}
+                                    );
+                                  };
+
+                                  return (
+                                    <div key={sv} className="bg-white rounded-xl border border-slate-100 overflow-hidden">
+                                      {/* Header */}
+                                      <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-100">
+                                        <span className="text-[11px] font-extrabold text-slate-700">{stLabel}</span>
+                                        <span className="text-[10px] font-bold text-slate-500">{nbU} unité{nbU > 1 ? 's' : ''}</span>
+                                      </div>
+                                      {/* Tarification commune */}
                                       {hasPrice && (
-                                        <div className="flex flex-wrap gap-2">
+                                        <div className="flex flex-wrap gap-2 px-3 py-2 border-b border-slate-50">
                                           {cfg.prixGroupe && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg">{cfg.prixGroupe} DT{cfg.nbPersonnesGroupe ? ` / ${cfg.nbPersonnesGroupe} pers.` : ''}</span>}
                                           {cfg.prixEnfant && <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-lg">{cfg.prixEnfant} DT enfant{cfg.ageMaxEnfant ? ` (≤${cfg.ageMaxEnfant} ans)` : ''}</span>}
                                           {cfg.suppPrivatisation && <span className="text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-100 px-2 py-0.5 rounded-lg">+{cfg.suppPrivatisation} DT privatisation</span>}
                                         </div>
                                       )}
+                                      {/* Détails par unité */}
+                                      <div className="divide-y divide-slate-50">
+                                        {Array.from({ length: nbU }, (_, i) => {
+                                          const unitPhotos = hb.entity_photos?.[`${sv}_unit_${i}`] ?? (i === 0 ? (hb.entity_photos?.[sv] ?? []) : []);
+                                          const unitData: Record<string, any> =
+                                            ((hb.unit_details as Record<string, Array<Record<string, any>>>)?.[sv]?.[i] ?? {});
+                                          const unitName = unitData?.nom_chambre ?? unitData?.nom_suite ?? unitData?.nom_tente ?? unitData?.nom_bungalow;
+                                          return (
+                                            <div key={i} className="p-3 space-y-2">
+                                              {nbU > 1 && (
+                                                <p className="text-[10px] font-black text-primary uppercase tracking-widest">{unitName || `Unité ${i + 1}`}</p>
+                                              )}
+                                              {unitPhotos.length > 0 && (
+                                                <div className="flex gap-1.5 overflow-x-auto">
+                                                  {unitPhotos.slice(0, 5).map((url, pi) => (
+                                                    <img key={pi} src={url} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
+                                                  ))}
+                                                </div>
+                                              )}
+                                              {renderFieldRows(unitData) ?? (
+                                                <p className="text-[10px] text-slate-300 italic">Aucun détail renseigné — modifiez l'hébergement pour compléter.</p>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
                                     </div>
                                   );
                                 })}
@@ -2389,51 +2437,76 @@ export default function ProviderProfilePage() {
                                         const stLabel = stDef?.label ?? sv;
                                         const nbU = etape.nb_unites?.[sv] ?? 1;
                                         const cfg = etape.form_config?.[sv] ?? {};
-                                        const entityPhotos = etape.entity_photos?.[sv] ?? etape.entity_photos?.[`${sv}_unit_0`] ?? [];
-                                        const hasPrice = cfg.prixGroupe || cfg.prixEnfant;
-                                        return (
-                                          <div key={sv} className="bg-slate-50 rounded-xl p-3 space-y-2">
-                                            <div className="flex items-center justify-between gap-2">
-                                              <span className="text-[11px] font-extrabold text-slate-700">{stLabel}</span>
-                                              {nbU > 1 && (
-                                                <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-lg">{nbU} unités</span>
-                                              )}
+                                        const hasPrice = cfg.prixGroupe || cfg.prixEnfant || cfg.suppPrivatisation;
+                                        const etapeFieldConfig = OFFER_DETAIL_FIELDS[sv];
+
+                                        const renderEtapeFieldRows = (data: Record<string, any>) => {
+                                          if (!etapeFieldConfig || Object.keys(data).length === 0) return null;
+                                          const rows: { label: string; display: string }[] = [];
+                                          etapeFieldConfig.sections.forEach((sec) => {
+                                            sec.fields.forEach((f) => {
+                                              const v = data[f.key];
+                                              if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) return;
+                                              if (f.type === 'boolean') { rows.push({ label: f.label, display: v ? 'Oui' : 'Non' }); return; }
+                                              if (Array.isArray(v)) { rows.push({ label: f.label, display: v.join(', ') }); return; }
+                                              rows.push({ label: f.label, display: String(v) });
+                                            });
+                                          });
+                                          if (rows.length === 0) return null;
+                                          return (
+                                            <div className="space-y-1 pt-1 border-t border-slate-200">
+                                              {rows.map((r) => (
+                                                <div key={r.label} className="flex items-start gap-2">
+                                                  <span className="text-[10px] text-slate-400 font-semibold shrink-0 min-w-[100px]">{r.label}</span>
+                                                  <span className="text-[10px] text-slate-700 font-bold">{r.display}</span>
+                                                </div>
+                                              ))}
                                             </div>
-                                            {/* Mini photo gallery per subtype */}
-                                            {entityPhotos.length > 0 && (
-                                              <div className="flex gap-1.5 overflow-x-auto">
-                                                {entityPhotos.slice(0, 4).map((url, pi) => (
-                                                  <img key={pi} src={url} alt="" className="w-14 h-14 rounded-lg object-cover shrink-0" />
-                                                ))}
-                                              </div>
-                                            )}
-                                            {/* Tarif */}
+                                          );
+                                        };
+
+                                        return (
+                                          <div key={sv} className="bg-slate-50 rounded-xl overflow-hidden">
+                                            {/* Header sous-type */}
+                                            <div className="flex items-center justify-between px-3 py-2 bg-slate-100">
+                                              <span className="text-[11px] font-extrabold text-slate-700">{stLabel}</span>
+                                              <span className="text-[10px] font-bold text-slate-500">{nbU} unité{nbU > 1 ? 's' : ''}</span>
+                                            </div>
+                                            {/* Tarif commun */}
                                             {hasPrice && (
-                                              <div className="flex flex-wrap gap-2">
-                                                {cfg.prixGroupe && (
-                                                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg">
-                                                    {cfg.prixGroupe} DT{cfg.nbPersonnesGroupe ? ` / ${cfg.nbPersonnesGroupe} pers.` : ' groupe'}
-                                                  </span>
-                                                )}
-                                                {cfg.prixEnfant && (
-                                                  <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-lg">
-                                                    {cfg.prixEnfant} DT enfant{cfg.ageMaxEnfant ? ` (≤${cfg.ageMaxEnfant} ans)` : ''}
-                                                  </span>
-                                                )}
-                                                {cfg.suppPrivatisation && (
-                                                  <span className="text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-100 px-2 py-0.5 rounded-lg">
-                                                    +{cfg.suppPrivatisation} DT privatisation
-                                                  </span>
-                                                )}
+                                              <div className="flex flex-wrap gap-2 px-3 py-2 border-b border-slate-100">
+                                                {cfg.prixGroupe && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg">{cfg.prixGroupe} DT{cfg.nbPersonnesGroupe ? ` / ${cfg.nbPersonnesGroupe} pers.` : ' groupe'}</span>}
+                                                {cfg.prixEnfant && <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-lg">{cfg.prixEnfant} DT enfant{cfg.ageMaxEnfant ? ` (≤${cfg.ageMaxEnfant} ans)` : ''}</span>}
+                                                {cfg.suppPrivatisation && <span className="text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-100 px-2 py-0.5 rounded-lg">+{cfg.suppPrivatisation} DT privatisation</span>}
                                               </div>
                                             )}
-                                            {/* Disponibilité spécifique */}
-                                            {cfg.availMode && cfg.availMode !== 'specific' && (
-                                              <div className="text-[10px] text-slate-400 font-semibold">
-                                                Dispo : {AVAILABILITY_TYPES.find((a) => a.value === cfg.availMode)?.label ?? cfg.availMode}
-                                                {cfg.availStart && cfg.availEnd && ` · ${cfg.availStart} → ${cfg.availEnd}`}
-                                              </div>
-                                            )}
+                                            {/* Per-unit display */}
+                                            <div className="divide-y divide-slate-100">
+                                              {Array.from({ length: nbU }, (_, i) => {
+                                                const unitPhotos = etape.entity_photos?.[`${sv}_unit_${i}`] ?? (i === 0 ? (etape.entity_photos?.[sv] ?? []) : []);
+                                                const unitData: Record<string, any> = etape.categorie === 'hebergement'
+                                                  ? ((etape.unit_details as Record<string, Array<Record<string, any>>>)?.[sv]?.[i] ?? {})
+                                                  : (nbU === 1
+                                                    ? ((etape.fields as Record<string, Record<string, any>>)?.[sv] ?? {})
+                                                    : ((etape.unit_details as Record<string, Array<Record<string, any>>>)?.[sv]?.[i] ?? {}));
+                                                const unitName = unitData?.nom_chambre ?? unitData?.nom_suite ?? unitData?.nom_tente ?? unitData?.nom_bungalow ?? unitData?.nom;
+                                                return (
+                                                  <div key={i} className="p-3 space-y-2">
+                                                    {nbU > 1 && <p className="text-[10px] font-black text-primary uppercase tracking-widest">{unitName || `Unité ${i + 1}`}</p>}
+                                                    {unitPhotos.length > 0 && (
+                                                      <div className="flex gap-1.5 overflow-x-auto">
+                                                        {unitPhotos.slice(0, 5).map((url: string, pi: number) => (
+                                                          <img key={pi} src={url} alt="" className="w-14 h-14 rounded-lg object-cover shrink-0" />
+                                                        ))}
+                                                      </div>
+                                                    )}
+                                                    {renderEtapeFieldRows(unitData) ?? (
+                                                      <p className="text-[10px] text-slate-300 italic">Aucun détail renseigné.</p>
+                                                    )}
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
                                           </div>
                                         );
                                       })}
