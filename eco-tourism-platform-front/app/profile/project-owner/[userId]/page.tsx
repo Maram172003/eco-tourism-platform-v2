@@ -118,7 +118,7 @@ const PROJECT_TYPE_LABELS: Record<string, string> = {
 
 function getSustainabilityLevel(score: number) {
   if (score >= 86) return { label: "Projet Ambassadeur Éco Voyage", color: "text-primary",     emoji: "⭐" };
-  if (score >= 71) return { label: "Projet Éco-Responsable",        color: "text-emerald-600", emoji: "🌿" };
+  if (score >= 71) return { label: "Projet Éco-Responsable",        color: "text-primary", emoji: "🌿" };
   if (score >= 51) return { label: "Projet Engagé",                 color: "text-teal-600",    emoji: "🤝" };
   if (score >= 31) return { label: "Projet Sensibilisé",            color: "text-blue-600",    emoji: "💡" };
   return              { label: "Projet Conventionnel",               color: "text-slate-500",   emoji: "📋" };
@@ -126,7 +126,7 @@ function getSustainabilityLevel(score: number) {
 
 function getOfferSustainabilityLevel(score: number) {
   if (score >= 86) return { label: "Offre Ambassadrice Éco Voyage", color: "text-primary",      emoji: "⭐" };
-  if (score >= 71) return { label: "Offre Éco-Responsable",         color: "text-emerald-600", emoji: "🌿" };
+  if (score >= 71) return { label: "Offre Éco-Responsable",         color: "text-primary", emoji: "🌿" };
   if (score >= 51) return { label: "Offre Engagée",                 color: "text-teal-600",    emoji: "🤝" };
   if (score >= 31) return { label: "Offre Sensibilisée",            color: "text-blue-600",    emoji: "💡" };
   return              { label: "Offre Conventionnelle",              color: "text-slate-500",   emoji: "📋" };
@@ -136,17 +136,17 @@ const REPORT_REASONS = ["Contenu inapproprié", "Faux profil", "Harcèlement", "
 
 function scoreColor(score: number) {
   if (score >= 80) return { text: "text-primary", bar: "bg-primary" };
-  if (score >= 60) return { text: "text-emerald-600", bar: "bg-emerald-500" };
+  if (score >= 60) return { text: "text-primary", bar: "bg-primary" };
   if (score >= 40) return { text: "text-teal-600", bar: "bg-teal-500" };
   return { text: "text-blue-600", bar: "bg-blue-500" };
 }
 
 function scoreLabel(score: number | null) {
-  if (score === null) return "Prestataire Éco";
-  if (score >= 80) return "Prestataire Ambassadeur";
-  if (score >= 60) return "Prestataire Éco-Responsable";
-  if (score >= 40) return "Prestataire Engagé";
-  return "Prestataire Sensibilisé";
+  if (score === null) return "Propriétaire Éco";
+  if (score >= 80) return "Propriétaire Ambassadeur";
+  if (score >= 60) return "Propriétaire Éco-Responsable";
+  if (score >= 40) return "Propriétaire Engagé";
+  return "Propriétaire Sensibilisé";
 }
 
 // ─── ProjectCard ──────────────────────────────────────────────────────────────
@@ -234,8 +234,8 @@ function OfferCard({ offer, onClick }: { offer: Offer; onClick: () => void }) {
           <h3 className="text-lg font-extrabold text-slate-800 tracking-tight leading-tight mb-2">{offer.title}</h3>
           {offer.description && <p className="text-slate-500 text-sm leading-relaxed mb-4 line-clamp-3">{offer.description}</p>}
           <div className="flex flex-wrap gap-2.5 mb-4">
-            <span className="bg-emerald-50 text-emerald-600 border border-emerald-100/60 rounded-xl px-3 py-1 text-[11px] font-extrabold tracking-wider flex items-center gap-1 uppercase">
-              <Sparkles size={11} className="text-emerald-500 shrink-0" />{typeData.label}
+            <span className="bg-emerald-50 text-primary border border-emerald-100/60 rounded-xl px-3 py-1 text-[11px] font-extrabold tracking-wider flex items-center gap-1 uppercase">
+              <Sparkles size={11} className="text-primary shrink-0" />{typeData.label}
             </span>
             {offer.region && (
               <span className="bg-slate-50 text-slate-500 border border-slate-100 rounded-xl px-3 py-1 text-[11px] font-bold flex items-center gap-1">
@@ -618,7 +618,7 @@ export default function PublicOwnerProfile() {
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             {reportSent ? (
               <div className="text-center py-4">
-                <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-4"><Check size={24} className="text-emerald-500" /></div>
+                <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-4"><Check size={24} className="text-primary" /></div>
                 <h3 className="text-lg font-extrabold text-slate-900 mb-2">Signalement envoyé</h3>
                 <button onClick={() => { setReportOpen(false); setReportSent(false); setReportReason(""); }} className="w-full py-3 bg-primary text-slate-900 font-extrabold rounded-2xl text-sm">Fermer</button>
               </div>

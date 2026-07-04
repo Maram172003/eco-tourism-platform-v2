@@ -2,8 +2,10 @@
 
 import { Star } from "lucide-react";
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 
 interface ExperienceCardProps {
+  id: string;
   image: string;
   location: string;
   title: string;
@@ -13,6 +15,7 @@ interface ExperienceCardProps {
 }
 
 export default function ExperienceCard({
+  id,
   image,
   location,
   title,
@@ -20,10 +23,22 @@ export default function ExperienceCard({
   description,
   price,
 }: ExperienceCardProps) {
+  const router = useRouter();
+
+  const handleReserve = () => {
+    const stored = localStorage.getItem("user");
+    if (!stored) {
+      router.push(`/auth/login?redirect=/offers/${id}`);
+      return;
+    }
+    router.push(`/offers/${id}`);
+  };
+
   return (
     <motion.div
       whileHover={{ y: -5 }}
-      className="flex flex-col rounded-3xl overflow-hidden bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-lg group"
+      className="flex flex-col rounded-3xl overflow-hidden bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-lg group cursor-pointer"
+      onClick={() => router.push(`/offers/${id}`)}
     >
       <div className="relative aspect-video overflow-hidden">
         <div
@@ -54,7 +69,13 @@ export default function ExperienceCard({
             </span>
           </div>
 
-          <button className="h-10 px-4 rounded-xl border border-primary text-primary font-bold hover:bg-primary hover:text-slate-900 transition-all text-sm">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleReserve();
+            }}
+            className="h-10 px-4 rounded-xl border border-primary text-primary font-bold hover:bg-primary hover:text-slate-900 transition-all text-sm"
+          >
             Réserver
           </button>
         </div>

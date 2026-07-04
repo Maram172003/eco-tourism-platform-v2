@@ -47,33 +47,30 @@ type PendingOffer = {
   created_at: string;
 };
 
-type PendingProvider = {
-  user_id: string;
-  full_name: string | null;
-  organization: string | null;
-  provider_type: string | null;
-  bio: string | null;
+type PendingProject = {
+  id: string;
+  name: string;
+  description: string | null;
   region: string | null;
   address: string | null;
-  zone: string | null;
   photo: string | null;
-  cover_photo: string | null;
+  photos: string[] | null;
   opening_hours: string | null;
   services: string[] | null;
   eco_labels: string[] | null;
-  certifications: string[] | null;
   website: string | null;
   phone: string | null;
-  whatsapp: string | null;
   facebook: string | null;
   instagram: string | null;
-  activity_types: string[] | null;
-  languages_spoken: string[] | null;
-  years_experience: number | null;
+  project_type: string[] | null;
+  lat: number | null;
+  lng: number | null;
   sustainability_score: number | null;
+  owner_id: string;
+  created_at: string;
 };
 
-type Tab = "publications" | "offers" | "providers" | "reports" | "banned";
+type Tab = "publications" | "offers" | "projects" | "reports" | "banned";
 
 type BannedUser = {
   user_id: string;
@@ -197,7 +194,7 @@ function DetailSustainability({ score }: { score: number | null }) {
   if (score === null) return null;
   const level =
     score >= 86 ? { label: "Ambassadeur Éco Voyage", color: "text-primary",      bar: "bg-primary" } :
-    score >= 71 ? { label: "Éco-Responsable",        color: "text-emerald-600", bar: "bg-emerald-500" } :
+    score >= 71 ? { label: "Éco-Responsable",        color: "text-primary", bar: "bg-primary" } :
     score >= 51 ? { label: "Engagé",                 color: "text-teal-600",    bar: "bg-teal-500" } :
     score >= 31 ? { label: "Sensibilisé",            color: "text-blue-600",    bar: "bg-blue-500" } :
                   { label: "Conventionnel",           color: "text-slate-500",   bar: "bg-slate-400" };
@@ -243,7 +240,7 @@ function OfferDetail({ offer, onClose, onApprove, onReject, loading }: {
   loading: boolean;
 }) {
   return (
-    <DetailModal title={offer.title} badge={offer.author_type === "guide" ? "Guide" : "Prestataire"} date={offer.created_at} onClose={onClose} onApprove={onApprove} onReject={onReject} loading={loading}>
+    <DetailModal title={offer.title} badge={offer.author_type === "guide" ? "Guide" : "Propriétaire"} date={offer.created_at} onClose={onClose} onApprove={onApprove} onReject={onReject} loading={loading}>
       <DetailImages images={offer.images} />
       <div className="grid grid-cols-3 gap-4">
         <DetailField label="Type d'offre" value={offer.offer_type} />
@@ -264,45 +261,31 @@ function OfferDetail({ offer, onClose, onApprove, onReject, loading }: {
   );
 }
 
-const PROVIDER_TYPE_LABELS: Record<string, string> = {
-  guide: "Guide nature", agence: "Agence de voyage", ecolodge: "Écolodge",
-  restaurant: "Restauration", artisan: "Artisan", association: "Association",
-  bien_etre: "Bien-être", transport: "Transport",
-};
-
-function ProviderDetail({ provider, onClose, onApprove, onReject, loading }: {
-  provider: PendingProvider;
+function ProjectDetail({ project, onClose, onApprove, onReject, loading }: {
+  project: PendingProject;
   onClose: () => void;
   onApprove: () => void;
   onReject: () => void;
   loading: boolean;
 }) {
-  const name = provider.full_name ?? provider.organization ?? "Prestataire";
-  const badge = provider.provider_type ? (PROVIDER_TYPE_LABELS[provider.provider_type] ?? provider.provider_type) : "Prestataire";
   return (
-    <DetailModal title={name} badge={badge} date={new Date().toISOString()} onClose={onClose} onApprove={onApprove} onReject={onReject} loading={loading}>
-      <DetailImages images={provider.photo ? [provider.photo] : null} />
+    <DetailModal title={project.name} badge="Projet" date={project.created_at} onClose={onClose} onApprove={onApprove} onReject={onReject} loading={loading}>
+      <DetailImages images={project.photos ?? (project.photo ? [project.photo] : null)} />
       <div className="grid grid-cols-2 gap-4">
-        <DetailField label="Région" value={provider.region} />
-        <DetailField label="Type" value={PROVIDER_TYPE_LABELS[provider.provider_type ?? ""] ?? provider.provider_type} />
+        <DetailField label="Région" value={project.region} />
+        <DetailField label="Type" value={project.project_type?.join(", ")} />
       </div>
-      <DetailField label="Organisation" value={provider.organization} />
-      <DetailField label="Adresse" value={provider.address} />
-      <DetailField label="Zone" value={provider.zone} />
-      <DetailField label="Biographie" value={provider.bio} />
-      <DetailField label="Horaires" value={provider.opening_hours} />
-      <div className="grid grid-cols-2 gap-4">
-        <DetailField label="Téléphone" value={provider.phone} />
-        <DetailField label="WhatsApp" value={provider.whatsapp} />
-      </div>
-      <DetailField label="Expérience" value={provider.years_experience ? `${provider.years_experience} ans` : null} />
-      <DetailLink label="Site web" url={provider.website} />
-      <DetailLink label="Facebook" url={provider.facebook} />
-      <DetailTags label="Activités" tags={provider.activity_types} />
-      <DetailTags label="Langues" tags={provider.languages_spoken} />
-      <DetailTags label="Labels éco" tags={provider.eco_labels} />
-      <DetailTags label="Certifications" tags={provider.certifications} />
-      <DetailSustainability score={provider.sustainability_score} />
+      <DetailField label="Adresse" value={project.address} />
+      <DetailField label="Description" value={project.description} />
+      <DetailField label="Horaires" value={project.opening_hours} />
+      <DetailField label="Téléphone" value={project.phone} />
+      <DetailLink label="Site web" url={project.website} />
+      <DetailLink label="Facebook" url={project.facebook} />
+      <DetailLink label="Instagram" url={project.instagram} />
+      <DetailTags label="Services" tags={project.services} />
+      <DetailTags label="Labels éco" tags={project.eco_labels} />
+      <DetailMap lat={project.lat} lng={project.lng} />
+      <DetailSustainability score={project.sustainability_score} />
     </DetailModal>
   );
 }
@@ -530,14 +513,14 @@ export default function AdminPage() {
 
   const [publications, setPublications] = useState<PendingPublication[]>([]);
   const [offers, setOffers] = useState<PendingOffer[]>([]);
-  const [providers, setProviders] = useState<PendingProvider[]>([]);
+  const [projects, setProjects] = useState<PendingProject[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [bannedUsers, setBannedUsers] = useState<BannedUser[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [detailPub, setDetailPub] = useState<PendingPublication | null>(null);
   const [detailOffer, setDetailOffer] = useState<PendingOffer | null>(null);
-  const [detailProvider, setDetailProvider] = useState<PendingProvider | null>(null);
+  const [detailProject, setDetailProject] = useState<PendingProject | null>(null);
 
   const [rejectTarget, setRejectTarget] = useState<{ type: Tab; id: string } | null>(null);
   const [resolveTarget, setResolveTarget] = useState<Report | null>(null);
@@ -559,16 +542,16 @@ export default function AdminPage() {
     async function fetchAll() {
       setLoading(true);
       try {
-        const [pubs, offrs, provs, reps, banned] = await Promise.all([
+        const [pubs, offrs, projs, reps, banned] = await Promise.all([
           apiFetch<PendingPublication[]>("/admin/publications/pending", { headers: { Authorization: `Bearer ${token}` } }),
           apiFetch<PendingOffer[]>("/admin/offers/pending", { headers: { Authorization: `Bearer ${token}` } }),
-          apiFetch<PendingProvider[]>("/admin/providers/pending", { headers: { Authorization: `Bearer ${token}` } }),
+          apiFetch<PendingProject[]>("/admin/projects/pending", { headers: { Authorization: `Bearer ${token}` } }),
           apiFetch<Report[]>("/admin/reports", { headers: { Authorization: `Bearer ${token}` } }),
           apiFetch<BannedUser[]>("/admin/users/banned", { headers: { Authorization: `Bearer ${token}` } }),
         ]);
         setPublications(pubs);
         setOffers(offrs);
-        setProviders(provs);
+        setProjects(projs);
         setReports(reps);
         setBannedUsers(banned);
       } catch {}
@@ -612,7 +595,7 @@ export default function AdminPage() {
   function removeItem(type: Tab, id: string) {
     if (type === "publications") setPublications((p) => p.filter((x) => x.id !== id));
     if (type === "offers") setOffers((p) => p.filter((x) => x.id !== id));
-    if (type === "providers") setProviders((p) => p.filter((x) => x.user_id !== id));
+    if (type === "projects") setProjects((p) => p.filter((x) => x.id !== id));
   }
 
   async function resolveReport(action: string, note: string, banDays?: number) {
@@ -636,7 +619,7 @@ export default function AdminPage() {
   function closeDetail() {
     setDetailPub(null);
     setDetailOffer(null);
-    setDetailProvider(null);
+    setDetailProject(null);
   }
 
   async function unbanUser(userId: string) {
@@ -663,8 +646,8 @@ export default function AdminPage() {
   }
 
   const pendingReports = reports.filter((r) => r.status === "pending");
-  const counts: Record<Tab, number> = { publications: publications.length, offers: offers.length, providers: providers.length, reports: pendingReports.length, banned: bannedUsers.length };
-  const tabLabels: Record<Tab, string> = { publications: "Lieux", offers: "Offres", providers: "Prestataires", reports: "Signalements", banned: "Bannis" };
+  const counts: Record<Tab, number> = { publications: publications.length, offers: offers.length, projects: projects.length, reports: pendingReports.length, banned: bannedUsers.length };
+  const tabLabels: Record<Tab, string> = { publications: "Lieux", offers: "Offres", projects: "Projets", reports: "Signalements", banned: "Bannis" };
 
   if (!token) return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -695,7 +678,7 @@ export default function AdminPage() {
       <main className="max-w-5xl mx-auto px-6 py-8">
         {/* Stats */}
         <div className="grid grid-cols-5 gap-4 mb-8">
-          {(["publications", "offers", "providers"] as Tab[]).map((t) => (
+          {(["publications", "offers", "projects"] as Tab[]).map((t) => (
             <div key={t} className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{tabLabels[t]}</p>
               <p className="text-3xl font-extrabold text-slate-900">{counts[t]}</p>
@@ -716,13 +699,13 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6 flex-wrap">
-          {(["publications", "offers", "providers", "reports", "banned"] as Tab[]).map((t) => (
+          {(["publications", "offers", "projects", "reports", "banned"] as Tab[]).map((t) => (
             <button key={t} onClick={() => setTab(t)}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
                 tab === t
                   ? t === "reports" ? "bg-red-500 text-white shadow-md"
                   : t === "banned" ? "bg-orange-500 text-white shadow-md"
-                  : "bg-primary text-slate-900 shadow-md shadow-primary/20"
+                  : "bg-primary text-slate-900 shadow-md shadow-emerald-500/20"
                   : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
               }`}>
               {t === "reports" && <Flag size={14} />}
@@ -768,7 +751,7 @@ export default function AdminPage() {
               offers.map((offer) => (
                 <ContentCard key={offer.id}
                   title={offer.title}
-                  badge={offer.author_type === "guide" ? "Guide" : "Prestataire"}
+                  badge={offer.author_type === "guide" ? "Guide" : "Propriétaire"}
                   meta={[offer.offer_type, offer.duration, offer.price != null ? `${offer.price} TND` : null].filter(Boolean).join(" · ")}
                   description={offer.description}
                   date={offer.created_at}
@@ -780,19 +763,19 @@ export default function AdminPage() {
               ))
             )}
 
-            {tab === "providers" && (
-              providers.length === 0 ? <Empty label="Aucun prestataire en attente" /> :
-              providers.map((prov) => (
-                <ContentCard key={prov.user_id}
-                  title={prov.full_name ?? prov.organization ?? "Prestataire"}
-                  badge={PROVIDER_TYPE_LABELS[prov.provider_type ?? ""] ?? "Prestataire"}
-                  meta={[prov.region, prov.activity_types?.slice(0, 2).join(", ")].filter(Boolean).join(" · ")}
-                  description={prov.bio}
-                  date={new Date().toISOString()}
-                  loading={actionLoading === prov.user_id}
-                  onOpen={() => setDetailProvider(prov)}
-                  onApprove={() => approve("providers", prov.user_id)}
-                  onReject={() => setRejectTarget({ type: "providers", id: prov.user_id })}
+            {tab === "projects" && (
+              projects.length === 0 ? <Empty label="Aucun projet en attente" /> :
+              projects.map((proj) => (
+                <ContentCard key={proj.id}
+                  title={proj.name}
+                  badge="Projet"
+                  meta={[proj.region, proj.address].filter(Boolean).join(" · ")}
+                  description={proj.description}
+                  date={proj.created_at}
+                  loading={actionLoading === proj.id}
+                  onOpen={() => setDetailProject(proj)}
+                  onApprove={() => approve("projects", proj.id)}
+                  onReject={() => setRejectTarget({ type: "projects", id: proj.id })}
                 />
               ))
             )}
@@ -947,11 +930,11 @@ export default function AdminPage() {
           loading={actionLoading === detailOffer.id}
         />
       )}
-      {detailProvider && (
-        <ProviderDetail provider={detailProvider} onClose={closeDetail}
-          onApprove={() => approve("providers", detailProvider.user_id)}
-          onReject={() => { closeDetail(); setRejectTarget({ type: "providers", id: detailProvider.user_id }); }}
-          loading={actionLoading === detailProvider.user_id}
+      {detailProject && (
+        <ProjectDetail project={detailProject} onClose={closeDetail}
+          onApprove={() => approve("projects", detailProject.id)}
+          onReject={() => { closeDetail(); setRejectTarget({ type: "projects", id: detailProject.id }); }}
+          loading={actionLoading === detailProject.id}
         />
       )}
 

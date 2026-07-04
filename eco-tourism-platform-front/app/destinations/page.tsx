@@ -92,6 +92,11 @@ type Offer = {
   cancellation_policy: string | null;
   sustainability_score: number | null;
   created_at: string;
+  project?: { id: string; name: string } | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  location_type?: string;
+  project_id?: string | null;
 };
 
 type Project = {
@@ -169,7 +174,7 @@ const PARTNER_PLACEHOLDERS = [
 ];
 
 const AVATAR_COLORS = [
-  "bg-emerald-500",
+  "bg-primary",
   "bg-teal-500",
   "bg-cyan-500",
   "bg-green-500",
@@ -237,6 +242,11 @@ function OfferModal({ offer, onClose }: { offer: Offer; onClose: () => void }) {
   const fallback = OFFER_PLACEHOLDERS[seedFromId(offer.id, OFFER_PLACEHOLDERS.length)];
   const isGuide = offer.author_type === "guide";
   const router = useRouter();
+  const [detail, setDetail] = useState<{ items: any[] } | null>(null);
+
+  useEffect(() => {
+    apiFetch<any>(`/offers/${offer.id}`).then(setDetail).catch(() => {});
+  }, [offer.id]);
 
   function handleReserve() {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
@@ -343,13 +353,70 @@ function OfferModal({ offer, onClose }: { offer: Offer; onClose: () => void }) {
           {/* Cancellation */}
           {offer.cancellation_policy && (
             <div className="flex items-start gap-3 bg-slate-50 rounded-xl px-4 py-3 mb-6">
-              <ShieldCheck className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+              <ShieldCheck className="w-4 h-4 text-primary mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">Politique d'annulation</p>
                 <p className="text-sm font-semibold text-slate-700">{offer.cancellation_policy}</p>
               </div>
             </div>
           )}
+
+          {/* ─── Sessions / disponibilités ─── */}
+          {detail?.items?.length ? (
+            <div className="mb-6">
+              {detail.items.filter((i: any) => i.status === "active").map((item: any) => {
+                const avail = (item.sessions || []).filter(
+                  (s: any) => s.status === "available" && (!s.remaining_capacity || s.remaining_capacity > 0)
+                );
+                if (!avail.length && !item.capacity?.[0] && !item.booking_deadline_days) return null;
+                return (
+                  <div key={item.id} className="bg-blue-50 rounded-xl p-4 mb-3 last:mb-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-sm font-bold text-slate-700">{item.name}</p>
+                      {item.prices?.find((p: any) => p.is_default) && (
+                        <span className="text-sm font-black text-primary">
+                          {Number(item.prices.find((p: any) => p.is_default).price).toLocaleString()} TND
+                        </span>
+                      )}
+                    </div>
+                    {/* Capacity */}
+                    {item.capacity?.[0] && (
+                      <p className="text-[11px] text-slate-500 mb-2">
+                        Capacité : {item.capacity[0].total_quantity} places
+                        {item.capacity[0].remaining_quantity != null ? ` (${item.capacity[0].remaining_quantity} restantes)` : ""}
+                      </p>
+                    )}
+                    {/* Session dates */}
+                    {avail.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {avail.slice(0, 5).map((s: any) => (
+                          <span key={s.id} className="text-[11px] font-medium text-primary bg-white rounded-md px-2 py-1 shadow-sm">
+                            {new Date(s.date).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })}
+                            {s.start_time ? ` ${s.start_time}` : ""}
+                            {s.remaining_capacity != null ? ` (${s.remaining_capacity} pl.)` : ""}
+                          </span>
+                        ))}
+                        {avail.length > 5 && (
+                          <span className="text-[11px] text-slate-400 self-center">+{avail.length - 5} autres</span>
+                        )}
+                      </div>
+                    )}
+                    {/* Deadlines */}
+                    {(item.booking_deadline_days || item.cancellation_deadline_days) && (
+                      <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-blue-100">
+                        {item.booking_deadline_days && (
+                          <span className="text-[10px] font-medium text-amber-600">Réservation {item.booking_deadline_days}j avant</span>
+                        )}
+                        {item.cancellation_deadline_days && (
+                          <span className="text-[10px] font-medium text-amber-600">Annul. gratuite {item.cancellation_deadline_days}j avant</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
 
           {/* Sustainability score */}
           {offer.sustainability_score !== null && (() => {
@@ -630,7 +697,7 @@ function ExperienceModal({ exp, onClose }: { exp: Experience; onClose: () => voi
 
 function sustainabilityLevel(score: number) {
   if (score >= 86) return { label: "Ambassadeur Éco Voyage", color: "text-primary",      bar: "bg-primary" };
-  if (score >= 71) return { label: "Éco-Responsable",        color: "text-emerald-600", bar: "bg-emerald-500" };
+  if (score >= 71) return { label: "Éco-Responsable",        color: "text-primary", bar: "bg-primary" };
   if (score >= 51) return { label: "Engagé",                 color: "text-teal-600",    bar: "bg-teal-500" };
   if (score >= 31) return { label: "Sensibilisé",            color: "text-blue-600",    bar: "bg-blue-500" };
   return              { label: "Conventionnel",               color: "text-slate-500",   bar: "bg-slate-400" };
@@ -676,9 +743,19 @@ function OfferCard({ offer, onClick }: { offer: Offer; onClick: () => void }) {
           <span className="bg-white/95 backdrop-blur-sm px-3 py-1 rounded-full text-[11px] font-extrabold text-slate-700 uppercase tracking-widest shadow-sm">
             {getTypeLabel(offer.offer_type)}
           </span>
-          <span className={`px-3 py-1 rounded-full text-[11px] font-bold backdrop-blur-sm shadow-sm ${isGuide ? "bg-emerald-500/90 text-white" : "bg-blue-500/90 text-white"}`}>
+          <span className={`px-3 py-1 rounded-full text-[11px] font-bold backdrop-blur-sm shadow-sm ${isGuide ? "bg-primary/90 text-white" : "bg-blue-500/90 text-white"}`}>
             {isGuide ? "Guide certifié" : "Projet éco"}
           </span>
+          {!isGuide && offer.project?.name && (
+            <span className="bg-amber-500/90 text-white px-3 py-1 rounded-full text-[11px] font-bold backdrop-blur-sm shadow-sm">
+              {offer.project.name}
+            </span>
+          )}
+          {offer.location_type === "mobile" && (
+            <span className="bg-purple-500/90 text-white px-3 py-1 rounded-full text-[11px] font-bold backdrop-blur-sm shadow-sm">
+              🚐 Mobile
+            </span>
+          )}
         </div>
 
         <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-2">
@@ -978,7 +1055,7 @@ export default function DestinationsPage() {
             { value: null,  label: "Tous",              sub: "Sans filtre" },
             { value: 31,    label: "Sensibilisé",       sub: "31+",  color: "text-blue-600" },
             { value: 51,    label: "Engagé",            sub: "51+",  color: "text-teal-600" },
-            { value: 71,    label: "Éco-Responsable",   sub: "71+",  color: "text-emerald-600" },
+            { value: 71,    label: "Éco-Responsable",   sub: "71+",  color: "text-primary" },
             { value: 86,    label: "Ambassadeur",       sub: "86+",  color: "text-primary" },
           ].map((opt) => (
             <button

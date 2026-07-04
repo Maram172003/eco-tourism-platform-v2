@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   MapPin, Leaf, ArrowLeft, Globe, UserCheck, UserPlus,
   Clock, Check, X, Quote, Mountain, MoreVertical, Send,
-  UserMinus, ShieldBan, Flag, ChevronLeft, ChevronRight, ArrowRight,
+  UserMinus, ShieldBan, Flag, ChevronLeft, ChevronRight, ArrowRight, Edit3,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { apiFetch } from "@/lib/api";
@@ -102,7 +102,7 @@ function scoreLabel(score: number | null) {
 
 function scoreColor(score: number) {
   if (score >= 80) return { text: "text-primary", bar: "bg-primary" };
-  if (score >= 60) return { text: "text-emerald-600", bar: "bg-emerald-500" };
+  if (score >= 60) return { text: "text-primary", bar: "bg-primary" };
   if (score >= 40) return { text: "text-teal-600", bar: "bg-teal-500" };
   return { text: "text-blue-600", bar: "bg-blue-500" };
 }
@@ -437,9 +437,20 @@ export default function PublicEcoTravelerProfile() {
                   </div>
                 )}
 
-                {/* Friend button + menu 3 points */}
+                {/* Action buttons (own profile) or Friend button */}
                 <div className="mt-5 w-full flex items-center gap-2">
-                  {viewerRole === "eco_traveler" && (
+                  {viewerId === userId ? (
+                    <>
+                      <button onClick={() => router.push("/profile/ecovoyageur")}
+                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-white font-extrabold rounded-2xl text-sm hover:bg-primary/90 active:scale-95 transition-all">
+                        <MapPin size={15} /> Recommander un lieu
+                      </button>
+                      <button onClick={() => router.push("/profile/ecovoyageur")}
+                        className="flex items-center justify-center gap-2 py-3 px-4 border-2 border-slate-200 text-slate-600 font-bold rounded-2xl text-sm hover:bg-slate-50 active:scale-95 transition-all">
+                        <Edit3 size={15} />
+                      </button>
+                    </>
+                  ) : viewerRole === "eco_traveler" && (
                     <div className="flex-1">
                       {profile.friend_status === "none" && (
                         <button onClick={sendRequest} disabled={actionLoading}
@@ -701,7 +712,7 @@ export default function PublicEcoTravelerProfile() {
             {reportSent ? (
               <div className="text-center py-4">
                 <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-4">
-                  <Check size={24} className="text-emerald-500" />
+                  <Check size={24} className="text-primary" />
                 </div>
                 <h3 className="text-lg font-extrabold text-slate-900 mb-2">Signalement envoyé</h3>
                 <p className="text-sm text-slate-500 mb-5">Notre équipe examinera ce profil dans les plus brefs délais.</p>
@@ -777,7 +788,7 @@ export default function PublicEcoTravelerProfile() {
                     </span>
                   ) : (
                     <>
-                      <span className="absolute bottom-3 left-3 text-[10px] font-black uppercase tracking-wide bg-emerald-500/90 text-white px-2.5 py-1 rounded-full shadow">
+                      <span className="absolute bottom-3 left-3 text-[10px] font-black uppercase tracking-wide bg-primary/90 text-white px-2.5 py-1 rounded-full shadow">
                         Communauté
                       </span>
                       {slides[safeIdx].authorName && (
@@ -873,7 +884,7 @@ export default function PublicEcoTravelerProfile() {
                         </div>
                         <span className="text-[11px] font-bold text-emerald-700">{topDesc.author.full_name}</span>
                       </button>
-                      <span className="ml-auto text-[9px] font-black uppercase tracking-wide bg-emerald-500 text-white px-2 py-0.5 rounded-full">
+                      <span className="ml-auto text-[9px] font-black uppercase tracking-wide bg-primary text-white px-2 py-0.5 rounded-full">
                         Communauté
                       </span>
                     </div>

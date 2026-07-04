@@ -335,7 +335,7 @@ export default function ProjectOwnerOnboardingPage() {
                 type="button"
                 onClick={handleNext}
                 disabled={loading || !canProceed()}
-                className="flex items-center gap-2 px-6 py-3 bg-primary text-slate-900 rounded-xl font-extrabold shadow-lg shadow-primary/20 hover:-translate-y-0.5 active:scale-95 transition-all disabled:opacity-60 disabled:translate-y-0"
+                className="flex items-center gap-2 px-6 py-3 bg-primary text-slate-900 rounded-xl font-extrabold shadow-lg shadow-emerald-500/20 hover:-translate-y-0.5 active:scale-95 transition-all disabled:opacity-60 disabled:translate-y-0"
               >
                 {loading ? (
                   <div className="w-5 h-5 rounded-full border-2 border-slate-900 border-t-transparent animate-spin" />
