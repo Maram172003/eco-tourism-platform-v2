@@ -6,7 +6,7 @@ let refreshQueue: Array<(token: string) => void> = [];
 
 async function doRefresh(): Promise<string> {
   const refresh_token = localStorage.getItem("refresh_token");
-  if (!refresh_token) throw new Error("No refresh token");
+  if (!refresh_token) throw new Error("Aucun jeton de rafraîchissement.");
 
   const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
     method: "POST",
@@ -14,7 +14,7 @@ async function doRefresh(): Promise<string> {
     body: JSON.stringify({ refresh_token }),
   });
 
-  if (!res.ok) throw new Error("Refresh failed");
+  if (!res.ok) throw new Error("Échec du rafraîchissement du jeton.");
 
   const data = await res.json();
   localStorage.setItem("access_token", data.access_token);
@@ -45,12 +45,13 @@ export async function apiFetch<T>(
     const hasSession = typeof window !== "undefined" && !!localStorage.getItem("refresh_token");
 
     if (!hasSession) {
-      const errData = await res.json().catch(() => null);
-      const msg = errData?.message || errData?.error || "Identifiants incorrects.";
-      throw new Error(Array.isArray(msg) ? msg.join(", ") : msg);
+      if (typeof window !== "undefined" && !window.location.pathname.startsWith("/auth/login")) {
+        const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `/auth/login?redirect=${currentPath}`;
+      }
+      throw new Error("Authentification requise.");
     }
 
-    // If another request is already refreshing, wait for it
     if (isRefreshing) {
       const newToken = await new Promise<string>((resolve, reject) => {
         refreshQueue.push((token) => (token ? resolve(token) : reject()));
@@ -66,12 +67,10 @@ export async function apiFetch<T>(
       } catch {
         refreshQueue.forEach((cb) => cb(""));
         refreshQueue = [];
-        // Refresh failed — clear session and redirect to login
         if (typeof window !== "undefined") {
           localStorage.removeItem("access_token");
           localStorage.removeItem("refresh_token");
           localStorage.removeItem("user");
-          window.location.href = "/auth/login";
         }
         throw new Error("Session expirée. Veuillez vous reconnecter.");
       } finally {
@@ -80,11 +79,26 @@ export async function apiFetch<T>(
     }
   }
 
+  if (res.status === 403) {
+    const hasSession = typeof window !== "undefined" && !!localStorage.getItem("refresh_token");
+    if (!hasSession) {
+      if (typeof window !== "undefined" && !window.location.pathname.startsWith("/auth/login")) {
+        const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `/auth/login?redirect=${currentPath}`;
+      }
+      throw new Error("Authentification requise.");
+    }
+  }
+
   const data = await res.json().catch(() => null);
 
   if (!res.ok) {
     const message = data?.message || data?.error || "Une erreur est survenue";
     throw new Error(Array.isArray(message) ? message.join(", ") : message);
+  }
+
+  if (res.status === 204 || data === null) {
+    return null as T;
   }
 
   return data;
