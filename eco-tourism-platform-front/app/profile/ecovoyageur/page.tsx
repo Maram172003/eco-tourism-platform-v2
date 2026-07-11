@@ -5,14 +5,16 @@ import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
   Plus, Edit3, MapPin, ArrowLeft, Leaf, ArrowRight, Send, X,
-  ChevronLeft, ChevronRight, Check, Star, Compass, Heart,
-  Camera, Mountain, Globe, Info, Users, LayoutGrid, ShieldCheck,
+  ChevronLeft, ChevronRight, ChevronDown, Check, Star, Compass, Heart,
+  Camera, Mountain, Globe, Info, Users, LayoutGrid, ShieldCheck, Calendar,
   Search, UserPlus, UserCheck, UserX, MoreVertical, ShieldBan, Flag,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import MessagerieWidget from "@/components/MessagerieWidget";
 import PubInteractions from "@/components/PubInteractions";
 import PlaceContributions, { type TopPhotoData, type TopDescData } from "@/components/PlaceContributions";
+import TimelineEditor from "@/components/TimelineEditor";
+import TimelineView from "@/components/TimelineView";
 
 const MapPicker = dynamic(
   () => import("@/components/map/MapPicker"),
@@ -172,7 +174,7 @@ const TRAVEL_STYLES = [
 
 const GOALS = [
   { value: "reduce_carbon",          label: "Réduire mon empreinte carbone" },
-  { value: "support_local_projects", label: "Soutenir des projets locaux" },
+  { value: "support_local_venues", label: "Soutenir des établissements locaux" },
   { value: "preserve_biodiversity",  label: "Préserver la biodiversité" },
   { value: "avoid_mass_tourism",     label: "Éviter le tourisme de masse" },
   { value: "support_local_crafts",   label: "Valoriser l'artisanat local" },
@@ -237,9 +239,13 @@ export default function EcoTravelerProfilePage() {
   const [pubError,     setPubError]     = useState("");
   const [pubImages,    setPubImages]    = useState<{ file: File; preview: string }[]>([]);
   const [pubCoverIdx,  setPubCoverIdx]  = useState(0);
+  const [pubTimeline,  setPubTimeline]  = useState<{ step_order: number; emoji: string; time_label: string; title: string; description?: string | null; duration_minutes?: number | null; distance_km?: number | null; transport_mode?: string | null }[]>([]);
   const [showPubMap,   setShowPubMap]   = useState(false);
   const [pubMapLat,    setPubMapLat]    = useState<number | null>(null);
   const [pubMapLng,    setPubMapLng]    = useState<number | null>(null);
+  const [pubEvents,    setPubEvents]    = useState<{ title: string; description: string; event_type: string; start_date: string; end_date: string; external_url: string }[]>([]);
+  const [pubEventOpen, setPubEventOpen] = useState(false);
+  const [pubEventForm, setPubEventForm] = useState({ title: "", description: "", event_type: "festival", start_date: "", end_date: "", external_url: "" });
 
   // ── View publication detail ──────────────────────────────────────────────
   const [viewPubOpen,  setViewPubOpen]  = useState(false);
@@ -247,6 +253,8 @@ export default function EcoTravelerProfilePage() {
   const [sliderIdx,    setSliderIdx]    = useState(0);
   const [touchStartX,  setTouchStartX]  = useState<number | null>(null);
   const [pubDeleting,  setPubDeleting]  = useState(false);
+  const [viewPubEvents, setViewPubEvents] = useState<{ id: string; title: string; event_type: string; start_date: string; end_date?: string; description?: string; external_url?: string }[]>([]);
+  const [viewPubTimeline, setViewPubTimeline] = useState<{ step_order: number; emoji: string; time_label: string; title: string; description?: string | null; duration_minutes?: number | null; distance_km?: number | null; transport_mode?: string | null }[]>([]);
 
   // ── Edit publication modal ───────────────────────────────────────────────
   const [editPubOpen,  setEditPubOpen]  = useState(false);
@@ -255,11 +263,12 @@ export default function EcoTravelerProfilePage() {
   const [editPubCover, setEditPubCover] = useState(0);
   const [editPubErr,   setEditPubErr]   = useState("");
   const [editPubSaving,setEditPubSaving]= useState(false);
+  const [editPubTimeline, setEditPubTimeline] = useState<{ step_order: number; emoji: string; time_label: string; title: string; description?: string | null; duration_minutes?: number | null; distance_km?: number | null; transport_mode?: string | null }[]>([]);
 
   // ── Social network ───────────────────────────────────────────────────────
   type Traveler = { user_id: string; full_name: string; photo: string | null; country: string | null; sustainability_score: number | null; friendship_id?: string | null };
   type FriendRequest = { id: string; created_at: string; sender: Traveler };
-  type AnyResult = { user_id: string; full_name: string; photo: string | null; _type: "traveler" | "guide" | "project"; sub?: string | null };
+  type AnyResult = { user_id: string; full_name: string; photo: string | null; _type: "traveler" | "guide" | "provider"; sub?: string | null };
   type FollowUser = { user_id: string; full_name: string | null; photo: string | null; _type: string; sub: string | null };
   const [searchQuery,    setSearchQuery]    = useState("");
   const [searchResults,  setSearchResults]  = useState<Traveler[]>([]);
@@ -333,12 +342,12 @@ export default function EcoTravelerProfilePage() {
       Promise.all([
         apiFetch<Traveler[]>(`/eco-traveler/search?q=${enc}`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => []),
         apiFetch<AnyResult[]>(`/guide/public/search?q=${enc}`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => []),
-        apiFetch<AnyResult[]>(`/project-owner/public/search?q=${enc}`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => []),
+        apiFetch<AnyResult[]>(`/provider/public/search?q=${enc}`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => []),
       ]).then(([travelers, guides, owners]) => {
         setAllResults([
           ...travelers.map((t) => ({ user_id: t.user_id, full_name: t.full_name, photo: t.photo, _type: "traveler" as const, sub: t.country })),
           ...guides.map((g: any) => ({ user_id: g.user_id, full_name: g.full_name, photo: g.photo, _type: "guide" as const, sub: g.zone ?? null })),
-          ...owners.map((o: any) => ({ user_id: o.user_id, full_name: o.full_name, photo: o.photo, _type: "project" as const, sub: o.organization ?? null })),
+          ...owners.map((o: any) => ({ user_id: o.user_id, full_name: o.full_name, photo: o.photo, _type: "provider" as const, sub: o.organization ?? null })),
         ]);
       }).finally(() => setAllLoading(false));
     }, 350);
@@ -382,6 +391,8 @@ export default function EcoTravelerProfilePage() {
     setPubImages([]); setPubCoverIdx(0);
     setAddPubOpen(false);
     setPubTitleErr(""); setPubError("");
+    setPubEvents([]); setPubEventOpen(false); setPubEventForm({ title: "", description: "", event_type: "festival", start_date: "", end_date: "", external_url: "" });
+    setPubTimeline([]);
   }
 
   async function handlePublish(e: React.SyntheticEvent<HTMLFormElement>) {
@@ -410,6 +421,29 @@ export default function EcoTravelerProfilePage() {
         }),
       });
       setPublications((prev) => [created, ...prev]);
+      if (pubType === "place" && pubEvents.length > 0) {
+        await Promise.all(pubEvents.map((ev) =>
+          apiFetch(`/places/${created.id}/events`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: ev.title,
+              description: ev.description || undefined,
+              event_type: ev.event_type,
+              start_date: new Date(ev.start_date).toISOString(),
+              end_date: ev.end_date ? new Date(ev.end_date).toISOString() : undefined,
+              external_url: ev.external_url || undefined,
+            }),
+          })
+        ));
+      }
+      if (pubType === "experience" && pubTimeline.length > 0) {
+        await apiFetch(`/publications/${created.id}/timeline`, {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ entries: pubTimeline.map((e) => ({ ...e, description: e.description || undefined })) }),
+        });
+      }
       closeAddPub();
     } catch (err: any) {
       setPubError(err.message || "Erreur lors de la publication.");
@@ -421,6 +455,16 @@ export default function EcoTravelerProfilePage() {
   function openViewPub(pub: Publication) {
     setViewPub(pub); setSliderIdx(0); setTouchStartX(null);
     setViewPubOpen(true);
+    setViewPubEvents([]);
+    setViewPubTimeline([]);
+    if (pub.type === "place") {
+      apiFetch<{ id: string; title: string; event_type: string; start_date: string; end_date?: string; description?: string; external_url?: string }[]>(`/places/${pub.id}/events`)
+        .then(setViewPubEvents).catch(() => {});
+    }
+    if (pub.type === "experience") {
+      apiFetch<any[]>(`/publications/${pub.id}/timeline`)
+        .then(setViewPubTimeline).catch(() => {});
+    }
   }
 
   function closeViewPub() { setViewPubOpen(false); setViewPub(null); }
@@ -451,6 +495,11 @@ export default function EcoTravelerProfilePage() {
     setEditPubImgs(imgs.map((src) => ({ src })));
     setEditPubCover(0); setEditPubErr("");
     setEditPubOpen(true);
+    setEditPubTimeline([]);
+    if (pub.type === "experience") {
+      apiFetch<any[]>(`/publications/${pub.id}/timeline`)
+        .then(setEditPubTimeline).catch(() => {});
+    }
   }
 
   function closeEditPub() { setEditPubOpen(false); setEditPubErr(""); }
@@ -484,6 +533,13 @@ export default function EcoTravelerProfilePage() {
       setPublications((prev) => prev.map((p) => p.id === viewPub.id ? finalPub : p));
       setViewPub(finalPub);
       setEditPubOpen(false);
+      if (viewPub.type === "experience" && editPubTimeline.length > 0) {
+        await apiFetch(`/publications/${viewPub.id}/timeline`, {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ entries: editPubTimeline.map((e) => ({ ...e, description: e.description || undefined })) }),
+        });
+      }
     } catch (err: any) {
       setEditPubErr(err.message || "Erreur lors de la sauvegarde.");
     } finally { setEditPubSaving(false); }
@@ -742,19 +798,19 @@ export default function EcoTravelerProfilePage() {
   // ── Follow user path helper ──────────────────────────────────────────────
   function followUserPath(u: FollowUser) {
     if (u._type === "guide") return `/profile/guide/${u.user_id}`;
-    if (u._type === "project") return `/profile/project-owner/${u.user_id}`;
+    if (u._type === "provider") return `/profile/provider/${u.user_id}`;
     return `/profile/ecovoyageur/${u.user_id}`;
   }
 
   function followTypeLabel(type: string) {
     if (type === "guide") return "Guide";
-    if (type === "project") return "Prestataire";
+    if (type === "provider") return "Propriétaire";
     return "Éco-Voyageur";
   }
 
   function followTypeBadgeColor(type: string) {
     if (type === "guide") return "bg-emerald-50 text-emerald-700";
-    if (type === "project") return "bg-blue-50 text-blue-700";
+    if (type === "provider") return "bg-blue-50 text-blue-700";
     return "bg-teal-50 text-teal-700";
   }
 
@@ -829,7 +885,7 @@ export default function EcoTravelerProfilePage() {
       {/* ══ MODAL SIGNALEMENT ════════════════════════════════════════════════ */}
       {reportTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl p-6">
+          <div className="modal-content bg-white rounded-3xl w-full max-w-sm shadow-2xl p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
                 <Flag size={16} className="text-red-500" />
@@ -878,7 +934,7 @@ export default function EcoTravelerProfilePage() {
       {/* ══ EDIT PROFILE MODAL ═══════════════════════════════════════════════ */}
       {editProfileOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl relative overflow-hidden flex flex-col max-h-[92vh]">
+          <div className="modal-content bg-white rounded-3xl w-full max-w-lg shadow-2xl relative overflow-hidden flex flex-col max-h-[92vh]">
             <button onClick={closeEditProfile}
               className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors">
               <X size={16} />
@@ -1156,7 +1212,7 @@ export default function EcoTravelerProfilePage() {
                         <button key={value} type="button"
                           onClick={() => setEditGoals((prev) => active ? prev.filter((x) => x !== value) : [...prev, value])}
                           className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-sm font-bold text-left transition-all ${active ? "bg-emerald-50 border-emerald-400 text-slate-900" : "border-slate-100 text-slate-600 hover:border-emerald-200 bg-white"}`}>
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${active ? "border-emerald-500 bg-emerald-500" : "border-slate-300"}`}>
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${active ? "border-primary bg-primary" : "border-slate-300"}`}>
                             {active && <Check size={10} className="text-white" />}
                           </div>
                           {label}
@@ -1195,7 +1251,7 @@ export default function EcoTravelerProfilePage() {
       {/* ══ ADD PUBLICATION MODAL ════════════════════════════════════════════ */}
       {addPubOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="modal-content bg-white rounded-3xl w-full max-w-xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
             <button onClick={closeAddPub}
               className="absolute top-5 right-5 z-10 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors">
               <X size={16} />
@@ -1267,12 +1323,14 @@ export default function EcoTravelerProfilePage() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white placeholder:text-slate-400 mb-2"
                   />
                   {showPubMap && (
-                    <MapPicker lat={pubMapLat} lng={pubMapLng}
-                      onPick={(lat, lng, address) => {
-                        setPubMapLat(lat); setPubMapLng(lng);
-                        if (address) setPubForm((f) => ({ ...f, place_name: address }));
-                      }}
-                    />
+                    <div className="overflow-hidden rounded-xl">
+                      <MapPicker lat={pubMapLat} lng={pubMapLng}
+                        onPick={(lat, lng, address) => {
+                          setPubMapLat(lat); setPubMapLng(lng);
+                          if (address) setPubForm((f) => ({ ...f, place_name: address }));
+                        }}
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -1288,6 +1346,13 @@ export default function EcoTravelerProfilePage() {
                     />
                   </div>
                 </div>
+
+                {/* Timeline (only for experiences) */}
+                {pubType === "experience" && (
+                  <div>
+                    <TimelineEditor entries={pubTimeline} onChange={setPubTimeline} />
+                  </div>
+                )}
 
                 {/* Photos */}
                 <div>
@@ -1333,6 +1398,56 @@ export default function EcoTravelerProfilePage() {
                   )}
                 </div>
 
+                {/* Événements (only for places) */}
+                {pubType === "place" && (
+                  <div>
+                    <button type="button" onClick={() => setPubEventOpen((v) => !v)}
+                      className="flex items-center justify-between w-full text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">
+                      <span className="flex items-center gap-1.5"><Calendar size={14} /> Événements{pubEvents.length > 0 && <span className="text-[10px] font-bold text-primary">({pubEvents.length})</span>}</span>
+                      <span className={`transition-transform ${pubEventOpen ? "rotate-180" : ""}`}><ChevronDown size={14} /></span>
+                    </button>
+                    {pubEventOpen && (
+                      <div className="space-y-3 mb-3">
+                        {pubEvents.map((ev, i) => (
+                          <div key={i} className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-slate-700 truncate">{ev.title}</p>
+                              <p className="text-[10px] text-slate-500">{ev.event_type} · {new Date(ev.start_date).toLocaleDateString("fr-FR")}</p>
+                            </div>
+                            <button type="button" onClick={() => setPubEvents((prev) => prev.filter((_, idx) => idx !== i))}
+                              className="w-6 h-6 rounded-full hover:bg-red-50 text-slate-400 hover:text-red-500 flex items-center justify-center transition-colors">
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                        <div className="grid grid-cols-2 gap-2">
+                          <input value={pubEventForm.title} onChange={(e) => setPubEventForm((f) => ({ ...f, title: e.target.value }))} placeholder="Titre *" className="w-full col-span-2 text-xs bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-primary/40" />
+                          <input value={pubEventForm.start_date} onChange={(e) => setPubEventForm((f) => ({ ...f, start_date: e.target.value }))} type="date" className="w-full text-xs bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-primary/40" />
+                          <input value={pubEventForm.end_date} onChange={(e) => setPubEventForm((f) => ({ ...f, end_date: e.target.value }))} type="date" className="w-full text-xs bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-primary/40" />
+                          <select value={pubEventForm.event_type} onChange={(e) => setPubEventForm((f) => ({ ...f, event_type: e.target.value }))} className="w-full text-xs bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-primary/40">
+                            <option value="festival">Festival</option>
+                            <option value="concert">Concert</option>
+                            <option value="market">Marché</option>
+                            <option value="competition">Compétition</option>
+                            <option value="exhibition">Exposition</option>
+                            <option value="workshop">Atelier</option>
+                            <option value="other">Autre</option>
+                          </select>
+                          <input value={pubEventForm.external_url} onChange={(e) => setPubEventForm((f) => ({ ...f, external_url: e.target.value }))} placeholder="Lien (optionnel)" className="w-full text-xs bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-primary/40" />
+                        </div>
+                        <button type="button" onClick={() => {
+                          if (!pubEventForm.title.trim() || !pubEventForm.start_date) return;
+                          setPubEvents((prev) => [...prev, { ...pubEventForm }]);
+                          setPubEventForm({ title: "", description: "", event_type: "festival", start_date: "", end_date: "", external_url: "" });
+                        }}
+                          className="w-full text-xs font-bold text-primary hover:bg-primary/5 border border-dashed border-primary/30 rounded-xl py-2 transition-colors">
+                          + Ajouter cet événement
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {pubError && (
                   <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
                     <span className="material-symbols-outlined text-red-500 text-base">error</span>
@@ -1374,13 +1489,13 @@ export default function EcoTravelerProfilePage() {
         const authorInitialsModal = (name: string) => name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
         const getProfilePath = (userId: string, role: string) => {
           if (role === "guide") return `/profile/guide/${userId}`;
-          if (role === "project_owner") return `/profile/project-owner/${userId}`;
+          if (role === "provider") return `/profile/provider/${userId}`;
           return `/profile/ecovoyageur/${userId}`;
         };
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-3xl w-full max-w-xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="modal-content bg-white rounded-3xl w-full max-w-xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
               <button onClick={closeViewPub}
                 className="absolute top-4 left-4 z-20 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center transition-colors">
                 <X size={16} />
@@ -1408,7 +1523,7 @@ export default function EcoTravelerProfilePage() {
                           </span>
                         ) : (
                           <>
-                            <span className="absolute bottom-3 left-3 text-[10px] font-black uppercase tracking-wide bg-emerald-500/90 text-white px-2.5 py-1 rounded-full shadow">
+                            <span className="absolute bottom-3 left-3 text-[10px] font-black uppercase tracking-wide bg-primary/90 text-white px-2.5 py-1 rounded-full shadow">
                               Communauté
                             </span>
                             {slide.authorPhoto !== undefined && (
@@ -1492,6 +1607,14 @@ export default function EcoTravelerProfilePage() {
                   </div>
                 )}
 
+                {/* Timeline (for experiences) */}
+                {isExp && viewPubTimeline.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Timeline du voyage</p>
+                    <TimelineView entries={viewPubTimeline} />
+                  </div>
+                )}
+
                 {/* Description communauté gagnante */}
                 {topDesc && (
                   <div className="border border-emerald-100 rounded-2xl p-4 bg-emerald-50/50">
@@ -1508,11 +1631,37 @@ export default function EcoTravelerProfilePage() {
                         </div>
                         <span className="text-[11px] font-bold text-emerald-700">{topDesc.author.full_name}</span>
                       </button>
-                      <span className="ml-auto text-[9px] font-black uppercase tracking-wide bg-emerald-500 text-white px-2 py-0.5 rounded-full">
+                      <span className="ml-auto text-[9px] font-black uppercase tracking-wide bg-primary text-white px-2 py-0.5 rounded-full">
                         Communauté
                       </span>
                     </div>
                     <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{topDesc.content}</p>
+                  </div>
+                )}
+
+                {/* Événements */}
+                {!isExp && viewPubEvents.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5"><Calendar size={13} />Événements ({viewPubEvents.length})</p>
+                    <div className="space-y-2">
+                      {viewPubEvents.map((ev) => {
+                        const typeColors: Record<string, string> = { festival: "bg-pink-100 text-pink-600", concert: "bg-purple-100 text-purple-600", market: "bg-amber-100 text-amber-600", competition: "bg-red-100 text-red-600", exhibition: "bg-blue-100 text-blue-600", workshop: "bg-emerald-100 text-emerald-600" };
+                        const typeLabel: Record<string, string> = { festival: "Festival", concert: "Concert", market: "Marché", competition: "Compétition", exhibition: "Exposition", workshop: "Atelier" };
+                        return (
+                          <div key={ev.id} className="flex items-start gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                            <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shrink-0"><Calendar size={14} className="text-primary" /></div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${typeColors[ev.event_type] || "bg-slate-100 text-slate-600"}`}>{typeLabel[ev.event_type] || ev.event_type}</span>
+                                <span className="text-[10px] text-slate-400">{new Date(ev.start_date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
+                              </div>
+                              <p className="text-xs font-bold text-slate-700">{ev.title}</p>
+                              {ev.description && <p className="text-[11px] text-slate-500 line-clamp-1">{ev.description}</p>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
@@ -1539,7 +1688,7 @@ export default function EcoTravelerProfilePage() {
       {/* ══ EDIT PUBLICATION MODAL ═══════════════════════════════════════════ */}
       {editPubOpen && viewPub && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="modal-content bg-white rounded-3xl w-full max-w-lg shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
             <button onClick={closeEditPub}
               className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center">
               <X size={16} />
@@ -1590,6 +1739,13 @@ export default function EcoTravelerProfilePage() {
                     />
                   </div>
                 </div>
+
+                {/* Timeline (edit, for experiences) */}
+                {viewPub?.type === "experience" && (
+                  <div>
+                    <TimelineEditor entries={editPubTimeline} onChange={setEditPubTimeline} />
+                  </div>
+                )}
 
                 {/* Gérer les photos existantes */}
                 {editPubImgs.length > 0 && (
@@ -1691,7 +1847,7 @@ export default function EcoTravelerProfilePage() {
                 <div className="text-center sm:text-left pb-1 min-w-0">
                   <div className="flex items-center justify-center sm:justify-start gap-2">
                     <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-800 break-words">{profile.full_name}</h1>
-                    <ShieldCheck size={20} className="text-emerald-500 fill-emerald-100 hidden sm:block shrink-0" />
+                    <ShieldCheck size={20} className="text-primary fill-emerald-100 hidden sm:block shrink-0" />
                   </div>
                   <div className="flex items-center justify-center sm:justify-start gap-1.5 mt-1 text-primary font-semibold text-sm">
                     <span>{roleLabel}</span>
@@ -1953,14 +2109,14 @@ export default function EcoTravelerProfilePage() {
                   {!allLoading && allResults.length > 0 && (
                     <div className="mt-3 divide-y divide-slate-50">
                       {allResults.map((r) => {
-                        const path = r._type === "traveler" ? `/profile/ecovoyageur/${r.user_id}` : r._type === "guide" ? `/profile/guide/${r.user_id}` : `/profile/project-owner/${r.user_id}`;
-                        const typeLabel = r._type === "traveler" ? "Éco-Voyageur" : r._type === "guide" ? "Guide" : "Prestataire";
+                        const path = r._type === "traveler" ? `/profile/ecovoyageur/${r.user_id}` : r._type === "guide" ? `/profile/guide/${r.user_id}` : `/profile/provider/${r.user_id}`;
+                        const typeLabel = r._type === "traveler" ? "Éco-Voyageur" : r._type === "guide" ? "Guide" : "Propriétaire";
                         const typeColor = r._type === "traveler" ? "bg-teal-50 text-teal-700" : r._type === "guide" ? "bg-emerald-50 text-emerald-700" : "bg-blue-50 text-blue-700";
                         return (
                           <div key={`${r._type}-${r.user_id}`} className="flex items-center justify-between py-3 gap-3">
                             <button onClick={() => router.push(path)} className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 text-left">
                               <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
-                                {r.photo ? <img src={r.photo} alt={r.full_name} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-slate-400">{r._type === "project" ? "business" : "person"}</span>}
+                                {r.photo ? <img src={r.photo} alt={r.full_name} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-slate-400">{r._type === "provider" ? "business" : "person"}</span>}
                               </div>
                               <div className="min-w-0">
                                 <p className="font-extrabold text-slate-800 text-sm truncate">{r.full_name}</p>
@@ -2095,7 +2251,7 @@ export default function EcoTravelerProfilePage() {
                 {/* Suivi(e)s list */}
                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
                   <h3 className="font-extrabold text-slate-800 text-base mb-4 flex items-center gap-2">
-                    <ArrowRight size={16} className="text-emerald-600" /> Mes suivi(e)s
+                    <ArrowRight size={16} className="text-primary" /> Mes suivi(e)s
                     {followings.length > 0 && <span className="bg-emerald-50 text-emerald-700 text-xs font-black px-2 py-0.5 rounded-full">{followings.length}</span>}
                   </h3>
                   {followings.length === 0 ? (
@@ -2113,7 +2269,7 @@ export default function EcoTravelerProfilePage() {
                             <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
                               {u.photo
                                 ? <img src={u.photo} alt={u.full_name ?? ""} className="w-full h-full object-cover" />
-                                : <span className="material-symbols-outlined text-slate-400">{u._type === "project" ? "business" : "person"}</span>
+                                : <span className="material-symbols-outlined text-slate-400">{u._type === "provider" ? "business" : "person"}</span>
                               }
                             </div>
                             <div className="min-w-0">
@@ -2263,7 +2419,7 @@ export default function EcoTravelerProfilePage() {
                   <div className="bg-white p-6 rounded-3xl border border-slate-100/80 shadow-sm">
                     <div className="flex items-center gap-2.5 mb-4">
                       <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center">
-                        <Mountain size={16} className="text-emerald-600" />
+                        <Mountain size={16} className="text-primary" />
                       </div>
                       <h3 className="text-base font-extrabold text-slate-800">Préférences & Objectifs</h3>
                     </div>
@@ -2298,7 +2454,7 @@ export default function EcoTravelerProfilePage() {
                               const g = GOALS.find((x) => x.value === v);
                               return (
                                 <li key={v} className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                                  <Check size={13} className="text-emerald-500 shrink-0" />{g?.label ?? v}
+                                  <Check size={13} className="text-primary shrink-0" />{g?.label ?? v}
                                 </li>
                               );
                             })}

@@ -1,98 +1,70 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Provider } from './entities/provider.entity';
-import { OnboardingProviderDto, UpdateProviderDto } from './dto/provider.dto';
+import { CreateProviderDto, UpdateProviderDto } from './dto/provider.dto';
+import { ProviderMongoService } from './provider-mongo.service';
 
 @Injectable()
 export class ProviderService {
   constructor(
     @InjectRepository(Provider)
     private readonly repo: Repository<Provider>,
+    private readonly mongoService: ProviderMongoService,
   ) {}
 
-  async findOrCreate(userId: string): Promise<Provider> {
-    let provider = await this.repo.findOne({ where: { user_id: userId } });
-    if (!provider) {
-      provider = this.repo.create({ user_id: userId });
-      await this.repo.save(provider);
+  async create(userId: string, dto: CreateProviderDto) {
+    const provider = this.repo.create({ user_id: userId, ...dto });
+    return this.repo.save(provider);
+  }
+
+  async findByUserId(userId: string) {
+    return this.repo.findOne({ where: { user_id: userId } });
+  }
+
+  async findById(userId: string) {
+    const provider = await this.repo.findOne({ where: { user_id: userId } });
+    if (!provider) throw new NotFoundException('Provider introuvable');
+    return provider;
+  }
+
+  async update(userId: string, dto: UpdateProviderDto) {
+    await this.findById(userId);
+    await this.repo.update({ user_id: userId }, dto);
+    return this.findByUserId(userId);
+  }
+
+  async findAll() {
+    return this.repo.find();
+  }
+
+  async updateQuestionnaireScore(userId: string, scoreQuestionnaire: number) {
+    const profile = await this.findProviderOrFail(userId);
+    profile.score_questionnaire = scoreQuestionnaire;
+    profile.sustainability_score = Math.round(
+      scoreQuestionnaire * 0.4 +
+        (profile.score_reservations ?? 0) * 0.4 +
+        (profile.score_feedbacks ?? 0) * 0.2,
+    );
+    const saved = await this.repo.save(profile);
+    if (profile.sustainability_score >= 80) {
+      await this.mongoService.addBadge(
+        userId,
+        'Propriétaire Ambassadeur AFRATIM',
+      );
     }
-    return provider;
+    return saved;
   }
 
-  async getMyProfile(userId: string): Promise<Provider> {
-    return this.findOrCreate(userId);
-  }
-
-  async getPublicProfile(userId: string): Promise<Provider> {
-    const provider = await this.repo.findOne({ where: { user_id: userId } });
-    if (!provider) throw new NotFoundException('Prestataire introuvable.');
-    return provider;
-  }
-
-  async onboard(userId: string, dto: OnboardingProviderDto): Promise<Provider> {
-    const provider = await this.findOrCreate(userId);
-    Object.assign(provider, dto);
-    provider.status = 'pending';
-    return this.repo.save(provider);
-  }
-
-  async update(userId: string, dto: UpdateProviderDto): Promise<Provider> {
-    const provider = await this.findOrCreate(userId);
-    Object.assign(provider, dto);
-    return this.repo.save(provider);
-  }
-
-  async search(q: string): Promise<Provider[]> {
-    return this.repo.find({
-      where: [
-        { full_name: ILike(`%${q}%`), status: 'active' },
-        { organization: ILike(`%${q}%`), status: 'active' },
-        { region: ILike(`%${q}%`), status: 'active' },
-      ],
-      take: 20,
+  private async findProviderOrFail(userId: string) {
+    const profile = await this.repo.findOne({
+      where: { user_id: userId },
     });
-  }
-
-  async findAll(): Promise<Provider[]> {
-    return this.repo.find({ where: { status: 'active' }, order: { sustainability_score: 'DESC' } });
-  }
-
-  async findByType(type: string): Promise<Provider[]> {
-    return this.repo.find({ where: { provider_type: type, status: 'active' } });
-  }
-
-  // Admin
-  async findPending(): Promise<Provider[]> {
-    return this.repo.find({ where: { status: 'pending' }, order: { created_at: 'DESC' } });
-  }
-
-  async approve(userId: string): Promise<Provider> {
-    const provider = await this.repo.findOne({ where: { user_id: userId } });
-    if (!provider) throw new NotFoundException('Prestataire introuvable.');
-    provider.status = 'active';
-    return this.repo.save(provider);
-  }
-
-  async reject(userId: string, reason: string): Promise<Provider> {
-    const provider = await this.repo.findOne({ where: { user_id: userId } });
-    if (!provider) throw new NotFoundException('Prestataire introuvable.');
-    provider.status = 'rejected';
-    provider.rejection_reason = reason;
-    return this.repo.save(provider);
-  }
-
-  async updateQuestionnaireScore(userId: string, score: number): Promise<void> {
-    const provider = await this.findOrCreate(userId);
-    provider.score_questionnaire = score;
-    provider.sustainability_score = this.computeScore(provider);
-    await this.repo.save(provider);
-  }
-
-  private computeScore(p: Provider): number {
-    const q = p.score_questionnaire ?? 0;
-    const r = p.score_reservations ?? 0;
-    const f = p.score_feedbacks ?? 0;
-    return Math.min(Math.round(q * 0.5 + r * 0.3 + f * 0.2), 100);
+    if (!profile) {
+      throw new NotFoundException(
+        "Profil introuvable. Complétez d'abord votre profil.",
+      );
+    }
+    return profile;
   }
 }

@@ -11,7 +11,6 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { MailService } from '../mail/mail.service';
 import { User } from '../users/entities/user.entity';
 
-
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),

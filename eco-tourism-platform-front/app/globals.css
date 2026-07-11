@@ -62,3 +62,49 @@
 .material-symbols-outlined {
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
 }
+
+/* ── Leaflet containment inside modals ───────────────────────── */
+.leaflet-container {
+  z-index: 0 !important;
+}
+
+.modal-content {
+  overflow-x: hidden;
+}
+
+.modal-content .leaflet-pane,
+.modal-content .leaflet-top,
+.modal-content .leaflet-bottom {
+  z-index: 0 !important;
+}
+
+.modal-content .leaflet-control {
+  z-index: 0 !important;
+}
+
+.modal-content .leaflet-popup {
+  z-index: 0 !important;
+}
+
+.modal-content .leaflet-overlay-pane {
+  z-index: 0 !important;
+}
+
+.modal-content .leaflet-marker-pane {
+  z-index: 0 !important;
+}
+
+.modal-content .leaflet-tooltip-pane {
+  z-index: 0 !important;
+}
+
+/* ── Map container inside forms ──────────────────────────────── */
+.map-contained {
+  overflow: hidden;
+  border-radius: 1rem;
+  position: relative;
+}
+
+.map-contained .leaflet-container {
+  z-index: 0 !important;
+}

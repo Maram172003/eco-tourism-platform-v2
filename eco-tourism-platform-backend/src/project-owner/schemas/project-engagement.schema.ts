@@ -27,4 +27,5 @@ export class ProjectEngagement {
   projects_count!: number;
 }
 
-export const ProjectEngagementSchema = SchemaFactory.createForClass(ProjectEngagement);
+export const ProjectEngagementSchema =
+  SchemaFactory.createForClass(ProjectEngagement);

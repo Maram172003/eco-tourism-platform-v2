@@ -45,10 +45,11 @@ export class EcoTravelerMongoService {
   ) {
     const update: Partial<TravelerPreferences> = {};
 
-    if (profile.interests)           update.activities  = profile.interests;
-    if (profile.landscapes)          update.landscapes  = profile.landscapes;
-    if (profile.motivations)         update.interests   = profile.motivations;
-    if (profile.sustainability_goals) update.objectives = profile.sustainability_goals;
+    if (profile.interests) update.activities = profile.interests;
+    if (profile.landscapes) update.landscapes = profile.landscapes;
+    if (profile.motivations) update.interests = profile.motivations;
+    if (profile.sustainability_goals)
+      update.objectives = profile.sustainability_goals;
 
     return await this.upsertPreferences(userId, update);
   }

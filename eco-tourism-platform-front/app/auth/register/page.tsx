@@ -18,26 +18,40 @@ export default function RegisterPage() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string; confirmPassword?: string }>({});
+
+  function validate(): boolean {
+    const errs: { email?: string; password?: string; confirmPassword?: string } = {};
+    if (!email.trim()) {
+      errs.email = "L'email est requis.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      errs.email = "Format d'email invalide.";
+    }
+    if (!password) {
+      errs.password = "Le mot de passe est requis.";
+    } else if (password.length < 8) {
+      errs.password = "Le mot de passe doit contenir au moins 8 caractères.";
+    } else if (!/(?=.*[a-z])/.test(password)) {
+      errs.password = "Le mot de passe doit contenir au moins une minuscule.";
+    } else if (!/(?=.*[A-Z])/.test(password)) {
+      errs.password = "Le mot de passe doit contenir au moins une majuscule.";
+    } else if (!/(?=.*\d)/.test(password)) {
+      errs.password = "Le mot de passe doit contenir au moins un chiffre.";
+    }
+    if (!confirmPassword) {
+      errs.confirmPassword = "La confirmation est requise.";
+    } else if (password !== confirmPassword) {
+      errs.confirmPassword = "Les mots de passe ne correspondent pas.";
+    }
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
 
-    if (!email.trim()) {
-      setError("L'email est requis.");
-      return;
-    }
-
-    if (!password.trim()) {
-      setError("Le mot de passe est requis.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Les mots de passe ne correspondent pas.");
-      return;
-    }
-
+    if (!validate()) return;
     if (!termsAccepted) {
       setError("Vous devez accepter les conditions.");
       return;
@@ -132,7 +146,7 @@ export default function RegisterPage() {
                 </label>
 
                 <div className="grid gap-3 grid-cols-3">
-                  <label className="relative flex flex-col items-center p-4 rounded-xl border-2 border-slate-100 bg-surface-container-low cursor-pointer hover:border-primary/30 transition-all group has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                  <label className="relative flex flex-col items-center p-3 rounded-xl border-2 border-slate-100 bg-surface-container-low cursor-pointer hover:border-primary/30 transition-all group has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                     <input
                       checked={role === "eco_traveler"}
                       onChange={() => setRole("eco_traveler")}
@@ -141,43 +155,42 @@ export default function RegisterPage() {
                       type="radio"
                       value="eco_traveler"
                     />
-                    <span className="material-symbols-outlined mb-2 text-primary" style={{ fontSize: 32 }}>travel_explore</span>
-                    <span className="text-xs font-bold text-slate-700 group-hover:text-primary uppercase tracking-wide text-center">
-                      Éco-Voyageur
+                    <span className="material-symbols-outlined text-2xl text-slate-400 group-hover:text-primary transition-colors mb-1">
+                      travel_explore
                     </span>
-                    <span className="text-[10px] text-slate-400 mt-1 text-center">Explorer & réserver</span>
+                    <span className="text-[11px] font-bold text-slate-600 group-hover:text-primary uppercase tracking-wider">
+                      Éco-voyageur
+                    </span>
                   </label>
 
-                  <label className="relative flex flex-col items-center p-4 rounded-xl border-2 border-slate-100 bg-surface-container-low cursor-pointer hover:border-primary/30 transition-all group has-[:checked]:border-primary has-[:checked]:bg-primary/5">
-                    <input
-                      checked={role === "provider"}
+                  <label className="relative flex flex-col items-center p-3 rounded-xl border-2 border-slate-100 bg-surface-container-low cursor-pointer hover:border-primary/30 transition-all group has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                    <input checked={role === "provider"}
                       onChange={() => setRole("provider")}
                       className="sr-only"
                       name="role"
                       type="radio"
-                      value="provider"
-                    />
-                    <span className="material-symbols-outlined mb-2 text-primary" style={{ fontSize: 32 }}>eco</span>
-                    <span className="text-xs font-bold text-slate-700 group-hover:text-primary uppercase tracking-wide text-center">
-                      Prestataire
+                      value="provider" />
+                    <span className="material-symbols-outlined text-2xl text-slate-400 group-hover:text-primary transition-colors mb-1">
+                      potted_plant
                     </span>
-                    <span className="text-[10px] text-slate-400 mt-1 text-center">Lodge, activité...</span>
+                    <span className="text-[11px] font-bold text-slate-600 group-hover:text-primary uppercase tracking-wider">
+                      Propriétaire
+                    </span>
                   </label>
 
-                  <label className="relative flex flex-col items-center p-4 rounded-xl border-2 border-slate-100 bg-surface-container-low cursor-pointer hover:border-primary/30 transition-all group has-[:checked]:border-primary has-[:checked]:bg-primary/5">
-                    <input
-                      checked={role === "guide"}
+                  <label className="relative flex flex-col items-center p-3 rounded-xl border-2 border-slate-100 bg-surface-container-low cursor-pointer hover:border-primary/30 transition-all group has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                    <input checked={role === "guide"}
                       onChange={() => setRole("guide")}
                       className="sr-only"
                       name="role"
                       type="radio"
-                      value="guide"
-                    />
-                    <span className="material-symbols-outlined mb-2 text-primary" style={{ fontSize: 32 }}>hiking</span>
-                    <span className="text-xs font-bold text-slate-700 group-hover:text-primary uppercase tracking-wide text-center">
+                      value="guide" />
+                    <span className="material-symbols-outlined text-2xl text-slate-400 group-hover:text-primary transition-colors mb-1">
+                      explore
+                    </span>
+                    <span className="text-[11px] font-bold text-slate-600 group-hover:text-primary uppercase tracking-wider">
                       Guide
                     </span>
-                    <span className="text-[10px] text-slate-400 mt-1 text-center">Accompagner & guider</span>
                   </label>
                 </div>
               </div>
@@ -195,15 +208,17 @@ export default function RegisterPage() {
                       </span>
                     </div>
                     <input
-                      className="w-full pl-11 pr-4 py-3.5 bg-surface-container border-none rounded-xl focus:ring-2 focus:ring-primary text-slate-900 placeholder:text-slate-400 font-medium transition-all"
+                      className={`w-full pl-11 pr-4 py-3.5 bg-surface-container border-none rounded-xl focus:ring-2 focus:ring-primary text-slate-900 placeholder:text-slate-400 font-medium transition-all ${fieldErrors.email ? "ring-2 ring-red-400" : ""}`}
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => { setEmail(e.target.value); setFieldErrors((p) => ({ ...p, email: undefined })); }}
                       id="email"
                       name="email"
                       placeholder="nom@exemple.com"
                       type="email"
+                      autoComplete="email"
                     />
                   </div>
+                  {fieldErrors.email && <p className="text-xs font-semibold text-red-500 ml-1">{fieldErrors.email}</p>}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -218,13 +233,14 @@ export default function RegisterPage() {
                         </span>
                       </div>
                       <input
-                        className="w-full pl-11 pr-12 py-3.5 bg-surface-container border-none rounded-xl focus:ring-2 focus:ring-primary text-slate-900 placeholder:text-slate-400 font-medium transition-all"
+                        className={`w-full pl-11 pr-12 py-3.5 bg-surface-container border-none rounded-xl focus:ring-2 focus:ring-primary text-slate-900 placeholder:text-slate-400 font-medium transition-all ${fieldErrors.password ? "ring-2 ring-red-400" : ""}`}
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        onChange={(e) => { setPassword(e.target.value); setFieldErrors((p) => ({ ...p, password: undefined })); }}
                         id="password"
                         name="password"
                         placeholder="••••••••"
                         type={showPassword ? "text" : "password"}
+                        autoComplete="new-password"
                       />
                       <button
                         type="button"
@@ -236,6 +252,7 @@ export default function RegisterPage() {
                         </span>
                       </button>
                     </div>
+                    {fieldErrors.password && <p className="text-xs font-semibold text-red-500 ml-1">{fieldErrors.password}</p>}
                   </div>
 
                   <div className="space-y-1.5">
@@ -249,13 +266,14 @@ export default function RegisterPage() {
                         </span>
                       </div>
                       <input
-                        className="w-full pl-11 pr-12 py-3.5 bg-surface-container border-none rounded-xl focus:ring-2 focus:ring-primary text-slate-900 placeholder:text-slate-400 font-medium transition-all"
+                        className={`w-full pl-11 pr-12 py-3.5 bg-surface-container border-none rounded-xl focus:ring-2 focus:ring-primary text-slate-900 placeholder:text-slate-400 font-medium transition-all ${fieldErrors.confirmPassword ? "ring-2 ring-red-400" : ""}`}
                         value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        onChange={(e) => { setConfirmPassword(e.target.value); setFieldErrors((p) => ({ ...p, confirmPassword: undefined })); }}
                         id="confirm_password"
                         name="confirm_password"
                         placeholder="••••••••"
                         type={showConfirmPassword ? "text" : "password"}
+                        autoComplete="new-password"
                       />
                       <button
                         type="button"
@@ -267,6 +285,7 @@ export default function RegisterPage() {
                         </span>
                       </button>
                     </div>
+                    {fieldErrors.confirmPassword && <p className="text-xs font-semibold text-red-500 ml-1">{fieldErrors.confirmPassword}</p>}
                   </div>
                 </div>
               </div>
@@ -296,7 +315,7 @@ export default function RegisterPage() {
                 <p className="text-sm font-semibold text-red-600">{error}</p>
               )}
               <button
-                className="w-full py-4 bg-primary text-black font-extrabold text-lg rounded-xl shadow-lg shadow-primary/30 hover:-translate-y-0.5 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                className="w-full py-4 bg-primary text-black font-extrabold text-lg rounded-xl shadow-lg shadow-emerald-500/30 hover:-translate-y-0.5 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60"
                 type="submit"
                 disabled={loading}
               >

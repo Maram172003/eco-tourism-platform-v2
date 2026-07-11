@@ -7,7 +7,10 @@ export class CompleteOwnerProfileDto {
   @IsNotEmpty()
   full_name!: string;
 
-  @ApiProperty({ example: 'Passionnée par le développement durable et le tourisme éco-responsable.' })
+  @ApiProperty({
+    example:
+      'Passionnée par le développement durable et le tourisme éco-responsable.',
+  })
   @IsOptional()
   @IsString()
   bio?: string;

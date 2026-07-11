@@ -6,7 +6,7 @@ export class UploadService {
   constructor() {
     cloudinary.config({
       cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-      api_key:    process.env.CLOUDINARY_API_KEY,
+      api_key: process.env.CLOUDINARY_API_KEY,
       api_secret: process.env.CLOUDINARY_API_SECRET,
     });
   }
@@ -16,7 +16,8 @@ export class UploadService {
       const stream = cloudinary.uploader.upload_stream(
         { folder: 'eco-tourism', resource_type: 'image' },
         (error, result) => {
-          if (error || !result) return reject(new InternalServerErrorException('Upload échoué.'));
+          if (error || !result)
+            return reject(new InternalServerErrorException('Upload échoué.'));
           resolve(result.secure_url);
         },
       );
@@ -28,6 +29,8 @@ export class UploadService {
     // Extrait le public_id depuis l'URL Cloudinary
     const match = url.match(/\/eco-tourism\/([^.]+)/);
     if (!match) return;
-    await cloudinary.uploader.destroy(`eco-tourism/${match[1]}`).catch(() => {});
+    await cloudinary.uploader
+      .destroy(`eco-tourism/${match[1]}`)
+      .catch(() => {});
   }
 }

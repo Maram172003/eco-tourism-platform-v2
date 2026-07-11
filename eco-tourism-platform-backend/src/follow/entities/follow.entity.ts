@@ -1,6 +1,13 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+  Unique,
+} from 'typeorm';
 
 @Entity('follows')
+@Unique(['follower_id', 'following_id'])
 export class Follow {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -8,14 +15,14 @@ export class Follow {
   @Column('uuid')
   follower_id!: string;
 
-  // eco_traveler | guide | project
+  // eco_traveler | guide | provider
   @Column({ type: 'varchar' })
   follower_type!: string;
 
   @Column('uuid')
   following_id!: string;
 
-  // guide | project
+  // guide | provider
   @Column({ type: 'varchar' })
   following_type!: string;
 

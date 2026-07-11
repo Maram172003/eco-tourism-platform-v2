@@ -76,7 +76,7 @@ function DescCard({
       isTop ? "border-emerald-200 bg-gradient-to-br from-emerald-50 to-white shadow-sm" : "border-slate-100 bg-white"
     }`}>
       {isTop && (
-        <span className="absolute top-2.5 right-2.5 bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-0.5 shadow-sm">
+        <span className="absolute top-2.5 right-2.5 bg-primary text-white text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-0.5 shadow-sm">
           <Star className="w-2.5 h-2.5 fill-white" /> Top
         </span>
       )}
@@ -87,7 +87,7 @@ function DescCard({
       {isLong && (
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="mt-1.5 flex items-center gap-0.5 text-[11px] font-bold text-emerald-600 hover:text-emerald-700 transition-colors"
+          className="mt-1.5 flex items-center gap-0.5 text-[11px] font-bold text-primary hover:text-emerald-700 transition-colors"
         >
           {expanded ? <><ChevronUp className="w-3 h-3" /> Réduire</> : <><ChevronDown className="w-3 h-3" /> Lire la suite</>}
         </button>
@@ -446,7 +446,7 @@ export default function PlaceContributions({
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <p className="flex items-center gap-1.5 text-[11px] font-black text-slate-500 uppercase tracking-widest">
-          <Leaf className="w-3.5 h-3.5 text-emerald-500" />
+          <Leaf className="w-3.5 h-3.5 text-primary" />
           Contributions de la communauté
           {contributions.length > 0 && (
             <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-0.5 rounded-full ml-0.5">
@@ -460,7 +460,7 @@ export default function PlaceContributions({
             className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-xl transition-all ${
               showForm
                 ? "bg-slate-200 text-slate-600"
-                : "bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm"
+                : "bg-primary text-white hover:bg-emerald-600 shadow-sm"
             }`}
           >
             {showForm ? <X className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
@@ -511,7 +511,7 @@ export default function PlaceContributions({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-slate-200 rounded-xl py-5 text-slate-400 hover:border-emerald-300 hover:text-emerald-500 hover:bg-emerald-50/50 transition-all"
+                  className="w-full flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-slate-200 rounded-xl py-5 text-slate-400 hover:border-emerald-300 hover:text-primary hover:bg-emerald-50/50 transition-all"
                 >
                   <Upload className="w-5 h-5" />
                   <span className="text-xs font-semibold">Cliquer pour ajouter des photos</span>
@@ -548,7 +548,7 @@ export default function PlaceContributions({
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="w-full flex items-center justify-center gap-1.5 bg-emerald-500 text-white text-xs font-bold py-2 rounded-xl hover:bg-emerald-600 disabled:opacity-60 transition-colors shadow-sm"
+            className="w-full flex items-center justify-center gap-1.5 bg-primary text-white text-xs font-bold py-2 rounded-xl hover:bg-emerald-600 disabled:opacity-60 transition-colors shadow-sm"
           >
             <Send className="w-3 h-3" />
             {uploading ? "Upload en cours…" : submitting ? "Envoi…" : "Publier ma contribution"}
@@ -571,7 +571,7 @@ export default function PlaceContributions({
             <div>
               <p className="flex items-center gap-1 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
                 <FileText className="w-3 h-3" />
-                Descriptions <span className="text-emerald-600">({descriptions.length})</span>
+                Descriptions <span className="text-primary">({descriptions.length})</span>
               </p>
               <div className="space-y-2">
                 {descriptions.map((c, i) => (
@@ -609,7 +609,7 @@ export default function PlaceContributions({
               <div>
                 <p className="flex items-center gap-1 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
                   <ImageIcon className="w-3 h-3" />
-                  Photos <span className="text-emerald-600">(top {flatImages.length})</span>
+                  Photos <span className="text-primary">(top {flatImages.length})</span>
                 </p>
                 <TopImagesGrid
                   items={flatImages}
