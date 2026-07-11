@@ -10,7 +10,7 @@ import { Report } from './entities/report.entity';
 import { User } from '../users/entities/user.entity';
 import { EcoTraveler } from '../eco-traveler/entities/eco-traveler.entity';
 import { Guide } from '../guide/entities/guide.entity';
-import { ProjectOwner } from '../project-owner/entities/project-owner.entity';
+import { Provider } from '../provider/entities/provider.entity';
 import { MailService } from '../mail/mail.service';
 
 @Injectable()
@@ -24,8 +24,8 @@ export class ReportsService {
     private readonly ecoRepo: Repository<EcoTraveler>,
     @InjectRepository(Guide)
     private readonly guideRepo: Repository<Guide>,
-    @InjectRepository(ProjectOwner)
-    private readonly ownerRepo: Repository<ProjectOwner>,
+    @InjectRepository(Provider)
+    private readonly providerRepo: Repository<Provider>,
     private readonly mailService: MailService,
   ) {}
 
@@ -40,7 +40,7 @@ export class ReportsService {
       entity = await this.ecoRepo.findOne({ where: { user_id: userId } });
     else if (r === 'guide')
       entity = await this.guideRepo.findOne({ where: { user_id: userId } });
-    else entity = await this.ownerRepo.findOne({ where: { user_id: userId } });
+    else entity = await this.providerRepo.findOne({ where: { user_id: userId } });
     const user = await this.userRepo.findOne({ where: { id: userId } });
     return {
       user_id: userId,

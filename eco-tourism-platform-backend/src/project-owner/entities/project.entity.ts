@@ -7,7 +7,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { ProjectOwner } from './project-owner.entity';
+import { Provider } from '../../provider/entities/provider.entity';
 
 @Entity('venues')
 export class Venue {
@@ -17,9 +17,9 @@ export class Venue {
   @Column('uuid')
   provider_id!: string;
 
-  @ManyToOne(() => ProjectOwner)
+  @ManyToOne(() => Provider)
   @JoinColumn({ name: 'provider_id', referencedColumnName: 'user_id' })
-  provider!: ProjectOwner;
+  provider!: Provider;
 
   @Column({ type: 'varchar' })
   name!: string;

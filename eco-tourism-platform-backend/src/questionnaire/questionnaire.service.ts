@@ -15,7 +15,7 @@ import {
 import { SubmitQuestionnaireDto } from './dto/submit-questionnaire.dto';
 import { EcoTravelerService } from '../eco-traveler/eco-traveler.service';
 import { GuideService } from '../guide/guide.service';
-import { ProjectOwnerService } from '../project-owner/project-owner.service';
+import { ProviderService } from '../provider/provider.service';
 
 @Injectable()
 export class QuestionnaireService {
@@ -32,7 +32,7 @@ export class QuestionnaireService {
     private readonly userAnswerRepo: Repository<UserAnswer>,
     private readonly ecoTravelerService: EcoTravelerService,
     private readonly guideService: GuideService,
-    private readonly projectOwnerService: ProjectOwnerService,
+    private readonly providerService: ProviderService,
   ) {}
 
   async getActiveQuestionnaire(targetType = 'eco_traveler') {
@@ -170,7 +170,7 @@ export class QuestionnaireService {
     } else if (questionnaire.target_type === 'guide') {
       await this.guideService.updateQuestionnaireScore(userId, percentage);
     } else if (questionnaire.target_type === 'eco_project') {
-      await this.projectOwnerService.updateQuestionnaireScore(
+      await this.providerService.updateQuestionnaireScore(
         userId,
         percentage,
       );

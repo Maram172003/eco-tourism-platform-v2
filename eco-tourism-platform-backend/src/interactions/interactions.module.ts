@@ -7,7 +7,7 @@ import { InteractionsService } from './interactions.service';
 import { InteractionsController } from './interactions.controller';
 import { EcoTraveler } from '../eco-traveler/entities/eco-traveler.entity';
 import { Guide } from '../guide/entities/guide.entity';
-import { ProjectOwner } from '../project-owner/entities/project-owner.entity';
+import { Provider } from '../provider/entities/provider.entity';
 import { Offer } from '../offer/entities/offer.entity';
 import { Venue } from '../project-owner/entities/project.entity';
 
@@ -19,7 +19,7 @@ import { Venue } from '../project-owner/entities/project.entity';
       ItemCommentLike,
       EcoTraveler,
       Guide,
-      ProjectOwner,
+      Provider,
       Offer,
       Venue,
     ]),

@@ -7,7 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Follow } from './entities/follow.entity';
 import { Guide } from '../guide/entities/guide.entity';
-import { ProjectOwner } from '../project-owner/entities/project-owner.entity';
+import { Provider } from '../provider/entities/provider.entity';
 import { EcoTraveler } from '../eco-traveler/entities/eco-traveler.entity';
 
 @Injectable()
@@ -17,8 +17,8 @@ export class FollowService {
     private readonly repo: Repository<Follow>,
     @InjectRepository(Guide)
     private readonly guideRepo: Repository<Guide>,
-    @InjectRepository(ProjectOwner)
-    private readonly projectOwnerRepo: Repository<ProjectOwner>,
+    @InjectRepository(Provider)
+    private readonly providerRepo: Repository<Provider>,
     @InjectRepository(EcoTraveler)
     private readonly ecoTravelerRepo: Repository<EcoTraveler>,
   ) {}
@@ -116,7 +116,7 @@ export class FollowService {
           };
         }
         if (f.follower_type === 'provider') {
-          const o = await this.projectOwnerRepo.findOne({
+          const o = await this.providerRepo.findOne({
             where: { user_id: f.follower_id },
           });
           return {
@@ -169,7 +169,7 @@ export class FollowService {
             sub: g?.zone ?? null,
           };
         }
-        const o = await this.projectOwnerRepo.findOne({
+        const o = await this.providerRepo.findOne({
           where: { user_id: f.following_id },
         });
         return {
@@ -203,7 +203,7 @@ export class FollowService {
           };
         }
         if (f.follower_type === 'provider') {
-          const o = await this.projectOwnerRepo.findOne({
+          const o = await this.providerRepo.findOne({
             where: { user_id: f.follower_id },
           });
           return {

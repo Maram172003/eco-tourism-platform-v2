@@ -13,7 +13,6 @@ import { MongodbModule } from './database/mongodb.module';
 import { EcoTravelerModule } from './eco-traveler/eco-traveler.module';
 import { QuestionnaireModule } from './questionnaire/questionnaire.module';
 import { GuideModule } from './guide/guide.module';
-import { ProjectOwnerModule } from './project-owner/project-owner.module';
 import { OfferModule } from './offer/offer.module';
 import { PublicationModule } from './publication/publication.module';
 import { UploadModule } from './upload/upload.module';
@@ -60,7 +59,6 @@ import { ProviderActivityModule } from './provider-activity/provider-activity.mo
     ProviderModule,
     OrganizationModule,
     ProviderActivityModule,
-    ProjectOwnerModule,
     OfferModule,
     PublicationModule,
     UploadModule,

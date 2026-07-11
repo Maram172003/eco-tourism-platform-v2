@@ -26,7 +26,7 @@ import {
   UpdateOfferItemSessionDto,
 } from './dto/offer.dto';
 import { Public } from '../common/decorators/public.decorator';
-import { ProjectOwnerMongoService } from '../project-owner/project-owner-mongo.service';
+import { ProviderMongoService } from '../provider/provider-mongo.service';
 
 const PROJECT_AMBASSADOR_BADGE = 'Propriétaire Ambassadeur AFRATIM';
 
@@ -35,7 +35,7 @@ const PROJECT_AMBASSADOR_BADGE = 'Propriétaire Ambassadeur AFRATIM';
 export class OfferController {
   constructor(
     private readonly service: OfferService,
-    private readonly projectOwnerMongoService: ProjectOwnerMongoService,
+    private readonly providerMongoService: ProviderMongoService,
   ) {}
 
   // ─── Offer ─────────────────────────────────────────
@@ -46,7 +46,7 @@ export class OfferController {
   @Post()
   async create(@Req() req: any, @Body() dto: CreateOfferDto) {
     const userId = req.user.sub;
-    const mongoService = this.projectOwnerMongoService;
+    const mongoService = this.providerMongoService;
     const hasAmbassador = await mongoService.hasBadge(
       userId,
       PROJECT_AMBASSADOR_BADGE,

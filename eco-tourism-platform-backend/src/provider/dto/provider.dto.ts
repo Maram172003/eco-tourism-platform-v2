@@ -19,8 +19,8 @@ export class CreateProviderDto {
   @IsOptional() @IsString() facebook?: string;
   @IsOptional() @IsString() instagram?: string;
   @IsOptional() @IsString() tiktok?: string;
-  @IsOptional() @IsNumber() gps_lat?: number;
-  @IsOptional() @IsNumber() gps_lng?: number;
+  @IsOptional() @IsNumber() lat?: number;
+  @IsOptional() @IsNumber() lng?: number;
   @IsOptional() @IsString() city?: string;
   @IsOptional() @IsString() region?: string;
   @IsOptional() @IsString() address?: string;

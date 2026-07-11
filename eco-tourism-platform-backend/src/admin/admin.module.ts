@@ -7,7 +7,7 @@ import { Venue } from '../project-owner/entities/project.entity';
 import { User } from '../users/entities/user.entity';
 import { EcoTraveler } from '../eco-traveler/entities/eco-traveler.entity';
 import { Guide } from '../guide/entities/guide.entity';
-import { ProjectOwner } from '../project-owner/entities/project-owner.entity';
+import { Provider } from '../provider/entities/provider.entity';
 import { GuideOffering } from '../guide/entities/guide-offering.entity';
 import { Booking } from '../booking/entities/booking.entity';
 import { Review } from '../review/entities/review.entity';
@@ -29,7 +29,7 @@ import { NotificationModule } from '../notification/notification.module';
       User,
       EcoTraveler,
       Guide,
-      ProjectOwner,
+      Provider,
       Booking,
       Review,
       ModerationLog,

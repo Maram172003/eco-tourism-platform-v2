@@ -10,7 +10,7 @@ import { PublicationController } from './publication.controller';
 import { EcoTravelerModule } from '../eco-traveler/eco-traveler.module';
 import { EcoTraveler } from '../eco-traveler/entities/eco-traveler.entity';
 import { Guide } from '../guide/entities/guide.entity';
-import { ProjectOwner } from '../project-owner/entities/project-owner.entity';
+import { Provider } from '../provider/entities/provider.entity';
 
 @Module({
   imports: [
@@ -22,7 +22,7 @@ import { ProjectOwner } from '../project-owner/entities/project-owner.entity';
       PlaceContribution,
       EcoTraveler,
       Guide,
-      ProjectOwner,
+      Provider,
     ]),
     EcoTravelerModule,
   ],

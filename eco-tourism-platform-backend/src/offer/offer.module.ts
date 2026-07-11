@@ -8,12 +8,12 @@ import { OfferItemAvailabilityRule } from './entities/offer-item-availability-ru
 import { OfferItemCapacity } from './entities/offer-item-capacity.entity';
 import { OfferItemSession } from './entities/offer-item-session.entity';
 import { Venue } from '../project-owner/entities/project.entity';
-import { ProjectOwner } from '../project-owner/entities/project-owner.entity';
+import { Provider } from '../provider/entities/provider.entity';
 import { Organization } from '../organization/entities/organization.entity';
 import { ProviderActivity } from '../provider-activity/entities/provider-activity.entity';
 import { OfferService } from './offer.service';
 import { OfferController } from './offer.controller';
-import { ProjectOwnerModule } from '../project-owner/project-owner.module';
+import { ProviderModule } from '../provider/provider.module';
 
 @Module({
   imports: [
@@ -26,11 +26,11 @@ import { ProjectOwnerModule } from '../project-owner/project-owner.module';
       OfferItemCapacity,
       OfferItemSession,
       Venue,
-      ProjectOwner,
+      Provider,
       Organization,
       ProviderActivity,
     ]),
-    ProjectOwnerModule,
+    ProviderModule,
   ],
   providers: [OfferService],
   controllers: [OfferController],

@@ -13,7 +13,7 @@ import { Venue } from '../project-owner/entities/project.entity';
 import { User } from '../users/entities/user.entity';
 import { EcoTraveler } from '../eco-traveler/entities/eco-traveler.entity';
 import { Guide } from '../guide/entities/guide.entity';
-import { ProjectOwner } from '../project-owner/entities/project-owner.entity';
+import { Provider } from '../provider/entities/provider.entity';
 import { Booking } from '../booking/entities/booking.entity';
 import { Review } from '../review/entities/review.entity';
 import { MailService } from '../mail/mail.service';
@@ -47,8 +47,8 @@ export class AdminService {
     @InjectRepository(Guide)
     private readonly guideRepo: Repository<Guide>,
 
-    @InjectRepository(ProjectOwner)
-    private readonly ownerRepo: Repository<ProjectOwner>,
+    @InjectRepository(Provider)
+    private readonly providerRepo: Repository<Provider>,
 
     @InjectRepository(Booking)
     private readonly bookingRepo: Repository<Booking>,
@@ -116,8 +116,8 @@ export class AdminService {
       this.bookingRepo.createQueryBuilder('b').where('b.created_at >= :start', { start: startOfMonth }).getCount(),
       this.bookingRepo.createQueryBuilder('b').select('COALESCE(SUM(b.total_price), 0)', 'total').where('b.created_at >= :start AND b.status IN (:...s)', { start: startOfDay, s: ['confirmed', 'completed'] }).getRawOne(),
       this.bookingRepo.createQueryBuilder('b').select('COALESCE(SUM(b.total_price), 0)', 'total').where('b.created_at >= :start AND b.status IN (:...s)', { start: startOfMonth, s: ['confirmed', 'completed'] }).getRawOne(),
-      this.ownerRepo.createQueryBuilder('po').where('po.status = :s', { s: 'suspended' }).getCount(),
-      this.ownerRepo.count(),
+      this.providerRepo.createQueryBuilder('po').where('po.status = :s', { s: 'suspended' }).getCount(),
+      this.providerRepo.count(),
     ]);
 
     const toMap = (rows: any[]) => {
@@ -185,7 +185,7 @@ export class AdminService {
         let profile: any = null;
         if (u.role === ('eco_traveler' as any)) profile = await this.ecoRepo.findOne({ where: { user_id: u.id } });
         else if (u.role === ('guide' as any)) profile = await this.guideRepo.findOne({ where: { user_id: u.id } });
-        else if (u.role === ('provider' as any)) profile = await this.ownerRepo.findOne({ where: { user_id: u.id } });
+        else if (u.role === ('provider' as any)) profile = await this.providerRepo.findOne({ where: { user_id: u.id } });
         return {
           id: u.id,
           email: u.email,
@@ -208,7 +208,7 @@ export class AdminService {
     let profile: any = null;
     if (user.role === ('eco_traveler' as any)) profile = await this.ecoRepo.findOne({ where: { user_id: id } });
     else if (user.role === ('guide' as any)) profile = await this.guideRepo.findOne({ where: { user_id: id } });
-    else if (user.role === ('provider' as any)) profile = await this.ownerRepo.findOne({ where: { user_id: id } });
+    else if (user.role === ('provider' as any)) profile = await this.providerRepo.findOne({ where: { user_id: id } });
     return { user: { id: user.id, email: user.email, role: user.role, status: user.status, created_at: user.created_at, ban_until: user.ban_until }, profile };
   }
 
@@ -234,7 +234,7 @@ export class AdminService {
   async getAllProviders(query: { status?: string; search?: string; page?: number; limit?: number }) {
     const page = query.page || 1;
     const limit = Math.min(query.limit || 20, 100);
-    const qb = this.ownerRepo.createQueryBuilder('po').orderBy('po.created_at', 'DESC');
+    const qb = this.providerRepo.createQueryBuilder('po').orderBy('po.created_at', 'DESC');
 
     if (query.status) qb.andWhere('po.status = :status', { status: query.status });
     if (query.search) qb.andWhere('(po.full_name ILIKE :search)', { search: `%${query.search}%` });
@@ -253,7 +253,6 @@ export class AdminService {
           user_id: p.user_id,
           full_name: p.full_name,
           organization: p.organization,
-          city: p.city,
           status: p.status,
           sustainability_score: p.sustainability_score,
           venues_count: venuesCount,
@@ -269,10 +268,10 @@ export class AdminService {
   }
 
   async suspendProvider(id: string) {
-    const provider = await this.ownerRepo.findOne({ where: { user_id: id } });
+    const provider = await this.providerRepo.findOne({ where: { user_id: id } });
     if (!provider) throw new NotFoundException('Provider introuvable.');
     provider.status = 'suspended';
-    await this.ownerRepo.save(provider);
+    await this.providerRepo.save(provider);
     const user = await this.userRepo.findOne({ where: { id } });
     if (user) {
       user.status = 'banned' as any;
@@ -282,10 +281,10 @@ export class AdminService {
   }
 
   async reactivateProvider(id: string) {
-    const provider = await this.ownerRepo.findOne({ where: { user_id: id } });
+    const provider = await this.providerRepo.findOne({ where: { user_id: id } });
     if (!provider) throw new NotFoundException('Provider introuvable.');
     provider.status = 'active';
-    await this.ownerRepo.save(provider);
+    await this.providerRepo.save(provider);
     const user = await this.userRepo.findOne({ where: { id } });
     if (user) {
       user.status = 'active' as any;
@@ -384,7 +383,7 @@ export class AdminService {
     const [offersWithScore, avgOfferScore, topProviders, topVenues, offersWithCarbon] = await Promise.all([
       this.offerRepo.createQueryBuilder('o').where('o.sustainability_score IS NOT NULL').getCount(),
       this.offerRepo.createQueryBuilder('o').select('AVG(o.sustainability_score)', 'avg').where('o.sustainability_score IS NOT NULL').getRawOne(),
-      this.ownerRepo.createQueryBuilder('po').where('po.sustainability_score IS NOT NULL AND po.status = :s', { s: 'active' }).orderBy('po.sustainability_score', 'DESC').limit(5).getMany(),
+      this.providerRepo.createQueryBuilder('po').where('po.sustainability_score IS NOT NULL AND po.status = :s', { s: 'active' }).orderBy('po.sustainability_score', 'DESC').limit(5).getMany(),
       this.venueRepo.createQueryBuilder('v').where('v.sustainability_score IS NOT NULL AND v.status = :s', { s: 'active' }).orderBy('v.sustainability_score', 'DESC').limit(5).getMany(),
       this.offerRepo.createQueryBuilder('o').where('o.carbon_estimate_kg IS NOT NULL').select('SUM(o.carbon_estimate_kg)', 'total').getRawOne(),
     ]);
@@ -580,10 +579,10 @@ export class AdminService {
     const users = await this.userRepo.find({ where: { status: 'banned' as any } });
     return Promise.all(
       users.map(async (u) => {
-        let profile: { full_name?: string; photo?: string | null } | null = null;
+        let profile: { full_name?: string | null; photo?: string | null } | null = null;
         if (u.role === ('eco_traveler' as any)) profile = await this.ecoRepo.findOne({ where: { user_id: u.id } });
         else if (u.role === ('guide' as any)) profile = await this.guideRepo.findOne({ where: { user_id: u.id } });
-        else if (u.role === ('provider' as any)) profile = await this.ownerRepo.findOne({ where: { user_id: u.id } });
+        else if (u.role === ('provider' as any)) profile = await this.providerRepo.findOne({ where: { user_id: u.id } });
         return { user_id: u.id, email: u.email, role: u.role, status: u.status, ban_until: u.ban_until, banned_at: u.updated_at, full_name: profile?.full_name ?? null, photo: profile?.photo ?? null };
       }),
     );
@@ -646,7 +645,7 @@ export class AdminService {
     if (author) {
       if (author.role === ('eco_traveler' as any)) authorProfile = await this.ecoRepo.findOne({ where: { user_id: author.id } });
       else if (author.role === ('guide' as any)) authorProfile = await this.guideRepo.findOne({ where: { user_id: author.id } });
-      else if (author.role === ('provider' as any)) authorProfile = await this.ownerRepo.findOne({ where: { user_id: author.id } });
+      else if (author.role === ('provider' as any)) authorProfile = await this.providerRepo.findOne({ where: { user_id: author.id } });
     }
     return { ...pub, author: author ? { ...author, full_name: authorProfile?.full_name ?? null } : null };
   }
@@ -658,7 +657,7 @@ export class AdminService {
       : null;
     let authorProfile: any = null;
     if (author) {
-      if (author.role === ('provider' as any)) authorProfile = await this.ownerRepo.findOne({ where: { user_id: author.id } });
+      if (author.role === ('provider' as any)) authorProfile = await this.providerRepo.findOne({ where: { user_id: author.id } });
       else if (author.role === ('guide' as any)) authorProfile = await this.guideRepo.findOne({ where: { user_id: author.id } });
     }
     return { ...offer, author: author ? { ...author, full_name: authorProfile?.full_name ?? null } : null };
@@ -667,10 +666,10 @@ export class AdminService {
   async getVenueDetail(id: string) {
     const venue = await this.findProjectOrFail(id);
     const provider = venue.provider_id
-      ? await this.ownerRepo.findOne({ where: { user_id: venue.provider_id } })
+      ? await this.providerRepo.findOne({ where: { user_id: venue.provider_id } })
       : null;
     const offersCount = await this.offerRepo.createQueryBuilder('o').where("o.author_id = :pid AND o.author_type = 'provider'", { pid: venue.provider_id }).getCount();
-    return { ...venue, provider: provider ? { full_name: provider.full_name, email: null, city: provider.city } : null, offers_count: offersCount };
+    return { ...venue, provider: provider ? { full_name: provider.full_name, email: null } : null, offers_count: offersCount };
   }
 
   async getCircuitDetail(id: string) {
@@ -681,7 +680,7 @@ export class AdminService {
     let authorProfile: any = null;
     if (author) {
       if (author.role === ('guide' as any)) authorProfile = await this.guideRepo.findOne({ where: { user_id: author.id } });
-      else if (author.role === ('provider' as any)) authorProfile = await this.ownerRepo.findOne({ where: { user_id: author.id } });
+      else if (author.role === ('provider' as any)) authorProfile = await this.providerRepo.findOne({ where: { user_id: author.id } });
     }
     return { ...circuit, author: author ? { ...author, full_name: authorProfile?.full_name ?? null } : null };
   }

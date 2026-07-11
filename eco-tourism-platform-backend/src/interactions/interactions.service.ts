@@ -11,7 +11,7 @@ import { ItemComment } from './entities/item-comment.entity';
 import { ItemCommentLike } from './entities/item-comment-like.entity';
 import { EcoTraveler } from '../eco-traveler/entities/eco-traveler.entity';
 import { Guide } from '../guide/entities/guide.entity';
-import { ProjectOwner } from '../project-owner/entities/project-owner.entity';
+import { Provider } from '../provider/entities/provider.entity';
 import { Offer } from '../offer/entities/offer.entity';
 import { Venue } from '../project-owner/entities/project.entity';
 
@@ -26,8 +26,8 @@ export class InteractionsService {
     @InjectRepository(EcoTraveler)
     private readonly ecoRepo: Repository<EcoTraveler>,
     @InjectRepository(Guide) private readonly guideRepo: Repository<Guide>,
-    @InjectRepository(ProjectOwner)
-    private readonly ownerRepo: Repository<ProjectOwner>,
+    @InjectRepository(Provider)
+    private readonly providerRepo: Repository<Provider>,
     @InjectRepository(Offer) private readonly offerRepo: Repository<Offer>,
     @InjectRepository(Venue)
     private readonly venueRepo: Repository<Venue>,
@@ -289,7 +289,7 @@ export class InteractionsService {
       entity = await this.ecoRepo.findOne({ where: { user_id: userId } });
     else if (r === 'guide')
       entity = await this.guideRepo.findOne({ where: { user_id: userId } });
-    else entity = await this.ownerRepo.findOne({ where: { user_id: userId } });
+    else entity = await this.providerRepo.findOne({ where: { user_id: userId } });
     return {
       user_id: userId,
       full_name: entity?.full_name ?? 'Utilisateur',
