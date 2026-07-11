@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -10,7 +14,8 @@ import {
 } from './entities/questionnaire.entities';
 import { SubmitQuestionnaireDto } from './dto/submit-questionnaire.dto';
 import { EcoTravelerService } from '../eco-traveler/eco-traveler.service';
-import { ProviderService } from '../provider/provider.service';
+import { GuideService } from '../guide/guide.service';
+import { ProjectOwnerService } from '../project-owner/project-owner.service';
 
 @Injectable()
 export class QuestionnaireService {
@@ -26,7 +31,8 @@ export class QuestionnaireService {
     @InjectRepository(UserAnswer)
     private readonly userAnswerRepo: Repository<UserAnswer>,
     private readonly ecoTravelerService: EcoTravelerService,
-    private readonly providerService: ProviderService,
+    private readonly guideService: GuideService,
+    private readonly projectOwnerService: ProjectOwnerService,
   ) {}
 
   async getActiveQuestionnaire(targetType = 'eco_traveler') {
@@ -66,7 +72,9 @@ export class QuestionnaireService {
       where: { user_id: userId, questionnaire_id: dto.questionnaire_id },
     });
     if (existingAttempt) {
-      throw new BadRequestException('Vous avez déjà complété ce questionnaire.');
+      throw new BadRequestException(
+        'Vous avez déjà complété ce questionnaire.',
+      );
     }
 
     // 2. Charger toutes les réponses en une seule requête
@@ -155,9 +163,17 @@ export class QuestionnaireService {
 
     // 8. Mettre à jour le composant questionnaire selon le rôle
     if (questionnaire.target_type === 'eco_traveler') {
-      await this.ecoTravelerService.updateQuestionnaireScore(userId, percentage);
-    } else if (questionnaire.target_type === 'provider') {
-      await this.providerService.updateQuestionnaireScore(userId, percentage);
+      await this.ecoTravelerService.updateQuestionnaireScore(
+        userId,
+        percentage,
+      );
+    } else if (questionnaire.target_type === 'guide') {
+      await this.guideService.updateQuestionnaireScore(userId, percentage);
+    } else if (questionnaire.target_type === 'eco_project') {
+      await this.projectOwnerService.updateQuestionnaireScore(
+        userId,
+        percentage,
+      );
     }
 
     return {

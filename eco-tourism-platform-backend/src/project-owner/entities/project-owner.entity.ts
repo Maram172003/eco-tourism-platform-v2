@@ -9,7 +9,7 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
-@Entity('project_owners')
+@Entity('providers')
 export class ProjectOwner {
   @PrimaryColumn('uuid')
   user_id!: string;
@@ -44,6 +44,45 @@ export class ProjectOwner {
 
   @Column({ type: 'varchar', nullable: true })
   phone!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  whatsapp!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  website!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  facebook!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  instagram!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  tiktok!: string | null;
+
+  @Column({ type: 'decimal', precision: 10, scale: 8, nullable: true })
+  gps_lat!: number | null;
+
+  @Column({ type: 'decimal', precision: 11, scale: 8, nullable: true })
+  gps_lng!: number | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  city!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  region!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  address!: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  years_experience!: number | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  languages_spoken!: string[] | null;
+
+  @Column({ type: 'varchar', default: 'pending' })
+  status!: string;
 
   @Column({ type: 'int', default: 0 })
   profile_completion!: number;

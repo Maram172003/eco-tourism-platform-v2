@@ -11,7 +11,8 @@ import {
 import { QuestionnaireService } from './questionnaire.service';
 import { QuestionnaireController } from './questionnaire.controller';
 import { EcoTravelerModule } from '../eco-traveler/eco-traveler.module';
-import { ProviderModule } from '../provider/provider.module';
+import { GuideModule } from '../guide/guide.module';
+import { ProjectOwnerModule } from '../project-owner/project-owner.module';
 
 @Module({
   imports: [
@@ -24,7 +25,8 @@ import { ProviderModule } from '../provider/provider.module';
       UserAnswer,
     ]),
     EcoTravelerModule,
-    ProviderModule,
+    GuideModule,
+    ProjectOwnerModule,
   ],
   providers: [QuestionnaireService],
   controllers: [QuestionnaireController],

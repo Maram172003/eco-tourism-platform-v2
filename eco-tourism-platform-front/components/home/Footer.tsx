@@ -3,14 +3,14 @@ import { Leaf, Globe, MessageSquare } from "lucide-react";
 export default function Footer() {
   return (
     <footer className="bg-white dark:bg-background-dark border-t border-slate-100 dark:border-slate-800 px-6 md:px-20 lg:px-40 py-16">
-      <div className="max-w-[1440px] mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
+      <div className="max-w-360 mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
         <div className="flex flex-col gap-6">
           <div className="flex items-center gap-2 text-slate-900 dark:text-slate-100">
             <Leaf className="text-primary w-8 h-8" />
             <h2 className="text-xl font-extrabold tracking-tight">Éco-Voyage</h2>
           </div>
           <p className="text-slate-500 text-sm leading-relaxed">
-            Redéfinir le voyage en mettant l'humain et la planète au centre de l'expérience.
+            Redéfinir le voyage en mettant l&apos;humain et la planète au centre de l'expérience.
           </p>
           <div className="flex gap-4">
             <a
@@ -58,9 +58,9 @@ export default function Footer() {
         </div>
       </div>
 
-      <div className="max-w-[1440px] mx-auto mt-16 pt-8 border-t border-slate-50 dark:border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div className="max-w-360 mx-auto mt-16 pt-8 border-t border-slate-50 dark:border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
         <p className="text-xs text-slate-400 font-medium">
-          © 2024 Éco-Voyage. Fièrement engagé pour la planète.
+          © 2026 Éco-Voyage. Fièrement engagé pour la planète.
         </p>
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-primary animate-pulse"></span>

@@ -14,11 +14,8 @@ export class GuideSkills {
   @Prop({ type: [String], default: [] })
   landscapes!: string[];
 
-  @Prop({
-    type: [{ label: String, proof: String }],
-    default: [],
-  })
-  certifications!: { label: string; proof: string }[];
+  @Prop({ type: [String], default: [] })
+  certifications!: string[];
 
   @Prop({ type: Boolean, default: false })
   updated_by_behavior!: boolean;

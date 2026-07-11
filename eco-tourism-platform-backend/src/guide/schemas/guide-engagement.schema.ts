@@ -24,4 +24,5 @@ export class GuideEngagement {
   reservations_handled!: number;
 }
 
-export const GuideEngagementSchema = SchemaFactory.createForClass(GuideEngagement);
+export const GuideEngagementSchema =
+  SchemaFactory.createForClass(GuideEngagement);

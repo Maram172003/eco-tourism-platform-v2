@@ -1,16 +1,30 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Req,
+  Query,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/roles.enum';
 import { Public } from '../common/decorators/public.decorator';
 import { ProjectOwnerService } from './project-owner.service';
 import { CompleteOwnerProfileDto } from './dto/project-owner.dto';
-import { CreateProjectDto, UpdateProjectDto, ProjectSustainabilityDto } from './dto/project.dto';
+import {
+  CreateProjectDto,
+  UpdateProjectDto,
+  ProjectSustainabilityDto,
+} from './dto/project.dto';
 
-@ApiTags('Project-Owner')
+@ApiTags('Provider')
 @ApiBearerAuth('bearer')
-@Roles(Role.PROJECT)
-@Controller('project-owner')
+@Roles(Role.PROVIDER)
+@Controller('provider')
 export class ProjectOwnerController {
   constructor(private readonly service: ProjectOwnerService) {}
 
@@ -18,8 +32,8 @@ export class ProjectOwnerController {
 
   @Public()
   @Roles()
-  @Get('projects/public')
-  findActiveProjects() {
+  @Get('venues/public')
+  findActiveVenues() {
     return this.service.findActiveProjects();
   }
 
@@ -40,40 +54,50 @@ export class ProjectOwnerController {
     return this.service.markOnboarded(req.user.sub);
   }
 
-  // ─── Projects ─────────────────────────────────────────────────────────────
+  // ─── Venues ─────────────────────────────────────────────────────────────
 
-  @Get('projects')
-  getProjects(@Req() req: any) {
+  @Get('venues')
+  getVenues(@Req() req: any) {
     return this.service.getProjects(req.user.sub);
   }
 
-  @Post('projects')
-  createProject(@Req() req: any, @Body() dto: CreateProjectDto) {
+  @Post('venues')
+  createVenue(@Req() req: any, @Body() dto: CreateProjectDto) {
     return this.service.createProject(req.user.sub, dto);
   }
 
-  @Patch('projects/:id')
-  updateProject(@Req() req: any, @Param('id') id: string, @Body() dto: UpdateProjectDto) {
+  @Patch('venues/:id')
+  updateVenue(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: UpdateProjectDto,
+  ) {
     return this.service.updateProject(req.user.sub, id, dto);
   }
 
-  @Patch('projects/:id/sustainability')
-  updateProjectSustainability(@Req() req: any, @Param('id') id: string, @Body() dto: ProjectSustainabilityDto) {
+  @Patch('venues/:id/sustainability')
+  updateVenueSustainability(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: ProjectSustainabilityDto,
+  ) {
     return this.service.updateProjectSustainability(req.user.sub, id, dto);
   }
 
-  @Delete('projects/:id')
-  deleteProject(@Req() req: any, @Param('id') id: string) {
+  @Delete('venues/:id')
+  deleteVenue(@Req() req: any, @Param('id') id: string) {
     return this.service.deleteProject(req.user.sub, id);
   }
 
-  @Public() @Roles()
+  @Public()
+  @Roles()
   @Get('public/search')
   searchOwners(@Query('q') q: string) {
     return this.service.searchOwners(q ?? '');
   }
 
-  @Public() @Roles()
+  @Public()
+  @Roles()
   @Get('public/:userId')
   getPublicProfile(@Param('userId') userId: string) {
     return this.service.getPublicProfile(userId);

@@ -1,5 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsArray,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateProjectDto {
@@ -8,49 +17,70 @@ export class CreateProjectDto {
   @IsNotEmpty()
   name!: string;
 
-  @IsOptional() @IsArray() @IsString({ each: true })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   project_type?: string[];
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   description?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   region?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   address?: string;
 
-  @IsOptional() @IsNumber() @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
   lat?: number;
 
-  @IsOptional() @IsNumber() @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
   lng?: number;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   photo?: string;
 
-  @IsOptional() @IsArray() @IsString({ each: true })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   photos?: string[];
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   opening_hours?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   facebook?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   instagram?: string;
 
-  @IsOptional() @IsArray() @IsString({ each: true })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   services?: string[];
 
-  @IsOptional() @IsArray() @IsString({ each: true })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   eco_labels?: string[];
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   website?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   phone?: string;
 }
 
@@ -62,51 +92,73 @@ export class ProjectSustainabilityDto {
 }
 
 export class UpdateProjectDto {
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   name?: string;
 
-  @IsOptional() @IsArray() @IsString({ each: true })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   project_type?: string[];
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   description?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   region?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   address?: string;
 
-  @IsOptional() @IsNumber() @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
   lat?: number;
 
-  @IsOptional() @IsNumber() @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
   lng?: number;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   photo?: string;
 
-  @IsOptional() @IsArray() @IsString({ each: true })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   photos?: string[];
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   opening_hours?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   facebook?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   instagram?: string;
 
-  @IsOptional() @IsArray() @IsString({ each: true })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   services?: string[];
 
-  @IsOptional() @IsArray() @IsString({ each: true })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   eco_labels?: string[];
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   website?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   phone?: string;
 }

@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { ProjectEngagement, ProjectEngagementDocument } from './schemas/project-engagement.schema';
+import {
+  ProjectEngagement,
+  ProjectEngagementDocument,
+} from './schemas/project-engagement.schema';
 
 @Injectable()
 export class ProjectOwnerMongoService {
@@ -57,5 +60,4 @@ export class ProjectOwnerMongoService {
       { upsert: true, new: true },
     );
   }
-
 }

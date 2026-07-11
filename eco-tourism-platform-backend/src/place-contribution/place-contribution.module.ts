@@ -8,9 +8,20 @@ import { Guide } from '../guide/entities/guide.entity';
 import { ProjectOwner } from '../project-owner/entities/project-owner.entity';
 import { PlaceContributionService } from './place-contribution.service';
 import { PlaceContributionController } from './place-contribution.controller';
+import { PublicationModule } from '../publication/publication.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([PlaceContribution, ContributionVote, Publication, EcoTraveler, Guide, ProjectOwner])],
+  imports: [
+    TypeOrmModule.forFeature([
+      PlaceContribution,
+      ContributionVote,
+      Publication,
+      EcoTraveler,
+      Guide,
+      ProjectOwner,
+    ]),
+    PublicationModule,
+  ],
   controllers: [PlaceContributionController],
   providers: [PlaceContributionService],
 })

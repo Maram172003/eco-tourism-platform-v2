@@ -21,4 +21,5 @@ export class ProjectServices {
   target_travelers!: string[];
 }
 
-export const ProjectServicesSchema = SchemaFactory.createForClass(ProjectServices);
+export const ProjectServicesSchema =
+  SchemaFactory.createForClass(ProjectServices);

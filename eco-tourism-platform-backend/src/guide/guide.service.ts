@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Guide } from './entities/guide.entity';
-import { Offer } from '../offer/entities/offer.entity';
+import { GuideOffering } from './entities/guide-offering.entity';
 import {
   CompleteGuideProfileDto,
   UpdateGuideSpecialtiesDto,
@@ -15,8 +15,8 @@ export class GuideService {
   constructor(
     @InjectRepository(Guide)
     private readonly repo: Repository<Guide>,
-    @InjectRepository(Offer)
-    private readonly offerRepo: Repository<Offer>,
+    @InjectRepository(GuideOffering)
+    private readonly offeringRepo: Repository<GuideOffering>,
     private readonly mongoService: GuideMongoService,
   ) {}
 
@@ -93,7 +93,9 @@ export class GuideService {
     profile.profile_completion = this.calculateCompletion(profile);
 
     const saved = await this.repo.save(profile);
-    await this.mongoService.upsertSkills(userId, { activities: dto.specialties });
+    await this.mongoService.upsertSkills(userId, {
+      activities: dto.specialties,
+    });
 
     return saved;
   }
@@ -106,7 +108,7 @@ export class GuideService {
     const saved = await this.repo.save(profile);
     await this.mongoService.upsertSkills(userId, {
       landscapes: dto.landscapes,
-      certifications: dto.certifications.map((c) => ({ label: c.label, proof: c.proof ?? '' })),
+      certifications: dto.certifications,
     });
 
     return saved;
@@ -126,7 +128,9 @@ export class GuideService {
     const profile = await this.findOrFail(userId);
     profile.score_questionnaire = scoreQuestionnaire;
     profile.sustainability_score = Math.round(
-      scoreQuestionnaire * 0.40 + profile.score_reservations * 0.40 + profile.score_feedbacks * 0.20,
+      scoreQuestionnaire * 0.4 +
+        profile.score_reservations * 0.4 +
+        profile.score_feedbacks * 0.2,
     );
     const saved = await this.repo.save(profile);
     await this.mongoService.updateScore(userId, profile.sustainability_score);
@@ -139,7 +143,9 @@ export class GuideService {
   private async findOrFail(userId: string) {
     const profile = await this.repo.findOne({ where: { user_id: userId } });
     if (!profile) {
-      throw new NotFoundException("Profil introuvable. Complétez d'abord votre profil de base.");
+      throw new NotFoundException(
+        "Profil introuvable. Complétez d'abord votre profil de base.",
+      );
     }
     return profile;
   }
@@ -147,8 +153,9 @@ export class GuideService {
   async getPublicProfile(guideId: string) {
     const profile = await this.repo.findOne({ where: { user_id: guideId } });
     if (!profile) throw new NotFoundException('Profil introuvable.');
-    const offers = await this.offerRepo.find({
-      where: { author_id: guideId, author_type: 'guide', status: 'approved' },
+    const offerings = await this.offeringRepo.find({
+      where: { guide_id: guideId },
+      relations: ['sessions'],
       order: { created_at: 'DESC' },
     });
     return {
@@ -164,32 +171,44 @@ export class GuideService {
       languages_spoken: profile.languages_spoken,
       years_experience: profile.years_experience,
       sustainability_score: profile.sustainability_score,
-      offers,
+      offerings,
     };
   }
 
   async searchGuides(query: string) {
     const q = query.trim();
-    if (!q) return [];
-    return this.repo
+    const builder = this.repo
       .createQueryBuilder('g')
-      .where('LOWER(g.full_name) LIKE :q', { q: `%${q.toLowerCase()}%` })
-      .select(['g.user_id', 'g.full_name', 'g.photo', 'g.zone', 'g.guide_type', 'g.sustainability_score'])
-      .limit(20)
-      .getMany();
+      .select([
+        'g.user_id',
+        'g.full_name',
+        'g.photo',
+        'g.zone',
+        'g.guide_type',
+        'g.sustainability_score',
+      ])
+      .limit(20);
+    if (q) {
+      builder.where('(LOWER(g.full_name) LIKE :q OR LOWER(g.zone) LIKE :q)', {
+        q: `%${q.toLowerCase()}%`,
+      });
+    }
+    return builder.getMany();
   }
 
   private calculateCompletion(p: Partial<Guide>): number {
     let score = 0;
 
     const identityFields = [p.full_name, p.country, p.language];
-    score += (identityFields.filter(Boolean).length / identityFields.length) * 30;
+    score +=
+      (identityFields.filter(Boolean).length / identityFields.length) * 30;
 
     if (p.guide_type) score += 10;
     if (p.zone) score += 10;
     if (p.specialties?.length) score += 15;
     if (p.languages_spoken?.length) score += 10;
-    if (p.years_experience !== null && p.years_experience !== undefined) score += 15;
+    if (p.years_experience !== null && p.years_experience !== undefined)
+      score += 15;
     if (p.photo) score += 10;
 
     return Math.round(score);

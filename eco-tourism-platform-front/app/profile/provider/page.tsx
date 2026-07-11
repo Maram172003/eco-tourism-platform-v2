@@ -5,29 +5,19 @@ import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
   Plus, Edit3, ShieldCheck, MapPin, Calendar, Phone, Building2, Globe, Leaf, ArrowLeft,
-  LayoutGrid, Tag, Info, Sparkles, Users, Mail, MessageCircle,
+  LayoutGrid, Tag, Briefcase, Users, Info, Sparkles,
   ArrowRight, Send, X, Clock, ChevronLeft, ChevronRight, Check, Search, UserPlus,
-  MoreVertical, UserX, ShieldBan, Flag, Route, Trash2,
+  MoreVertical, UserX, ShieldBan, Flag,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import MessagerieWidget from "@/components/MessagerieWidget";
 import PubInteractions from "@/components/PubInteractions";
-import { PROVIDER_SCHEMA, SUBTYPE_FIELDS, getCategoryByValue } from "@/lib/provider-schema";
-import type { FieldConfig } from "@/lib/provider-schema";
-import {
-  OFFER_DETAIL_FIELDS, getCapacityLimit,
-  AVAILABILITY_TYPES, CONFIRMATION_TYPES, CANCELLATION_POLICIES, SAISONS,
-  type CrossValidationRule,
-} from "@/lib/offer-schema";
 
 const MapPicker = dynamic(
   () => import("@/components/map/MapPicker"),
   { ssr: false, loading: () => <div className="h-[268px] rounded-2xl bg-slate-100 animate-pulse" /> }
 );
 const MapView = dynamic(() => import("@/components/map/MapView"),
-  { ssr: false, loading: () => <div className="h-[200px] rounded-xl bg-slate-100 animate-pulse" /> }
-);
-const CircuitRouteMap = dynamic(() => import("@/components/map/CircuitRouteMap"),
   { ssr: false, loading: () => <div className="h-[200px] rounded-xl bg-slate-100 animate-pulse" /> }
 );
 
@@ -70,63 +60,31 @@ function LocationMap({ lat, lng, address }: { lat: number | null; lng: number | 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ProviderProfile = {
+type Venue = {
+  id: string; name: string; venue_type: string[] | null;
+  region: string | null; status: string; description: string | null;
+  address: string | null; website: string | null; phone: string | null;
+  eco_labels: string[] | null; services: string[] | null;
+  photo: string | null; photos: string[] | null;
+  lat: number | null; lng: number | null; opening_hours: string | null;
+  facebook: string | null; instagram: string | null;
+  sustainability_score: number | null;
+  created_at: string;
+};
+
+type OwnerProfile = {
   user_id: string; full_name: string; bio: string | null;
   organization: string | null; position: string | null; photo: string | null;
   cover_photo: string | null;
   country: string | null; phone: string | null; language: string | null;
-  languages_spoken: string[] | null;
   sustainability_score: number | null; total_reservations: number;
-  feedback_received: number;
-  provider_type: string | null;
-  activity_types: string[] | null;
-  secondary_activity_types: string[] | null;
-  website: string | null;
-  region: string | null;
-  address: string | null;
-  lat: number | null; lng: number | null;
-  years_experience: number | null;
-  history: string | null;
-  eco_labels: string[] | null;
-  certifications: string[] | null;
-  photos: string[] | null;
-  status: string;
-  personal_bio: string | null;
-  personal_certifications: Array<{ name: string; document_url?: string }> | null;
-};
-
-type OrganizationProfile = {
-  id: string;
-  name: string;
-  logo: string | null;
-  provider_type: string | null;
-  bio: string | null;
-  history: string | null;
-  phone: string | null;
-  whatsapp: string | null;
-  email: string | null;
-  website: string | null;
-  facebook: string | null;
-  instagram: string | null;
-  tiktok: string | null;
-  region: string | null;
-  address: string | null;
-  zone: string | null;
-  country: string | null;
-  lat: number | null;
-  lng: number | null;
-  photos: string[] | null;
-  videos: string[] | null;
-  eco_labels: string[] | null;
-  certifications: Array<{ name: string; document_url?: string }> | null;
-  sustainability_score: number | null;
-  status: string;
+  feedback_received: number;   venues: Venue[];
 };
 
 type Offer = {
   id: string; title: string; description: string | null;
   price: number | null; duration: string | null;
-  offer_type: string | null; project_id: string | null;
+  offer_type: string | null; venue_id: string | null;
   status: string; created_at: string;
   region: string | null; inclusions: string | null;
   meeting_point: string | null;
@@ -136,42 +94,6 @@ type Offer = {
   cancellation_policy: string | null;
   sustainability_score: number | null;
   images?: string[] | null; cover_image?: string | null;
-  offer_subtype?: string | null;
-  offer_subtypes?: string[] | null;
-  details?: Record<string, any> | null;
-  // Extended fields from backend
-  activity_id?: string | null;
-  offer_mode?: string | null;
-  availability_mode?: string | null;
-  availability_start?: string | null;
-  availability_end?: string | null;
-  confirmation_mode?: string | null;
-  confirmation_deadline_hours?: number | null;
-  deposit_percentage?: number | null;
-};
-
-type Activity = {
-  id: string; title: string; description: string | null;
-  category: string; level: "primary" | "secondary";
-  region: string | null; address: string | null;
-  photo: string | null; photos: string[] | null;
-  status: string; created_at: string;
-  lat: number | null; lng: number | null;
-  sustainability_score: number | null;
-  website: string | null; phone: string | null;
-};
-
-type OrgActivity = {
-  id: string;
-  provider_id: string;
-  organization_id: string;
-  level: "primary" | "secondary";
-  category: string;
-  subtypes: string[] | null;
-  years_experience: number | null;
-  fields: Record<string, Record<string, any>>;
-  photos: Record<string, string[]>;
-  certifications: Array<{ name: string; document_url?: string }>;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -185,63 +107,146 @@ const OFFER_TYPES = [
   { value: "autre",        label: "Autre",        icon: "category",   gradient: "from-slate-400 to-slate-500" },
 ];
 
+const VENUE_TYPE_LABELS: Record<string, string> = {
+  hebergement: "Hébergement", restauration: "Restauration",
+  artisanat: "Artisanat", agence: "Agence de voyage", centre_loisir: "Centre de loisirs",
+};
+
+const VENUE_TYPES_FULL = [
+  { value: "hebergement",   label: "Hébergement",      icon: "hotel" },
+  { value: "restauration",  label: "Restauration",     icon: "restaurant" },
+  { value: "artisanat",     label: "Artisanat",        icon: "brush" },
+  { value: "agence",        label: "Agence de voyage", icon: "luggage" },
+  { value: "centre_loisir", label: "Centre de loisirs", icon: "sports" },
+];
+
+const ECO_PRACTICES = [
+  "Panneaux solaires", "Eau recyclée", "Zéro plastique", "Produits locaux",
+  "Compostage", "Éco-certification", "Véhicules électriques", "Éclairage LED",
+];
+
+const VENUE_SERVICES = [
+  { value: "hebergement",   label: "Hébergement",        icon: "hotel" },
+  { value: "restauration",  label: "Restauration",       icon: "restaurant" },
+  { value: "transport",     label: "Transport",          icon: "directions_car" },
+  { value: "excursions",    label: "Excursions",         icon: "hiking" },
+  { value: "artisanat",     label: "Artisanat",          icon: "brush" },
+  { value: "spa_bien_etre", label: "Spa & Bien-être",    icon: "spa" },
+  { value: "location",      label: "Location matériel",  icon: "backpack" },
+  { value: "animation",     label: "Animation culturelle", icon: "celebration" },
+];
+
 const COUNTRY_LABELS: Record<string, string> = {
   TN: "Tunisie", MA: "Maroc", DZ: "Algérie", FR: "France", OTHER: "Autre",
 };
 
-const PROVIDER_TYPES = [
-  { value: "lodge",       label: "Éco-Lodge",          icon: "cabin" },
-  { value: "hotel",       label: "Hôtel Vert",          icon: "hotel" },
-  { value: "restaurant",  label: "Restaurant Bio",      icon: "restaurant" },
-  { value: "ferme",       label: "Ferme Agro-tourisme", icon: "agriculture" },
-  { value: "agence",      label: "Agence de Voyage",    icon: "travel_explore" },
-  { value: "transport",   label: "Transport Éco",       icon: "electric_car" },
-  { value: "bienetre",    label: "Bien-être & Spa",     icon: "spa" },
-  { value: "artisanat",   label: "Artisanat local",     icon: "handshake" },
-  { value: "autre",       label: "Autre",               icon: "category" },
+const PHONE_RE = /^(\+216|00216)?[2-9]\d{7}$|^\+?[0-9\s\-().]{7,20}$/;
+const URL_RE = /^https?:\/\/.+\..+/;
+
+// ─── Questionnaire de durabilité ──────────────────────────────────────────────
+
+const SUSTAINABILITY_STEPS = [
+  {
+    category: "Environnement",
+    emoji: "🌿",
+    color: "from-emerald-500 to-green-400",
+    description: "Pratiques écologiques et gestion des ressources naturelles",
+    questions: [
+      {
+        id: "q1", text: "Utilisez-vous des énergies renouvelables (solaire, éolien…) ?",
+        options: [{ label: "Oui, principalement", value: 8 }, { label: "Partiellement", value: 4 }, { label: "Non", value: 0 }],
+      },
+      {
+        id: "q2", text: "Avez-vous une politique de gestion des déchets et de recyclage ?",
+        options: [{ label: "Oui, politique complète", value: 7 }, { label: "En cours de mise en place", value: 3 }, { label: "Non", value: 0 }],
+      },
+      {
+        id: "q3", text: "Utilisez-vous des produits biologiques ou de l'agriculture locale ?",
+        options: [{ label: "Oui, systématiquement", value: 8 }, { label: "Parfois", value: 4 }, { label: "Non", value: 0 }],
+      },
+      {
+        id: "q4", text: "Avez-vous des mesures pour réduire la consommation d'eau ?",
+        options: [{ label: "Oui (récupération, douches éco…)", value: 7 }, { label: "Non", value: 0 }],
+      },
+    ],
+  },
+  {
+    category: "Social & Communauté",
+    emoji: "🤝",
+    color: "from-blue-500 to-cyan-400",
+    description: "Contribution à la communauté locale et création de valeur sociale",
+    questions: [
+      {
+        id: "q5", text: "Quelle est la proportion d'employés locaux (de la région) ?",
+        options: [{ label: "Plus de 70 %", value: 10 }, { label: "Entre 30 % et 70 %", value: 5 }, { label: "Moins de 30 %", value: 0 }],
+      },
+      {
+        id: "q6", text: "Travaillez-vous en partenariat avec des artisans ou producteurs locaux ?",
+        options: [{ label: "Oui, régulièrement", value: 8 }, { label: "Parfois", value: 4 }, { label: "Non", value: 0 }],
+      },
+      {
+        id: "q7", text: "Proposez-vous des activités culturelles ou éducatives liées au patrimoine local ?",
+        options: [{ label: "Oui", value: 7 }, { label: "Non", value: 0 }],
+      },
+    ],
+  },
+  {
+    category: "Économie locale",
+    emoji: "💰",
+    color: "from-amber-500 to-yellow-400",
+    description: "Investissement et soutien à l'économie de votre territoire",
+    questions: [
+      {
+        id: "q8", text: "Quel pourcentage de votre budget d'achat est consacré aux fournisseurs locaux ?",
+        options: [{ label: "Plus de 70 %", value: 10 }, { label: "Entre 40 % et 70 %", value: 5 }, { label: "Moins de 40 %", value: 0 }],
+      },
+      {
+        id: "q9", text: "Vendez-vous ou valorisez-vous des produits artisanaux fabriqués localement ?",
+        options: [{ label: "Oui", value: 10 }, { label: "Non", value: 0 }],
+      },
+    ],
+  },
+  {
+    category: "Gouvernance & Certifications",
+    emoji: "🏅",
+    color: "from-violet-500 to-purple-400",
+    description: "Cadre organisationnel et reconnaissance officielle de vos pratiques",
+    questions: [
+      {
+        id: "q10", text: "Votre projet possède-t-il une certification éco-touristique ou environnementale ?",
+        options: [{ label: "Oui (certification obtenue)", value: 8 }, { label: "En cours d'obtention", value: 4 }, { label: "Non", value: 0 }],
+      },
+      {
+        id: "q11", text: "Avez-vous formalisé une politique de responsabilité sociale et environnementale ?",
+        options: [{ label: "Oui, document écrit", value: 7 }, { label: "Non", value: 0 }],
+      },
+    ],
+  },
+  {
+    category: "Sensibilisation & Éducation",
+    emoji: "📚",
+    color: "from-rose-500 to-pink-400",
+    description: "Actions de sensibilisation auprès des visiteurs et de la communauté",
+    questions: [
+      {
+        id: "q12", text: "Informez-vous vos visiteurs sur les bonnes pratiques environnementales ?",
+        options: [{ label: "Oui", value: 5 }, { label: "Non", value: 0 }],
+      },
+      {
+        id: "q13", text: "Participez-vous à des initiatives locales de conservation ou de reboisement ?",
+        options: [{ label: "Oui", value: 5 }, { label: "Non", value: 0 }],
+      },
+    ],
+  },
 ];
 
-const PROVIDER_ACTIVITY_TYPES = [
-  { value: "hebergement",  label: "Hébergement",             icon: "cabin",          gradient: "from-emerald-500 to-teal-400" },
-  { value: "restauration", label: "Restauration Bio",        icon: "restaurant",     gradient: "from-orange-500 to-amber-400" },
-  { value: "randonnee",    label: "Randonnée & Trekking",    icon: "hiking",         gradient: "from-green-600 to-emerald-400" },
-  { value: "plongee",      label: "Plongée & Sports naut.",  icon: "scuba_diving",   gradient: "from-blue-500 to-cyan-400" },
-  { value: "agriculture",  label: "Agro-tourisme",           icon: "agriculture",    gradient: "from-lime-500 to-green-400" },
-  { value: "artisanat",    label: "Artisanat local",         icon: "handshake",      gradient: "from-amber-500 to-yellow-400" },
-  { value: "transport",    label: "Transport éco",           icon: "electric_car",   gradient: "from-sky-500 to-blue-400" },
-  { value: "bienetre",     label: "Bien-être & Spa",         icon: "spa",            gradient: "from-purple-500 to-violet-400" },
-  { value: "culture",      label: "Tourisme culturel",       icon: "museum",         gradient: "from-rose-500 to-pink-400" },
-  { value: "aventure",     label: "Aventure & Nature",       icon: "terrain",        gradient: "from-teal-500 to-cyan-400" },
-  { value: "formation",    label: "Formation & Éducation",   icon: "school",         gradient: "from-indigo-500 to-blue-400" },
-  { value: "autre",        label: "Autre",                   icon: "category",       gradient: "from-slate-400 to-slate-500" },
-];
-
-const CATEGORY_GRADIENT_MAP: Record<string, string> = {
-  eco_tour:    "from-green-600 to-emerald-400",
-  hebergement: "from-emerald-500 to-teal-400",
-  activite:    "from-orange-500 to-amber-400",
-  restauration:"from-red-500 to-rose-400",
-  culture:     "from-rose-500 to-pink-400",
-  bien_etre:   "from-purple-500 to-violet-400",
-  artisanat:   "from-amber-500 to-yellow-400",
-  agriculture: "from-lime-500 to-green-400",
-  transport:   "from-sky-500 to-blue-400",
-  equipement:  "from-indigo-500 to-blue-400",
-};
-
-function findProviderTypeMeta(value: string) {
-  for (const cat of PROVIDER_SCHEMA) {
-    const st = cat.subtypes.find((s) => s.value === value);
-    if (st) return { label: st.label, categoryLabel: cat.label, categoryIcon: cat.icon, categoryValue: cat.value, gradient: CATEGORY_GRADIENT_MAP[cat.value] ?? "from-slate-400 to-slate-500" };
-  }
-  const cat = PROVIDER_SCHEMA.find((c) => c.value === value);
-  if (cat) return { label: cat.label, categoryLabel: cat.label, categoryIcon: cat.icon, categoryValue: cat.value, gradient: CATEGORY_GRADIENT_MAP[cat.value] ?? "from-slate-400 to-slate-500" };
-  const act = PROVIDER_ACTIVITY_TYPES.find((t) => t.value === value);
-  if (act) return { label: act.label, categoryLabel: act.label, categoryIcon: act.icon, categoryValue: value, gradient: act.gradient };
-  return { label: value, categoryLabel: value, categoryIcon: "eco", categoryValue: value, gradient: "from-slate-400 to-slate-500" };
+function getSustainabilityLevel(score: number) {
+  if (score >= 86) return { label: "Établissement Ambassadeur Éco Voyage", color: "text-primary", bg: "bg-primary/10", emoji: "⭐" };
+  if (score >= 71) return { label: "Établissement Éco-Responsable",        color: "text-primary", bg: "bg-emerald-50", emoji: "🌿" };
+  if (score >= 51) return { label: "Établissement Engagé",                 color: "text-teal-600",   bg: "bg-teal-50",    emoji: "🤝" };
+  if (score >= 31) return { label: "Établissement Sensibilisé",            color: "text-blue-600",   bg: "bg-blue-50",    emoji: "💡" };
+  return              { label: "Établissement Conventionnel",               color: "text-slate-500",  bg: "bg-slate-100",  emoji: "📋" };
 }
-
-// ─── Offer sustainability questionnaire ───────────────────────────────────────
 
 const OFFER_SUSTAINABILITY_STEPS = [
   {
@@ -290,111 +295,13 @@ const OFFER_SUSTAINABILITY_STEPS = [
 
 function getOfferSustainabilityLevel(score: number) {
   if (score >= 86) return { label: "Offre Ambassadrice Éco Voyage", color: "text-primary",      bg: "bg-primary/10",   emoji: "⭐" };
-  if (score >= 71) return { label: "Offre Éco-Responsable",         color: "text-emerald-600", bg: "bg-emerald-50",   emoji: "🌿" };
+  if (score >= 71) return { label: "Offre Éco-Responsable",         color: "text-primary", bg: "bg-emerald-50",   emoji: "🌿" };
   if (score >= 51) return { label: "Offre Engagée",                 color: "text-teal-600",    bg: "bg-teal-50",      emoji: "🤝" };
   if (score >= 31) return { label: "Offre Sensibilisée",            color: "text-blue-600",    bg: "bg-blue-50",      emoji: "💡" };
   return              { label: "Offre Conventionnelle",              color: "text-slate-500",   bg: "bg-slate-100",    emoji: "📋" };
 }
 
-function getActivitySustainabilityLevel(score: number) {
-  if (score >= 86) return { label: "Activité Ambassadrice", color: "text-primary",      bg: "bg-primary/10",   emoji: "⭐" };
-  if (score >= 71) return { label: "Activité Éco-Responsable", color: "text-emerald-600", bg: "bg-emerald-50", emoji: "🌿" };
-  if (score >= 51) return { label: "Activité Engagée",       color: "text-teal-600",    bg: "bg-teal-50",      emoji: "🤝" };
-  if (score >= 31) return { label: "Activité Sensibilisée",  color: "text-blue-600",    bg: "bg-blue-50",      emoji: "💡" };
-  return              { label: "Activité Conventionnelle",    color: "text-slate-500",   bg: "bg-slate-100",    emoji: "📋" };
-}
-
-const ACTIVITY_SUSTAINABILITY_STEPS = [
-  {
-    category: "Impact Écologique", emoji: "🌿",
-    description: "Empreinte environnementale de l'activité",
-    questions: [
-      { id: "aq1", text: "L'activité se déroule-t-elle dans un milieu naturel préservé ?", options: [{ label: "Oui, site protégé", value: 10 }, { label: "Partiellement", value: 5 }, { label: "Non", value: 0 }] },
-      { id: "aq2", text: "Des mesures réduisent-elles l'empreinte carbone ?", options: [{ label: "Oui", value: 10 }, { label: "Partiellement", value: 5 }, { label: "Non", value: 0 }] },
-      { id: "aq3", text: "Les déchets générés sont-ils gérés de manière responsable ?", options: [{ label: "Oui, complètement", value: 10 }, { label: "Partiellement", value: 5 }, { label: "Non", value: 0 }] },
-    ],
-  },
-  {
-    category: "Valorisation Locale", emoji: "🤝",
-    description: "Intégration des ressources et acteurs locaux",
-    questions: [
-      { id: "aq4", text: "Faites-vous appel à des artisans ou intervenants locaux ?", options: [{ label: "Oui, systématiquement", value: 10 }, { label: "Parfois", value: 5 }, { label: "Non", value: 0 }] },
-      { id: "aq5", text: "Valorisez-vous le patrimoine culturel local ?", options: [{ label: "Oui", value: 8 }, { label: "Partiellement", value: 4 }, { label: "Non", value: 0 }] },
-    ],
-  },
-  {
-    category: "Sensibilisation", emoji: "📚",
-    description: "Actions d'éducation et de sensibilisation",
-    questions: [
-      { id: "aq6", text: "Sensibilisez-vous les participants à l'environnement ?", options: [{ label: "Oui, activement", value: 10 }, { label: "Partiellement", value: 5 }, { label: "Non", value: 0 }] },
-      { id: "aq7", text: "Fournissez-vous des conseils sur les bonnes pratiques ?", options: [{ label: "Oui", value: 10 }, { label: "Non", value: 0 }] },
-    ],
-  },
-  {
-    category: "Accessibilité & Pratiques", emoji: "🏅",
-    description: "Ouverture et encadrement responsable",
-    questions: [
-      { id: "aq8", text: "L'activité est-elle accessible aux personnes à mobilité réduite ?", options: [{ label: "Oui", value: 8 }, { label: "Partiellement", value: 4 }, { label: "Non", value: 0 }] },
-      { id: "aq9", text: "Avez-vous une politique d'annulation éco-responsable ?", options: [{ label: "Oui", value: 7 }, { label: "Non", value: 0 }] },
-    ],
-  },
-];
-
-type Tab = "tout" | "offres" | "activites" | "circuits" | "reseau" | "apropos";
-
-// ── Circuit types ─────────────────────────────────────────────────────────────
-type CircuitEtape = {
-  id: string;
-  jour: number;
-  heure_debut: string;
-  heure_fin: string;
-  destination: string;
-  address: string;
-  lat: number | null;
-  lng: number | null;
-  categorie: string;
-  subtypes: string[];
-  titre: string;
-  description_courte: string;
-  description_longue: string;
-  prix: number | null;
-  photos: string[];
-  fields: Record<string, Record<string, any>>;
-  unit_details: Record<string, Array<Record<string, any>>>;
-  nb_unites: Record<string, number>;
-  form_config: Record<string, Record<string, any>>;
-  entity_photos: Record<string, string[]>;
-};
-
-type CircuitAvailability = {
-  mode: string;
-  specific_dates?: string[];
-  weekdays?: number[];
-  avail_start?: string;
-  avail_end?: string;
-  saisons?: string[];
-  heure_debut?: string;
-  heure_fin?: string;
-  delai_reponse?: string;
-};
-
-type CircuitHebergement = {
-  inclus: boolean;
-  type?: "same" | "per_day";
-  etape?: CircuitEtape;
-};
-
-type Circuit = {
-  id: string;
-  title: string;
-  description: string;
-  nb_jours: number;
-  cover_image: string | null;
-  etapes: CircuitEtape[];
-  availability?: CircuitAvailability;
-  hebergement?: CircuitHebergement;
-  created_at: string;
-};
+type Tab = "tout" | "offres" | "projets" | "reseau" | "apropos";
 
 // ─── Botanical SVG Cover ──────────────────────────────────────────────────────
 
@@ -431,134 +338,30 @@ function BotanicalCover() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ProviderProfilePage() {
+export default function ProjectOwnerProfilePage() {
   const router = useRouter();
 
-  const [profile,        setProfile]        = useState<ProviderProfile | null>(null);
-  const [org,            setOrg]            = useState<OrganizationProfile | null>(null);
-  const [offers,         setOffers]         = useState<Offer[]>([]);
-  const [activities,     setActivities]     = useState<Activity[]>([]);
-  const [orgActivities,  setOrgActivities]  = useState<OrgActivity[]>([]);
-  const [activityFilter, setActivityFilter] = useState<string | null>(null);
+  const [profile,   setProfile]   = useState<OwnerProfile | null>(null);
+  const [offers,    setOffers]    = useState<Offer[]>([]);
   const [token,     setToken]     = useState("");
   const [loading,   setLoading]   = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("tout");
-
-  // ── OrgActivity detail modal ──────────────────────────────────────────────
-  const [viewOrgActivity, setViewOrgActivity] = useState<OrgActivity | null>(null);
-  const [orgActSliderIdx,  setOrgActSliderIdx]  = useState(0);
-
-  // ── Activity modal (create) ──────────────────────────────────────────────
-  const [actModalOpen,        setActModalOpen]        = useState(false);
-  const [actFormError,        setActFormError]        = useState("");
-  const [actPublishing,       setActPublishing]       = useState(false);
-  const [actImages,           setActImages]           = useState<{ file: File; preview: string }[]>([]);
-  const [actCoverIdx,         setActCoverIdx]         = useState(0);
-  const [actSelCategory,      setActSelCategory]      = useState("");
-  const [actSelSubtypes,      setActSelSubtypes]      = useState<string[]>([]);
-  const [actFieldValues,      setActFieldValues]      = useState<Record<string, Record<string, any>>>({});
-  const [actYearsExp,         setActYearsExp]         = useState("");
-
-  // ── Circuits ──────────────────────────────────────────────────────────────
-  const [circuits,            setCircuits]            = useState<Circuit[]>([]);
-  const [circuitModalOpen,    setCircuitModalOpen]    = useState(false);
-  const [circuitSaving,       setCircuitSaving]       = useState(false);
-  const [circuitFormError,    setCircuitFormError]    = useState("");
-  const [editingCircuit,      setEditingCircuit]      = useState<Circuit | null>(null);
-  const [viewingCircuit,      setViewingCircuit]      = useState<Circuit | null>(null);
-  const [circuitTitle,        setCircuitTitle]        = useState("");
-  const [circuitDescription,  setCircuitDescription]  = useState("");
-  const [circuitNbJours,      setCircuitNbJours]      = useState(1);
-  const [circuitCoverImg,     setCircuitCoverImg]     = useState<{ file: File; preview: string } | null>(null);
-  const [circuitCoverExisting,setCircuitCoverExisting]= useState<string | null>(null);
-  const [circuitEtapes,       setCircuitEtapes]       = useState<CircuitEtape[]>([]);
-  // Circuit-level availability
-  const [circuitAvailMode,    setCircuitAvailMode]    = useState("specific");
-  const [circuitAvailDates,   setCircuitAvailDates]   = useState<string[]>([]);
-  const [circuitAvailNewDate, setCircuitAvailNewDate] = useState("");
-  const [circuitAvailWeekdays,setCircuitAvailWeekdays]= useState<number[]>([]);
-  const [circuitAvailStart,   setCircuitAvailStart]   = useState("");
-  const [circuitAvailEnd,     setCircuitAvailEnd]     = useState("");
-  const [circuitAvailSaisons, setCircuitAvailSaisons] = useState<string[]>([]);
-  const [circuitAvailHDebut,  setCircuitAvailHDebut]  = useState("");
-  const [circuitAvailHFin,    setCircuitAvailHFin]    = useState("");
-  const [circuitAvailDelai,    setCircuitAvailDelai]    = useState("24h");
-  // Circuit-level hébergement
-  const [circuitHebergInclus,  setCircuitHebergInclus]  = useState(false);
-  const [circuitHebergType,    setCircuitHebergType]    = useState<"same" | "per_day">("same");
-  const [circuitHebergEtape,   setCircuitHebergEtape]   = useState<CircuitEtape | null>(null);
-  // États du formulaire d'une nouvelle étape
-  const [etapeFormOpen,       setEtapeFormOpen]       = useState(false);
-  const [etapeJour,           setEtapeJour]           = useState(1);
-  const [etapeDestination,    setEtapeDestination]    = useState("");
-  const [etapeAddress,        setEtapeAddress]        = useState("");
-  const [etapeLat,            setEtapeLat]            = useState<number | null>(null);
-  const [etapeLng,            setEtapeLng]            = useState<number | null>(null);
-  const [etapeCategorie,      setEtapeCategorie]      = useState("");
-  const [etapeSubtypes,       setEtapeSubtypes]       = useState<string[]>([]);
-  const [etapeFields,         setEtapeFields]         = useState<Record<string, Record<string, any>>>({});
-  const [etapeTitre,          setEtapeTitre]          = useState("");
-  const [etapeDescCourte,     setEtapeDescCourte]     = useState("");
-  const [etapeDescLongue,     setEtapeDescLongue]     = useState("");
-  const [etapePrix,           setEtapePrix]           = useState("");
-  const [etapeLocalPhotos,    setEtapeLocalPhotos]    = useState<{ file: File; preview: string }[]>([]);
-  const [etapePhotoCoverIdx,  setEtapePhotoCoverIdx]  = useState(0);
-  const [etapeFormError,      setEtapeFormError]      = useState("");
-  const [etapeEntityImages,         setEtapeEntityImages]         = useState<Record<string, { file: File; preview: string }[]>>({});
-  const [etapeEntityCoverIdx,       setEtapeEntityCoverIdx]       = useState<Record<string, number>>({});
-  const [etapeEntityExistingImages, setEtapeEntityExistingImages] = useState<Record<string, string[]>>({});
-  const [etapeSubtypeNbUnites,   setEtapeSubtypeNbUnites]   = useState<Record<string, number>>({});
-  const [etapeSubtypeUnitDetails,setEtapeSubtypeUnitDetails]= useState<Record<string, Array<Record<string, any>>>>({});
-  const [etapeActiveSubtypeTab,  setEtapeActiveSubtypeTab]  = useState<Record<string, number>>({});
-  const [etapeSubtypeFormConfig, setEtapeSubtypeFormConfig] = useState<Record<string, Record<string, any>>>({});
-  const [etapeSubtypeDetails,    setEtapeSubtypeDetails]    = useState<Record<string, Record<string, any>>>({});
-  const [etapeHeureDebut,        setEtapeHeureDebut]        = useState("");
-  const [etapeHeureFin,          setEtapeHeureFin]          = useState("");
-  const [editingEtapeId,         setEditingEtapeId]         = useState<string | null>(null);
-
-  // ── Activity detail/edit modal ───────────────────────────────────────────
-  const [actDetailOpen,  setActDetailOpen]  = useState(false);
-  const [actDetailMode,  setActDetailMode]  = useState<"view"|"edit">("view");
-  const [viewActivity,   setViewActivity]   = useState<Activity | null>(null);
-  const [actEditForm,    setActEditForm]    = useState({ title: "", category: "", level: "primary" as "primary"|"secondary", description: "", region: "", address: "", website: "", phone: "" });
-  const [actEditError,   setActEditError]   = useState("");
-  const [actEditSaving,  setActEditSaving]  = useState(false);
-  const [actDeleting,    setActDeleting]    = useState(false);
-  const [actEditImages,  setActEditImages]  = useState<{ src: string; file?: File }[]>([]);
-  const [actEditCoverIdx,setActEditCoverIdx]= useState(0);
-
-  // ── Activity type detail / edit modal (profile-level) ───────────────────
-  const [actTypeOpen,          setActTypeOpen]          = useState(false);
-  const [actTypeMode,          setActTypeMode]          = useState<"view" | "edit">("view");
-  const [actTypeCurrent,       setActTypeCurrent]       = useState<{ value: string; level: "primary" | "secondary" } | null>(null);
-  const [actTypeEditCategory,  setActTypeEditCategory]  = useState("");
-  const [actTypeEditSubtype,   setActTypeEditSubtype]   = useState("");
-  const [actTypeEditDynFields, setActTypeEditDynFields] = useState<Record<string, any>>({});
-  const [actTypeSaving,        setActTypeSaving]        = useState(false);
-  const [actTypeSaveError,     setActTypeSaveError]     = useState("");
-
-  // ── Activity sustainability questionnaire ────────────────────────────────
-  const [aqOpen,     setAqOpen]     = useState(false);
-  const [aqActId,    setAqActId]    = useState("");
-  const [aqStep,     setAqStep]     = useState(0);
-  const [aqAnswers,  setAqAnswers]  = useState<Record<string, number>>({});
-  const [aqSaving,   setAqSaving]   = useState(false);
-
   type NetUser = { user_id: string; full_name: string; photo: string | null; _type: string; sub?: string | null };
   const [following,  setFollowing]  = useState<NetUser[]>([]);
   const [followers,  setFollowers]  = useState<NetUser[]>([]);
+  const [netLoaded,  setNetLoaded]  = useState(false);
   const [netSearch,  setNetSearch]  = useState("");
   const [netResults, setNetResults] = useState<NetUser[]>([]);
   const [netLoading, setNetLoading] = useState(false);
-  const [netMenuId,        setNetMenuId]        = useState<string | null>(null);
-  const [netReport,        setNetReport]        = useState<{ id: string; name: string } | null>(null);
-  const [netReportReason,  setNetReportReason]  = useState("");
-  const [netReportSending, setNetReportSending] = useState(false);
+  const [netMenuId,       setNetMenuId]        = useState<string | null>(null);
+  const [netReport,       setNetReport]        = useState<{ id: string; name: string } | null>(null);
+  const [netReportReason, setNetReportReason]  = useState("");
+  const [netReportSending,setNetReportSending] = useState(false);
   const NET_REPORT_REASONS = ["Contenu inapproprié", "Faux profil", "Harcèlement ou spam", "Informations trompeuses", "Autre"];
 
   // ── Publish offer modal ──────────────────────────────────────────────────
   const [modalOpen,       setModalOpen]       = useState(false);
-  const [form,            setForm]            = useState({ title: "", offer_type: "", description: "", price: "", duration: "", region: "", inclusions: "", meeting_point: "", min_group_size: "", max_group_size: "", min_age: "", cancellation_policy: "" });
+  const [form,            setForm]            = useState({ title: "", offer_type: "", venue_id: "", description: "", price: "", duration: "", region: "", inclusions: "", meeting_point: "", min_group_size: "", max_group_size: "", min_age: "", cancellation_policy: "" });
   const [titleError,      setTitleError]      = useState("");
   const [publishing,      setPublishing]      = useState(false);
   const [publishError,    setPublishError]    = useState("");
@@ -567,86 +370,59 @@ export default function ProviderProfilePage() {
   const [showPublishMap,  setShowPublishMap]  = useState(false);
   const [publishMapLat,   setPublishMapLat]   = useState<number | null>(null);
   const [publishMapLng,   setPublishMapLng]   = useState<number | null>(null);
-  // ── Offer enriched fields ────────────────────────────────────────────────
-  const [offerActivity,      setOfferActivity]      = useState<OrgActivity | null>(null);
-  const [offerSubtypes,      setOfferSubtypes]      = useState<string[]>([]);
-  const [offerMode,          setOfferMode]          = useState<"single" | "variant" | "package">("single");
-  const [subtypeDetails,     setSubtypeDetails]     = useState<Record<string, Record<string, any>>>({});
-  const [constraintError,    setConstraintError]    = useState("");
-  const [availabilityMode,   setAvailabilityMode]   = useState("always");
-  const [availabilityStart,  setAvailabilityStart]  = useState("");
-  const [availabilityEnd,    setAvailabilityEnd]    = useState("");
-  const [availableWeekdays,  setAvailableWeekdays]  = useState<number[]>([]);
-  const [specificDates,      setSpecificDates]      = useState<string[]>([]);
-  const [newSpecificDate,    setNewSpecificDate]    = useState("");
-  const [offerConfirmMode,   setOfferConfirmMode]   = useState("24h");
-  const [offerDeadlineHours, setOfferDeadlineHours] = useState("24");
-  const [offerDepositPct,    setOfferDepositPct]    = useState("30");
-  // ── Bloc 1 extra ────────────────────────────────────────────────────────
-  const [offerDescCourte,    setOfferDescCourte]    = useState("");
-  const [offerLangue,        setOfferLangue]        = useState("");
-  // ── Bloc 3 time fields ──────────────────────────────────────────────────
-  const [availHeureDebut,    setAvailHeureDebut]    = useState("");
-  const [availHeureFin,      setAvailHeureFin]      = useState("");
-  const [availDelaiReponse,  setAvailDelaiReponse]  = useState("24h");
-  const [availMessageAccueil,setAvailMessageAccueil]= useState("");
-  const [availSaisons,       setAvailSaisons]       = useState<string[]>([]);
-  // ── Bloc 4 pricing ──────────────────────────────────────────────────────
-  const [prixGroupe,         setPrixGroupe]         = useState("");
-  const [nbPersonnesGroupe,  setNbPersonnesGroupe]  = useState("");
-  const [prixEnfant,         setPrixEnfant]         = useState("");
-  const [ageMaxEnfant,       setAgeMaxEnfant]       = useState("");
-  const [suppPrivatisation,  setSuppPrivatisation]  = useState("");
-  const [acompteRequis,      setAcompteRequis]      = useState(false);
-  const [typeAcompte,        setTypeAcompte]        = useState("pourcentage");
-  const [valeurAcompte,      setValeurAcompte]      = useState("");
-  // ── Bloc 6 annulation ───────────────────────────────────────────────────
-  const [cancellationPolicy, setCancellationPolicy] = useState("moderate");
-  const [cancellationDesc,   setCancellationDesc]   = useState("");
-  // ── Tarif par sous-type (variant) ────────────────────────────────────────
-  const [subtypePrices,      setSubtypePrices]      = useState<Record<string, string>>({});
-  // ── Multi-unités par sous-type (hébergement) ─────────────────────────────
-  // subtypeNbUnites[st]    = nb d'unités de ce sous-type
-  // subtypeUnitDetails[st] = [{...champs unité 0}, {... unité 1}, ...]
-  // activeSubtypeTab[st]   = onglet actif pour ce sous-type
-  const [subtypeNbUnites,    setSubtypeNbUnites]    = useState<Record<string, number>>({});
-  const [subtypeUnitDetails, setSubtypeUnitDetails] = useState<Record<string, Array<Record<string, any>>>>({});
-  const [activeSubtypeTab,   setActiveSubtypeTab]   = useState<Record<string, number>>({});
-  // ── Gardés pour compat (single subtype path) ──────────────────────────────
-  const [offerNbUnites,      setOfferNbUnites]      = useState(1);
-  const [unitDetailsArray,   setUnitDetailsArray]   = useState<Array<Record<string, any>>>([{}]);
-  const [activeUnitTab,      setActiveUnitTab]      = useState(0);
-  // ── Config par sous-type (disponibilité + tarification — hébergement) ────
-  const [subtypeFormConfig,  setSubtypeFormConfig]  = useState<Record<string, Record<string, any>>>({});
-  // ── Photos par entité (sous-type ou unité) ───────────────────────────────
-  const [entityImages,         setEntityImages]         = useState<Record<string, Array<{file: File; preview: string}>>>({});
-  const [entityCoverIdx,       setEntityCoverIdx]       = useState<Record<string, number>>({});
-  const [entityExistingImages, setEntityExistingImages] = useState<Record<string, string[]>>({});
-  // ── Publish modal — edit mode ─────────────────────────────────────────────
-  const [offerEditMode,        setOfferEditMode]        = useState(false);
-  const [offerEditId,          setOfferEditId]          = useState("");
-  const [publishExistingImages,setPublishExistingImages] = useState<string[]>([]);
 
   // ── Offer detail / edit modal ────────────────────────────────────────────
   const [editModalOpen,  setEditModalOpen]  = useState(false);
-  const [editMode,       setEditMode]       = useState(false);
+  const [editMode,       setEditMode]       = useState(false); // false=view, true=edit
   const [viewOffer,      setViewOffer]      = useState<Offer | null>(null);
   const [sliderIdx,      setSliderIdx]      = useState(0);
+  const [projSliderIdx,  setProjSliderIdx]  = useState(0);
   const [touchStartX,    setTouchStartX]    = useState<number | null>(null);
   const [editOfferId,    setEditOfferId]    = useState("");
-  const [editForm,       setEditForm]       = useState({ title: "", offer_type: "", description: "", price: "", duration: "", status: "", region: "", inclusions: "", meeting_point: "", min_group_size: "", max_group_size: "", min_age: "", cancellation_policy: "" });
+  const [editForm,       setEditForm]       = useState({ title: "", offer_type: "", venue_id: "", description: "", price: "", duration: "", status: "", region: "", inclusions: "", meeting_point: "", min_group_size: "", max_group_size: "", min_age: "", cancellation_policy: "" });
   const [editTitleError, setEditTitleError] = useState("");
   const [editSaving,     setEditSaving]     = useState(false);
   const [editError,      setEditError]      = useState("");
   const [offerDeleting,  setOfferDeleting]  = useState(false);
   const [editImages,     setEditImages]     = useState<{ src: string; file?: File }[]>([]);
   const [editCoverIdx,   setEditCoverIdx]   = useState(0);
-  const [editDetails,    setEditDetails]    = useState<Record<string, any>>({});
   const [showEditMap,    setShowEditMap]    = useState(false);
   const [editMapLat,     setEditMapLat]     = useState<number | null>(null);
   const [editMapLng,     setEditMapLng]     = useState<number | null>(null);
 
-  // ── Offer sustainability questionnaire ───────────────────────────────────
+  // ── Project creation modal ───────────────────────────────────────────────
+  const [projModalOpen,   setProjModalOpen]   = useState(false);
+  const [venueForm,        setVenueForm]        = useState({ name: "", description: "", region: "", address: "", website: "", phone: "", venue_type: [] as string[], eco_labels: [] as string[], services: [] as string[], opening_hours: "", facebook: "", instagram: "" });
+  const [projFieldErrors, setProjFieldErrors] = useState<{ name?: string; phone?: string; website?: string; region?: string }>({});
+  const [projSaving,      setProjSaving]      = useState(false);
+  const [projError,       setProjError]       = useState("");
+  const [projImages,      setProjImages]      = useState<{ file: File; preview: string }[]>([]);
+  const [projCoverIdx,    setProjCoverIdx]    = useState(0);
+  // ── Project detail / edit modal ─────────────────────────────────────────
+  const [projDetailOpen,  setProjDetailOpen]  = useState(false);
+  const [projDetailMode,  setProjDetailMode]  = useState<"view" | "edit">("view");
+  const [viewVenue,     setViewVenue]     = useState<Venue | null>(null);
+  const [venueEditForm,    setVenueEditForm]    = useState({ name: "", description: "", region: "", address: "", website: "", phone: "", venue_type: [] as string[], eco_labels: [] as string[], services: [] as string[], opening_hours: "", facebook: "", instagram: "" });
+  const [projEditImages,  setProjEditImages]  = useState<{ src: string; file?: File }[]>([]);
+  const [projEditCoverIdx, setProjEditCoverIdx] = useState(0);
+  const [projEditSaving,  setProjEditSaving]  = useState(false);
+  const [projEditError,   setProjEditError]   = useState("");
+  const [projDeleting,    setProjDeleting]    = useState(false);
+  const [showProjCreateMap, setShowProjCreateMap] = useState(false);
+  const [projCreateMapLat,  setProjCreateMapLat]  = useState<number | null>(null);
+  const [projCreateMapLng,  setProjCreateMapLng]  = useState<number | null>(null);
+  const [showProjEditMap,   setShowProjEditMap]   = useState(false);
+  const [projEditMapLat,    setProjEditMapLat]    = useState<number | null>(null);
+  const [projEditMapLng,    setProjEditMapLng]    = useState<number | null>(null);
+
+  // ── Sustainability questionnaire ─────────────────────────────────────────
+  const [qOpen,      setQOpen]      = useState(false);
+  const [qProjectId, setQProjectId] = useState("");
+  const [qStep,      setQStep]      = useState(0);
+  const [qAnswers,   setQAnswers]   = useState<Record<string, number>>({});
+  const [qSaving,    setQSaving]    = useState(false);
+
+  // ── Offer sustainability questionnaire ───────────────────────────────────────
   const [oqOpen,    setOqOpen]    = useState(false);
   const [oqOfferId, setOqOfferId] = useState("");
   const [oqStep,    setOqStep]    = useState(0);
@@ -655,9 +431,7 @@ export default function ProviderProfilePage() {
 
   // ── Edit profile modal ────────────────────────────────────────────────────
   const [editProfileOpen,   setEditProfileOpen]   = useState(false);
-  const [editProfileForm,   setEditProfileForm]   = useState({ full_name: "", bio: "", country: "", language: "", organization: "", position: "", phone: "", provider_type: "", region: "", website: "", years_experience: "" });
-  const [editProfileActivities,    setEditProfileActivities]    = useState<string[]>([]);
-  const [editProfileSecActivities, setEditProfileSecActivities] = useState<string[]>([]);
+  const [editProfileForm,   setEditProfileForm]   = useState({ full_name: "", bio: "", country: "", language: "", organization: "", position: "", phone: "" });
   const [editProfilePhoto,  setEditProfilePhoto]  = useState<{ file?: File; preview: string } | null>(null);
   const [editProfileCover,  setEditProfileCover]  = useState<{ file?: File; preview: string } | null>(null);
   const [editProfileSaving, setEditProfileSaving] = useState(false);
@@ -669,16 +443,11 @@ export default function ProviderProfilePage() {
       if (!tkn) { router.push("/auth/login"); return; }
       setToken(tkn);
       try {
-        const [p, myOffers, myActivities, myOrg, myOrgActivities] = await Promise.all([
-          apiFetch<ProviderProfile>("/providers/me", { headers: { Authorization: `Bearer ${tkn}` } }),
+        const [p, myOffers] = await Promise.all([
+          apiFetch<OwnerProfile>("/provider/profile", { headers: { Authorization: `Bearer ${tkn}` } }),
           apiFetch<Offer[]>("/offers/mine", { headers: { Authorization: `Bearer ${tkn}` } }).catch(() => [] as Offer[]),
-          apiFetch<Activity[]>("/provider-activities/mine", { headers: { Authorization: `Bearer ${tkn}` } }).catch(() => [] as Activity[]),
-          apiFetch<OrganizationProfile>("/organizations/me", { headers: { Authorization: `Bearer ${tkn}` } }).catch(() => null),
-          apiFetch<OrgActivity[]>("/provider-activities/mine", { headers: { Authorization: `Bearer ${tkn}` } }).catch(() => [] as OrgActivity[]),
         ]);
         setProfile(p);
-        setOrg(myOrg);
-        setOrgActivities(myOrgActivities);
         const offersWithCover = myOffers.map((o) => {
           const validImages = o.images?.filter((url) => url.startsWith("http")) ?? null;
           return {
@@ -688,15 +457,15 @@ export default function ProviderProfilePage() {
           };
         });
         setOffers(offersWithCover);
-        setActivities(myActivities);
+        // Load network in background
         Promise.all([
           apiFetch<NetUser[]>("/follows/following/profiles", { headers: { Authorization: `Bearer ${tkn}` } }).catch(() => []),
           apiFetch<NetUser[]>("/follows/followers/profiles", { headers: { Authorization: `Bearer ${tkn}` } }).catch(() => []),
         ]).then(([fwing, fwers]) => {
-          setFollowing(fwing); setFollowers(fwers);
+          setFollowing(fwing); setFollowers(fwers); setNetLoaded(true);
         });
       } catch {
-        router.push("/dashboard/provider");
+        router.push("/dashboard");
       } finally {
         setLoading(false);
       }
@@ -704,7 +473,7 @@ export default function ProviderProfilePage() {
     init();
   }, [router]);
 
-  // Network search
+  // Network search — guides
   useEffect(() => {
     if (!netSearch.trim() || !token) { setNetResults([]); return; }
     const t = setTimeout(() => {
@@ -716,222 +485,6 @@ export default function ProviderProfilePage() {
     }, 350);
     return () => clearTimeout(t);
   }, [netSearch, token]);
-
-  // ── Circuits — chargés depuis l'API ────────────────────────────────────────
-  useEffect(() => {
-    if (!token) return;
-    apiFetch<Circuit[]>("/circuits/mine", { headers: { Authorization: `Bearer ${token}` } })
-      .then((data) => setCircuits(data.map((c) => ({ ...c, created_at: typeof c.created_at === 'string' ? c.created_at : new Date(c.created_at).toISOString() }))))
-      .catch(() => {});
-  }, [token]);
-
-  function openCircuitModal(circuit?: Circuit) {
-    if (circuit) {
-      setEditingCircuit(circuit);
-      setCircuitTitle(circuit.title);
-      setCircuitDescription(circuit.description);
-      setCircuitNbJours(circuit.nb_jours);
-      setCircuitCoverExisting(circuit.cover_image);
-      setCircuitEtapes([...circuit.etapes]);
-      const av = circuit.availability;
-      setCircuitAvailMode(av?.mode ?? "specific");
-      setCircuitAvailDates(av?.specific_dates ?? []);
-      setCircuitAvailWeekdays(av?.weekdays ?? []);
-      setCircuitAvailStart(av?.avail_start ?? "");
-      setCircuitAvailEnd(av?.avail_end ?? "");
-      setCircuitAvailSaisons(av?.saisons ?? []);
-      setCircuitAvailHDebut(av?.heure_debut ?? "");
-      setCircuitAvailHFin(av?.heure_fin ?? "");
-      setCircuitAvailDelai(av?.delai_reponse ?? "24h");
-      const hb = circuit.hebergement;
-      setCircuitHebergInclus(hb?.inclus ?? false);
-      setCircuitHebergType(hb?.type ?? "same");
-      setCircuitHebergEtape(hb?.etape ?? null);
-    } else {
-      setEditingCircuit(null);
-      setCircuitTitle(""); setCircuitDescription("");
-      setCircuitNbJours(1); setCircuitCoverExisting(null);
-      setCircuitEtapes([]);
-      setCircuitAvailMode("specific"); setCircuitAvailDates([]);
-      setCircuitAvailWeekdays([]); setCircuitAvailStart(""); setCircuitAvailEnd("");
-      setCircuitAvailSaisons([]); setCircuitAvailHDebut(""); setCircuitAvailHFin("");
-      setCircuitAvailDelai("24h");
-      setCircuitHebergInclus(false); setCircuitHebergType("same");
-      setCircuitHebergEtape(null);
-    }
-    setCircuitAvailNewDate("");
-    setCircuitCoverImg(null); setCircuitFormError("");
-    setEtapeFormOpen(false); resetEtapeForm();
-    setCircuitModalOpen(true);
-  }
-
-  function toMinutes(t: string) { const [h, m] = t.split(":").map(Number); return h * 60 + m; }
-
-  function resetEtapeForm() {
-    setEtapeJour(1);
-    setEtapeDestination(""); setEtapeAddress("");
-    setEtapeLat(null); setEtapeLng(null);
-    setEtapeCategorie("");
-    setEtapeSubtypes([]); setEtapeFields({});
-    setEtapeTitre(""); setEtapeDescCourte(""); setEtapeDescLongue(""); setEtapePrix("");
-    setEtapeLocalPhotos([]); setEtapePhotoCoverIdx(0);
-    setEtapeFormError("");
-    setEtapeEntityImages({}); setEtapeEntityCoverIdx({}); setEtapeEntityExistingImages({});
-    setEtapeSubtypeNbUnites({}); setEtapeSubtypeUnitDetails({});
-    setEtapeActiveSubtypeTab({}); setEtapeSubtypeFormConfig({});
-    setEtapeSubtypeDetails({});
-    setEtapeHeureDebut(""); setEtapeHeureFin("");
-    setEditingEtapeId(null);
-  }
-
-  function openCircuitHebergConfig() {
-    resetEtapeForm();
-    setEtapeJour(-1);
-    setEtapeCategorie('hebergement');
-    if (circuitHebergEtape) {
-      setEditingEtapeId(circuitHebergEtape.id);
-      setEtapeSubtypes(circuitHebergEtape.subtypes);
-      setEtapeTitre(circuitHebergEtape.titre);
-      setEtapeDescCourte(circuitHebergEtape.description_courte);
-      setEtapeDescLongue(circuitHebergEtape.description_longue);
-      setEtapeSubtypeDetails(circuitHebergEtape.fields ?? {});
-      setEtapeSubtypeUnitDetails(circuitHebergEtape.unit_details ?? {});
-      setEtapeSubtypeNbUnites(circuitHebergEtape.nb_unites ?? {});
-      setEtapeSubtypeFormConfig(circuitHebergEtape.form_config ?? {});
-      setEtapeEntityExistingImages(circuitHebergEtape.entity_photos ?? {});
-    }
-    setEtapeFormOpen(true);
-  }
-
-  async function addEtape(keepOpen = false) {
-    const isCircuitHeberg = etapeJour === -1;
-    if (!etapeLat || !etapeLng) { setEtapeFormError("Positionnez la destination sur la carte."); return; }
-    if (!etapeCategorie)              { setEtapeFormError("Choisissez un type d'activité."); return; }
-    if (etapeSubtypes.length === 0)   { setEtapeFormError("Choisissez au moins un sous-type."); return; }
-    if (!etapeTitre.trim())           { setEtapeFormError("Le titre est requis."); return; }
-    if (!isCircuitHeberg) {
-      if (!etapeHeureDebut)             { setEtapeFormError("L'heure de début est requise."); return; }
-      if (!etapeHeureFin)               { setEtapeFormError("L'heure de fin est requise."); return; }
-      if (toMinutes(etapeHeureFin) <= toMinutes(etapeHeureDebut)) {
-        setEtapeFormError("L'heure de fin doit être après l'heure de début."); return;
-      }
-      const newStart = toMinutes(etapeHeureDebut);
-      const newEnd   = toMinutes(etapeHeureFin);
-      const conflict = circuitEtapes.find((e) =>
-        e.jour === etapeJour &&
-        e.id !== editingEtapeId &&
-        e.heure_debut && e.heure_fin &&
-        toMinutes(e.heure_debut) < newEnd &&
-        toMinutes(e.heure_fin)   > newStart
-      );
-      if (conflict) {
-        setEtapeFormError(`Conflit horaire avec "${conflict.titre || conflict.destination}" (${conflict.heure_debut} – ${conflict.heure_fin}).`);
-        return;
-      }
-    }
-    const displayName = etapeDestination.trim() || etapeAddress.split(",")[0].trim();
-    const finalEntityPhotos: Record<string, string[]> = { ...etapeEntityExistingImages };
-    try {
-      for (const [entityKey, imgs] of Object.entries(etapeEntityImages)) {
-        if (imgs.length === 0) continue;
-        const coverI = etapeEntityCoverIdx[entityKey] ?? 0;
-        const urls = await Promise.all(imgs.map((p) => uploadImage(p.file)));
-        const cover = urls[coverI] ?? urls[0];
-        const newOrdered = [cover, ...urls.filter((u) => u !== cover)];
-        const existing = finalEntityPhotos[entityKey] ?? [];
-        finalEntityPhotos[entityKey] = [...existing, ...newOrdered];
-      }
-    } catch { setEtapeFormError("Erreur upload photos."); return; }
-    const allEntityUrls = Object.values(finalEntityPhotos).flat();
-    const newEtape: CircuitEtape = {
-      id: (isCircuitHeberg ? circuitHebergEtape?.id : editingEtapeId) ?? crypto.randomUUID(),
-      jour: etapeJour,
-      heure_debut: isCircuitHeberg ? '' : etapeHeureDebut,
-      heure_fin:   isCircuitHeberg ? '' : etapeHeureFin,
-      destination: displayName,
-      address: etapeAddress,
-      lat: etapeLat,
-      lng: etapeLng,
-      categorie: etapeCategorie,
-      subtypes: etapeSubtypes,
-      titre: etapeTitre.trim(),
-      description_courte: etapeDescCourte.trim(),
-      description_longue: etapeDescLongue.trim(),
-      prix: etapePrix ? Number(etapePrix) : null,
-      photos: allEntityUrls,
-      fields: etapeSubtypeDetails,
-      unit_details: etapeSubtypeUnitDetails,
-      nb_unites: etapeSubtypeNbUnites,
-      form_config: etapeSubtypeFormConfig,
-      entity_photos: finalEntityPhotos,
-    };
-    if (isCircuitHeberg) {
-      setCircuitHebergEtape(newEtape);
-      setEtapeFormOpen(false);
-      resetEtapeForm();
-      return;
-    }
-    if (editingEtapeId) {
-      setCircuitEtapes((prev) => prev.map((e) => e.id === editingEtapeId ? newEtape : e));
-    } else {
-      setCircuitEtapes((prev) => [...prev, newEtape].sort((a, b) => a.jour - b.jour || toMinutes(a.heure_debut || "00:00") - toMinutes(b.heure_debut || "00:00")));
-    }
-    if (keepOpen) {
-      const savedJour = etapeJour;
-      resetEtapeForm();
-      setEtapeJour(savedJour);
-      setEtapeFormOpen(true);
-    } else {
-      setEtapeFormOpen(false);
-      resetEtapeForm();
-    }
-  }
-
-  async function saveCircuit() {
-    if (!circuitTitle.trim()) { setCircuitFormError("Titre requis."); return; }
-    if (circuitEtapes.length === 0) { setCircuitFormError("Configurez au moins un jour."); return; }
-    const missingJours = Array.from({ length: circuitNbJours }, (_, i) => i + 1).filter((j) => !circuitEtapes.find((e) => e.jour === j));
-    if (missingJours.length > 0) { setCircuitFormError(`Jours non configurés : ${missingJours.join(", ")}.`); return; }
-    setCircuitSaving(true);
-    try {
-      let coverUrl = circuitCoverExisting;
-      if (circuitCoverImg) coverUrl = await uploadImage(circuitCoverImg.file);
-      const availability: CircuitAvailability = {
-        mode: circuitAvailMode,
-        ...(circuitAvailMode === 'specific' && { specific_dates: circuitAvailDates }),
-        ...(circuitAvailMode === 'weekly' && { weekdays: circuitAvailWeekdays, avail_start: circuitAvailStart, avail_end: circuitAvailEnd }),
-        ...(circuitAvailMode === 'period' && { avail_start: circuitAvailStart, avail_end: circuitAvailEnd }),
-        ...(circuitAvailMode === 'season' && { saisons: circuitAvailSaisons }),
-        ...(circuitAvailMode === 'on_demand' && { delai_reponse: circuitAvailDelai }),
-        ...(circuitAvailMode !== 'on_demand' && circuitAvailHDebut && { heure_debut: circuitAvailHDebut }),
-        ...(circuitAvailMode !== 'on_demand' && circuitAvailHFin && { heure_fin: circuitAvailHFin }),
-      };
-      const hebergement: CircuitHebergement = {
-        inclus: circuitHebergInclus,
-        ...(circuitHebergInclus && { type: circuitHebergType }),
-        ...(circuitHebergInclus && circuitHebergType === 'same' && circuitHebergEtape && { etape: circuitHebergEtape }),
-      };
-      const body = { title: circuitTitle, description: circuitDescription, nb_jours: circuitNbJours, cover_image: coverUrl, etapes: circuitEtapes, availability, hebergement };
-      if (editingCircuit) {
-        const updated = await apiFetch<Circuit>(`/circuits/${editingCircuit.id}`, {
-          method: "PATCH",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        setCircuits((prev) => prev.map((c) => c.id === updated.id ? { ...updated, created_at: typeof updated.created_at === 'string' ? updated.created_at : new Date(updated.created_at).toISOString() } : c));
-      } else {
-        const created = await apiFetch<Circuit>("/circuits", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        setCircuits((prev) => [{ ...created, created_at: typeof created.created_at === 'string' ? created.created_at : new Date(created.created_at).toISOString() }, ...prev]);
-      }
-      if (circuitCoverImg) URL.revokeObjectURL(circuitCoverImg.preview);
-      setCircuitModalOpen(false);
-    } catch { setCircuitFormError("Erreur lors de la sauvegarde."); }
-    finally { setCircuitSaving(false); }
-  }
 
   async function handleNetUnfollow(userId: string) {
     try {
@@ -981,6 +534,10 @@ export default function ProviderProfilePage() {
   // ── Publish modal ──────────────────────────────────────────────────────────
 
   function openModal() {
+    setForm({ title: "", offer_type: "", venue_id: "", description: "", price: "", duration: "", region: "", inclusions: "", meeting_point: "", min_group_size: "", max_group_size: "", min_age: "", cancellation_policy: "" });
+    setTitleError(""); setPublishError("");
+    setPublishImages([]); setPublishCoverIdx(0);
+    setShowPublishMap(false); setPublishMapLat(null); setPublishMapLng(null);
     setModalOpen(true);
   }
 
@@ -989,26 +546,6 @@ export default function ProviderProfilePage() {
     setPublishCoverIdx(0);
     setModalOpen(false);
     setTitleError(""); setPublishError("");
-    setOfferActivity(null); setOfferSubtypes([]); setOfferMode("single");
-    setSubtypeDetails({}); setConstraintError("");
-    setAvailabilityMode("specific"); setAvailabilityStart(""); setAvailabilityEnd("");
-    setAvailableWeekdays([]); setSpecificDates([]); setNewSpecificDate("");
-    setAvailHeureDebut(""); setAvailHeureFin("");
-    setAvailDelaiReponse("24h"); setAvailMessageAccueil(""); setAvailSaisons([]);
-    setOfferConfirmMode("24h"); setOfferDeadlineHours("24"); setOfferDepositPct("30");
-    setOfferDescCourte(""); setOfferLangue("");
-    setPrixGroupe(""); setNbPersonnesGroupe(""); setPrixEnfant(""); setAgeMaxEnfant("");
-    setSuppPrivatisation(""); setAcompteRequis(false); setTypeAcompte("pourcentage"); setValeurAcompte("");
-    setCancellationPolicy("moderate"); setCancellationDesc("");
-    setOfferNbUnites(1); setUnitDetailsArray([{}]); setActiveUnitTab(0); setSubtypePrices({});
-    setSubtypeNbUnites({}); setSubtypeUnitDetails({}); setActiveSubtypeTab({});
-    setSubtypeFormConfig({});
-    setEntityImages((prev) => { Object.values(prev).flat().forEach((img) => URL.revokeObjectURL(img.preview)); return {}; });
-    setEntityCoverIdx({});
-    setEntityExistingImages({});
-    setForm({ title: "", offer_type: "", description: "", price: "", duration: "", region: "", inclusions: "", meeting_point: "", min_group_size: "", max_group_size: "", min_age: "", cancellation_policy: "" });
-    setPublishMapLat(null); setPublishMapLng(null); setShowPublishMap(false);
-    setOfferEditMode(false); setOfferEditId(""); setPublishExistingImages([]);
   }
 
   async function handlePublish(e: React.SyntheticEvent<HTMLFormElement>) {
@@ -1016,142 +553,46 @@ export default function ProviderProfilePage() {
     if (!form.title.trim()) { setTitleError("Le titre est obligatoire."); return; }
     setPublishError(""); setPublishing(true);
     try {
-      const isHebergementOffer = offerActivity?.category === 'hebergement';
-      const combinedDetails: Record<string, any> = {};
+      const created = await apiFetch<Offer>("/offers", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          title:       form.title.trim(),
+          offer_type:  form.offer_type  || undefined,
+          venue_id:  form.venue_id  || undefined,
+          description: form.description.trim() || undefined,
+          price:       form.price ? Number(form.price) : undefined,
+          duration:    form.duration.trim() || undefined,
+          region:              form.region.trim()              || undefined,
+          inclusions:          form.inclusions.trim()          || undefined,
+          meeting_point:       form.meeting_point.trim()       || undefined,
+          min_group_size:      form.min_group_size ? Number(form.min_group_size) : undefined,
+          max_group_size:      form.max_group_size ? Number(form.max_group_size) : undefined,
+          min_age:             form.min_age        ? Number(form.min_age)        : undefined,
+          cancellation_policy: form.cancellation_policy.trim() || undefined,
+        }),
+      });
 
-      if (isHebergementOffer && offerSubtypes.length > 0) {
-        combinedDetails.subtypes_units = Object.fromEntries(
-          offerSubtypes.map((st) => [st, subtypeUnitDetails[st] ?? [{}]])
-        );
-        if (Object.keys(subtypeFormConfig).length > 0) combinedDetails.subtypes_config = subtypeFormConfig;
-        if (Object.keys(subtypePrices).length > 0) combinedDetails.subtypes_pricing = subtypePrices;
-      } else {
-        Object.values(subtypeDetails).forEach((d) => Object.assign(combinedDetails, d));
-      }
-      if (availabilityMode === "weekly")   combinedDetails.available_weekdays = availableWeekdays;
-      if (availabilityMode === "specific") combinedDetails.specific_dates = specificDates;
-      if (availabilityMode === "season")   combinedDetails.available_saisons = availSaisons;
-      if (availHeureDebut) combinedDetails.heure_debut = availHeureDebut;
-      if (availHeureFin)   combinedDetails.heure_fin   = availHeureFin;
-      if (availabilityMode === "on_demand") {
-        combinedDetails.delai_reponse   = availDelaiReponse;
-        combinedDetails.message_accueil = availMessageAccueil;
-      }
-      if (form.description.trim()) combinedDetails.description_longue = form.description.trim();
+      let finalOffer: Offer = created;
 
-      const payload = {
-        activity_id:                 offerActivity?.id                         || undefined,
-        offer_subtypes:              offerSubtypes.length > 0 ? offerSubtypes  : undefined,
-        offer_subtype:               offerSubtypes[0]                          || undefined,
-        offer_mode:                  offerSubtypes.length > 1 ? offerMode      : "single",
-        availability_mode:           availabilityMode,
-        availability_start:          availabilityMode === "period" ? availabilityStart : undefined,
-        availability_end:            availabilityMode === "period" ? availabilityEnd   : undefined,
-        confirmation_mode:           offerConfirmMode,
-        confirmation_deadline_hours: ["24h","48h"].includes(offerConfirmMode) ? Number(offerDeadlineHours) : undefined,
-        deposit_percentage:          offerConfirmMode === "deposit" ? Number(offerDepositPct) : undefined,
-        details: Object.keys(combinedDetails).length > 0 ? combinedDetails : undefined,
-        title:               form.title.trim(),
-        offer_type:          form.offer_type || offerActivity?.category || undefined,
-        description:         offerDescCourte.trim() || undefined,
-        langue_offre:        offerLangue || undefined,
-        price:               form.price  ? Number(form.price)  : undefined,
-        duration:            form.duration.trim()      || undefined,
-        region:              form.region.trim()        || undefined,
-        inclusions:          form.inclusions.trim()    || undefined,
-        meeting_point:       form.meeting_point.trim() || undefined,
-        meeting_lat:         publishMapLat              ?? undefined,
-        meeting_lng:         publishMapLng              ?? undefined,
-        min_group_size:      form.min_group_size ? Number(form.min_group_size) : undefined,
-        max_group_size:      form.max_group_size ? Number(form.max_group_size) : undefined,
-        min_age:             form.min_age        ? Number(form.min_age)        : undefined,
-        cancellation_policy: cancellationPolicy !== "custom"
-          ? cancellationPolicy
-          : (cancellationDesc.trim() || undefined),
-      };
-
-      let finalOffer: Offer;
-
-      if (offerEditMode && offerEditId) {
-        // ── MODE ÉDITION : PATCH sur l'offre existante ──────────────────────
-        finalOffer = await apiFetch<Offer>(`/offers/${offerEditId}`, {
-          method: "PATCH",
-          headers: { Authorization: `Bearer ${token}` },
-          body: JSON.stringify(payload),
-        });
-      } else {
-        // ── MODE CRÉATION : POST nouvelle offre ─────────────────────────────
-        finalOffer = await apiFetch<Offer>("/offers", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ organization_id: org?.id || undefined, ...payload }),
-        });
-      }
-
-      // ── Images ─────────────────────────────────────────────────────────────
-      try {
-        // On commence avec les images existantes déjà uploadées (mode édition)
-        let mainImages: string[] = [...publishExistingImages];
-        const detailsPhotos: Record<string, string[]> = {};
-
-        // Photos générales (offres sans sous-types)
-        if (publishImages.length > 0) {
+      if (publishImages.length > 0) {
+        try {
           const urls = await Promise.all(publishImages.map((img) => uploadImage(img.file)));
+          // Cover first so images[0] = cover after reload
           const cover = urls[publishCoverIdx] ?? urls[0];
-          const newOrdered = [cover, ...urls.filter((u) => u !== cover)];
-          mainImages = [...newOrdered, ...mainImages.filter((u) => !newOrdered.includes(u))];
-        }
-        // Photos par entité : combiner existantes + nouvelles, dans details.photos uniquement
-        const allEntityKeys = new Set([...Object.keys(entityExistingImages), ...Object.keys(entityImages)]);
-        for (const key of allEntityKeys) {
-          const existingUrls = entityExistingImages[key] ?? [];
-          const newImgs = entityImages[key] ?? [];
-          let newUploaded: string[] = [];
-          if (newImgs.length > 0) {
-            const urls = await Promise.all(newImgs.map((img) => uploadImage(img.file)));
-            const coverI = entityCoverIdx[key] ?? 0;
-            const cover = urls[coverI] ?? urls[0];
-            newUploaded = [cover, ...urls.filter((u) => u !== cover)];
-          }
-          const combined = [...existingUrls, ...newUploaded];
-          if (combined.length > 0) detailsPhotos[key] = combined;
-        }
-
-        const hasPhotos = mainImages.length > 0 || Object.keys(detailsPhotos).length > 0;
-        if (hasPhotos) {
-          const patchBody: Record<string, any> = {};
-          if (mainImages.length > 0) patchBody.images = mainImages;
-          if (Object.keys(detailsPhotos).length > 0) {
-            patchBody.details = { ...combinedDetails, photos: detailsPhotos };
-          }
-          const patchedOffer = await apiFetch<Offer>(`/offers/${finalOffer.id}`, {
+          const ordered = [cover, ...urls.filter((u) => u !== cover)];
+          await apiFetch<Offer>(`/offers/${created.id}`, {
             method: "PATCH",
             headers: { Authorization: `Bearer ${token}` },
-            body: JSON.stringify(patchBody),
+            body: JSON.stringify({ images: ordered }),
           });
-          const validImgs = patchedOffer.images?.filter((u) => u.startsWith("http")) ?? [];
-          finalOffer = { ...patchedOffer, cover_image: patchedOffer.cover_image ?? validImgs[0] ?? null };
-        }
-      } catch { /* offer saved without images */ }
-
-      // Toujours dériver cover_image depuis images[0] si absent
-      const validImgsFinal = finalOffer.images?.filter((u) => u.startsWith("http")) ?? [];
-      finalOffer = { ...finalOffer, cover_image: finalOffer.cover_image ?? validImgsFinal[0] ?? null };
-
-      const wasEditMode = offerEditMode;
-      const savedId     = finalOffer.id;
-
-      if (wasEditMode) {
-        setOffers((prev) => prev.map((o) => o.id === savedId ? finalOffer : o));
-      } else {
-        setOffers((prev) => [finalOffer, ...prev]);
+          finalOffer = { ...finalOffer, images: ordered, cover_image: cover };
+        } catch { /* upload failed — offer saved without images */ }
       }
 
+      setOffers((prev) => [finalOffer, ...prev]);
       closeModal();
-
-      if (!wasEditMode) {
-        setOqOfferId(savedId); setOqStep(0); setOqAnswers({}); setOqOpen(true);
-      }
+      setOqOfferId(finalOffer.id); setOqStep(0); setOqAnswers({}); setOqOpen(true);
     } catch (err: any) {
       setPublishError(err.message || "Erreur lors de la publication.");
     } finally {
@@ -1167,6 +608,7 @@ export default function ProviderProfilePage() {
     setEditForm({
       title:               offer.title,
       offer_type:          offer.offer_type          ?? "",
+      venue_id:          offer.venue_id          ?? "",
       description:         offer.description         ?? "",
       price:               offer.price !== null ? String(offer.price) : "",
       duration:            offer.duration            ?? "",
@@ -1191,159 +633,6 @@ export default function ProviderProfilePage() {
     setViewOffer(null);
     setEditTitleError(""); setEditError("");
     setShowEditMap(false); setEditMapLat(null); setEditMapLng(null);
-  }
-
-  // Ouvre le modal de publication pré-rempli avec les données d'une offre existante
-  function openPublishModalForEdit(offer: Offer) {
-    closeEditModal();
-
-    const details = (offer.details ?? {}) as Record<string, any>;
-
-    // 1 – Champs de base du formulaire
-    setOfferDescCourte(offer.description ?? "");
-    setForm({
-      title:               offer.title,
-      offer_type:          offer.offer_type          ?? "",
-      description:         (details.description_longue as string) ?? "",
-      price:               offer.price   !== null && offer.price   !== undefined ? String(offer.price)   : "",
-      duration:            offer.duration            ?? "",
-      region:              offer.region              ?? "",
-      inclusions:          offer.inclusions          ?? "",
-      meeting_point:       offer.meeting_point       ?? "",
-      min_group_size:      offer.min_group_size !== null && offer.min_group_size !== undefined ? String(offer.min_group_size) : "",
-      max_group_size:      offer.max_group_size !== null && offer.max_group_size !== undefined ? String(offer.max_group_size) : "",
-      min_age:             offer.min_age       !== null && offer.min_age       !== undefined ? String(offer.min_age)       : "",
-      cancellation_policy: offer.cancellation_policy ?? "",
-    });
-
-    // 2 – Activité liée : on cherche dans orgActivities par activity_id
-    if (offer.activity_id) {
-      const found = orgActivities.find((a) => a.id === offer.activity_id) ?? null;
-      if (found) {
-        setOfferActivity(found);
-      } else if (offer.offer_type) {
-        // Activité non trouvée → activité synthétique minimale pour que les checks de catégorie fonctionnent
-        setOfferActivity({
-          id: "", provider_id: "", organization_id: "",
-          level: "primary", category: offer.offer_type,
-          subtypes: null, years_experience: null,
-          fields: {}, photos: {}, certifications: [],
-        });
-      }
-    } else if (offer.offer_type) {
-      setOfferActivity({
-        id: "", provider_id: "", organization_id: "",
-        level: "primary", category: offer.offer_type,
-        subtypes: null, years_experience: null,
-        fields: {}, photos: {}, certifications: [],
-      });
-    }
-
-    // 3 – Sous-types & mode
-    const subtypes = offer.offer_subtypes ?? (offer.offer_subtype ? [offer.offer_subtype] : []);
-    setOfferSubtypes(subtypes);
-    setOfferMode((offer.offer_mode ?? "single") as "single" | "variant" | "package");
-
-    // 4 – Données par unité (hébergement)
-    if (details.subtypes_units) {
-      const unitsData = details.subtypes_units as Record<string, Record<string, any>[]>;
-      setSubtypeUnitDetails(unitsData);
-      setSubtypeNbUnites(
-        Object.fromEntries(Object.entries(unitsData).map(([k, v]) => [k, Array.isArray(v) ? v.length : 1]))
-      );
-    }
-
-    // 5 – Config par sous-type (disponibilité + tarification hébergement)
-    if (details.subtypes_config) {
-      setSubtypeFormConfig(details.subtypes_config as Record<string, Record<string, any>>);
-    }
-
-    // 6 – Tarifs par sous-type
-    if (details.subtypes_pricing) {
-      setSubtypePrices(
-        Object.fromEntries(
-          Object.entries(details.subtypes_pricing as Record<string, number>).map(([k, v]) => [k, String(v)])
-        )
-      );
-    }
-
-    // 7 – Champs de sous-type (hors hébergement)
-    if (!details.subtypes_units && subtypes.length > 0) {
-      const stDetails: Record<string, Record<string, any>> = {};
-      const meta = ["specific_dates","available_weekdays","available_saisons","heure_debut","heure_fin","delai_reponse","message_accueil","photos","subtypes_pricing"];
-      const fieldData: Record<string, any> = Object.fromEntries(
-        Object.entries(details).filter(([k]) => !meta.includes(k))
-      );
-      subtypes.forEach((st) => { stDetails[st] = fieldData; });
-      setSubtypeDetails(stDetails);
-    }
-
-    // 8 – Disponibilité
-    setAvailabilityMode(offer.availability_mode ?? "specific");
-    setAvailabilityStart(offer.availability_start ?? "");
-    setAvailabilityEnd(offer.availability_end ?? "");
-    setAvailableWeekdays((details.available_weekdays as number[]) ?? []);
-    setSpecificDates((details.specific_dates as string[]) ?? []);
-    setAvailSaisons((details.available_saisons as string[]) ?? []);
-    setAvailHeureDebut((details.heure_debut as string) ?? "");
-    setAvailHeureFin((details.heure_fin as string) ?? "");
-    setAvailDelaiReponse((details.delai_reponse as string) ?? "24h");
-    setAvailMessageAccueil((details.message_accueil as string) ?? "");
-
-    // 9 – Mode de confirmation
-    setOfferConfirmMode(offer.confirmation_mode ?? "24h");
-    setOfferDeadlineHours(offer.confirmation_deadline_hours != null ? String(offer.confirmation_deadline_hours) : "24");
-    setOfferDepositPct(offer.deposit_percentage != null ? String(offer.deposit_percentage) : "30");
-
-    // 11 – Tarification extras (stockés dans details)
-    setPrixGroupe(details.prix_par_groupe        ? String(details.prix_par_groupe)        : "");
-    setNbPersonnesGroupe(details.nb_personnes_groupe ? String(details.nb_personnes_groupe) : "");
-    setPrixEnfant(details.prix_enfant            ? String(details.prix_enfant)            : "");
-    setAgeMaxEnfant(details.age_max_enfant       ? String(details.age_max_enfant)         : "");
-    setSuppPrivatisation(details.supplement_privatisation ? String(details.supplement_privatisation) : "");
-    setAcompteRequis(!!(details.acompte_requis));
-    setTypeAcompte((details.type_acompte as string) ?? "pourcentage");
-    setValeurAcompte(details.valeur_acompte      ? String(details.valeur_acompte)         : "");
-
-    // 12 – Politique d'annulation
-    const policy = offer.cancellation_policy ?? "moderate";
-    if (["flexible", "moderate", "strict"].includes(policy)) {
-      setCancellationPolicy(policy);
-      setCancellationDesc("");
-    } else {
-      setCancellationPolicy("custom");
-      setCancellationDesc(policy);
-    }
-
-    // 13 – Carte
-    setPublishMapLat(offer.meeting_lat ?? null);
-    setPublishMapLng(offer.meeting_lng ?? null);
-    setShowPublishMap(!!(offer.meeting_lat && offer.meeting_lng));
-
-    // 14 – Images existantes (déjà uploadées sur Cloudinary)
-    const detailsPhotosExisting = (details.photos ?? {}) as Record<string, string[]>;
-    // Normaliser les clés hébergement : ancien format 'suite' → 'suite_unit_0'
-    const isHeberg = !!(details.subtypes_units);
-    const normalizedEntityPhotos: Record<string, string[]> = {};
-    for (const [k, v] of Object.entries(detailsPhotosExisting)) {
-      if (isHeberg && !k.includes('_unit_')) {
-        normalizedEntityPhotos[`${k}_unit_0`] = v;
-      } else {
-        normalizedEntityPhotos[k] = v;
-      }
-    }
-    const entityPhotoSet = new Set<string>(Object.values(normalizedEntityPhotos).flat());
-    // Cover = images de l'offre qui ne sont pas des photos d'entité
-    const coverImgs = (offer.images ?? []).filter((url) => url.startsWith("http") && !entityPhotoSet.has(url));
-    setPublishExistingImages(coverImgs);
-    setEntityExistingImages(normalizedEntityPhotos);
-    setPublishImages([]);
-    setPublishCoverIdx(0);
-
-    // 15 – Activer le mode édition et ouvrir le modal
-    setOfferEditMode(true);
-    setOfferEditId(offer.id);
-    setModalOpen(true);
   }
 
   async function handleDeleteOffer() {
@@ -1373,22 +662,22 @@ export default function ProviderProfilePage() {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          title:               editForm.title.trim(),
-          offer_type:          editForm.offer_type          || undefined,
-          description:         editForm.description.trim()  || undefined,
-          price:               editForm.price ? Number(editForm.price) : undefined,
-          duration:            editForm.duration.trim()      || undefined,
-          region:              editForm.region.trim()        || undefined,
-          inclusions:          editForm.inclusions.trim()    || undefined,
-          meeting_point:       editForm.meeting_point.trim() || undefined,
+          title:       editForm.title.trim(),
+          offer_type:  editForm.offer_type  || undefined,
+          description: editForm.description.trim() || undefined,
+          price:       editForm.price ? Number(editForm.price) : undefined,
+          duration:    editForm.duration.trim() || undefined,
+          region:              editForm.region.trim()              || undefined,
+          inclusions:          editForm.inclusions.trim()          || undefined,
+          meeting_point:       editForm.meeting_point.trim()       || undefined,
           min_group_size:      editForm.min_group_size ? Number(editForm.min_group_size) : undefined,
           max_group_size:      editForm.max_group_size ? Number(editForm.max_group_size) : undefined,
           min_age:             editForm.min_age        ? Number(editForm.min_age)        : undefined,
           cancellation_policy: editForm.cancellation_policy.trim() || undefined,
-          status:              editForm.status,
-          details:             Object.keys(editDetails).length > 0 ? editDetails : undefined,
+          status:      editForm.status,
         }),
       });
+      // Upload new images; keep only valid http URLs (filter out expired blob:// URLs)
       const finalImageSrcs = (await Promise.all(
         editImages.map(async (img) => {
           if (img.file) {
@@ -1397,11 +686,13 @@ export default function ProviderProfilePage() {
           return img.src.startsWith("http") ? img.src : null;
         })
       )).filter((url): url is string => url !== null);
+      // Reorder so the chosen cover is always first (cover = images[0] after reload)
       const coverSrc = finalImageSrcs[editCoverIdx] ?? finalImageSrcs[0] ?? null;
       const orderedImages = coverSrc
         ? [coverSrc, ...finalImageSrcs.filter((_, i) => i !== (finalImageSrcs.indexOf(coverSrc)))]
         : finalImageSrcs;
       const newCover = orderedImages[0] ?? null;
+      // Persist image list to DB
       await apiFetch<Offer>(`/offers/${editOfferId}`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}` },
@@ -1411,7 +702,6 @@ export default function ProviderProfilePage() {
         ...updated,
         images:      finalImageSrcs.length ? finalImageSrcs : null,
         cover_image: newCover,
-        details:     Object.keys(editDetails).length > 0 ? editDetails : updated.details,
       };
       setOffers((prev) => prev.map((o) => (o.id === editOfferId ? finalUpdated : o)));
       setViewOffer(finalUpdated);
@@ -1423,7 +713,33 @@ export default function ProviderProfilePage() {
     }
   }
 
-  // ── Offer sustainability questionnaire handlers ────────────────────────────
+  // ── Sustainability questionnaire handlers ──────────────────────────────────
+
+  const qScore = Object.values(qAnswers).reduce((sum, v) => sum + v, 0);
+
+  const qCurrentStep = SUSTAINABILITY_STEPS[qStep];
+
+  const qStepAnswered = qCurrentStep
+    ? qCurrentStep.questions.every((q) => q.id in qAnswers)
+    : true;
+
+  async function submitQuestionnaire() {
+    setQSaving(true);
+    try {
+      const updated = await apiFetch<Venue>(`/provider/venues/${qProjectId}/sustainability`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ score: qScore }),
+      });
+      setProfile((prev) =>
+        prev ? { ...prev, projects: prev.venues.map((p) => p.id === qProjectId ? { ...p, sustainability_score: updated.sustainability_score } : p) } : prev
+      );
+    } catch {
+      // silent — score shown, user closes manually
+    } finally {
+      setQSaving(false);
+    }
+  }
 
   async function submitOfferQuestionnaire() {
     const score = Object.values(oqAnswers).reduce((s, v) => s + v, 0);
@@ -1436,180 +752,185 @@ export default function ProviderProfilePage() {
       });
       setOffers((prev) => prev.map((o) => o.id === oqOfferId ? { ...o, sustainability_score: updated.sustainability_score } : o));
       if (viewOffer?.id === oqOfferId) setViewOffer((v) => v ? { ...v, sustainability_score: updated.sustainability_score } : v);
-    } catch {}
-    finally {
+    } catch {
+      // silent — score shown, user closes manually
+    } finally {
       setOqSaving(false);
     }
   }
 
-  // ── Activity CRUD handlers ────────────────────────────────────────────────
+  // ── Project creation modal ─────────────────────────────────────────────────
 
-  function openActModal(level: "primary" | "secondary" = "secondary") {
-    setActSelCategory(""); setActSelSubtypes([]); setActFieldValues({}); setActYearsExp("");
-    setActFormError(""); setActImages([]); setActCoverIdx(0);
-    setActModalOpen(true);
+  const EMPTY_VENUE_FORM = { name: "", description: "", region: "", address: "", website: "", phone: "", venue_type: [] as string[], eco_labels: [] as string[], services: [] as string[], opening_hours: "", facebook: "", instagram: "" };
+
+  function openProjModal() {
+    setVenueForm(EMPTY_VENUE_FORM);
+    setProjFieldErrors({}); setProjError("");
+    setProjImages((prev) => { prev.forEach((i) => URL.revokeObjectURL(i.preview)); return []; });
+    setProjCoverIdx(0);
+    setShowProjCreateMap(false); setProjCreateMapLat(null); setProjCreateMapLng(null);
+    setProjModalOpen(true);
   }
 
-  async function handleCreateActivity(e: React.SyntheticEvent<HTMLFormElement>) {
+  function closeProjModal() {
+    setProjModalOpen(false);
+    setProjFieldErrors({}); setProjError("");
+    setProjImages((prev) => { prev.forEach((i) => URL.revokeObjectURL(i.preview)); return []; });
+    setProjCoverIdx(0);
+    setShowProjCreateMap(false); setProjCreateMapLat(null); setProjCreateMapLng(null);
+  }
+
+  function validateProjForm(): boolean {
+    const errors: typeof projFieldErrors = {};
+    if (!venueForm.name.trim()) errors.name = "Le nom de l'établissement est obligatoire.";
+    else if (venueForm.name.trim().length < 2) errors.name = "Le nom doit contenir au moins 2 caractères.";
+    if (venueForm.phone && !PHONE_RE.test(venueForm.phone.replace(/\s/g, "")))
+      errors.phone = "Numéro de téléphone invalide.";
+    if (venueForm.website && !URL_RE.test(venueForm.website))
+      errors.website = "L'URL doit commencer par http:// ou https://";
+    if (venueForm.region && venueForm.region.trim().length === 1)
+      errors.region = "La région doit contenir au moins 2 caractères.";
+    setProjFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  }
+
+  async function handleCreateProject(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!actSelCategory) { setActFormError("Choisissez un type d'activité."); return; }
-    setActFormError(""); setActPublishing(true);
+    if (!validateProjForm()) return;
+    setProjError(""); setProjSaving(true);
     try {
-      const created = await apiFetch<OrgActivity>("/provider-activities", {
+      // Upload all images, put cover first
+      let uploadedPhotos: string[] = [];
+      if (projImages.length > 0) {
+        const results = await Promise.all(projImages.map((img) => uploadImage(img.file).catch(() => null)));
+        const valid = results.filter((u): u is string => u !== null);
+        const cover = valid[projCoverIdx] ?? valid[0];
+        uploadedPhotos = cover ? [cover, ...valid.filter((u) => u !== cover)] : valid;
+      }
+      const created = await apiFetch<Venue>("/provider/venues", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          organization_id:  org?.id,
-          level:            "secondary",
-          category:         actSelCategory,
-          subtypes:         actSelSubtypes.length > 0 ? actSelSubtypes : undefined,
-          years_experience: actYearsExp ? Number(actYearsExp) : undefined,
-          fields:           Object.keys(actFieldValues).length > 0 ? actFieldValues : undefined,
+          name:          venueForm.name.trim(),
+          description:   venueForm.description.trim() || undefined,
+          region:        venueForm.region.trim() || undefined,
+          address:       venueForm.address.trim() || undefined,
+          website:       venueForm.website.trim() || undefined,
+          phone:         venueForm.phone.trim() || undefined,
+          venue_type:  venueForm.venue_type.length > 0 ? venueForm.venue_type : undefined,
+          eco_labels:    venueForm.eco_labels.length > 0 ? venueForm.eco_labels : undefined,
+          services:      venueForm.services.length > 0 ? venueForm.services : undefined,
+          photos:        uploadedPhotos.length > 0 ? uploadedPhotos : undefined,
+          lat:           projCreateMapLat ?? undefined,
+          lng:           projCreateMapLng ?? undefined,
+          opening_hours: venueForm.opening_hours.trim() || undefined,
+          facebook:      venueForm.facebook.trim() || undefined,
+          instagram:     venueForm.instagram.trim() || undefined,
         }),
       });
-      let finalActivity: OrgActivity = created;
-      if (actImages.length > 0) {
-        try {
-          const urls = await Promise.all(actImages.map((img) => uploadImage(img.file)));
-          const coverUrl = urls[actCoverIdx] ?? urls[0];
-          const subtypeKey = actSelSubtypes[0] ?? actSelCategory;
-          const patchedAct = await apiFetch<OrgActivity>(`/provider-activities/${created.id}`, {
-            method: "PATCH",
-            headers: { Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ photos: { [subtypeKey]: urls }, photo: coverUrl }),
-          });
-          finalActivity = patchedAct;
-        } catch {}
-      }
-      setOrgActivities((prev) => [finalActivity, ...prev]);
-      setActImages((prev) => { prev.forEach((i) => URL.revokeObjectURL(i.preview)); return []; });
-      setActModalOpen(false);
+      setProfile((prev) => prev ? { ...prev, venues: [...prev.venues, created] } : prev);
+      closeProjModal();
+      // Open sustainability questionnaire for the newly created project
+      setQProjectId(created.id);
+      setQStep(0);
+      setQAnswers({});
+      setQOpen(true);
     } catch (err: any) {
-      setActFormError(err.message || "Erreur lors de la création.");
+      setProjError(err.message || "Erreur lors de la création du projet.");
     } finally {
-      setActPublishing(false);
+      setProjSaving(false);
     }
   }
 
-  function openActivityDetail(activity: Activity) {
-    setViewActivity(activity);
-    setActEditForm({ title: activity.title, category: activity.category, level: activity.level, description: activity.description ?? "", region: activity.region ?? "", address: activity.address ?? "", website: activity.website ?? "", phone: activity.phone ?? "" });
-    setActEditError(""); setActDetailMode("view");
-    const imgs = (activity.photos?.length ? activity.photos : activity.photo ? [activity.photo] : []).filter((s) => s.startsWith("http"));
-    setActEditImages(imgs.map((src) => ({ src })));
-    setActEditCoverIdx(0);
-    setActDetailOpen(true);
+  // ── Project detail / edit / delete ────────────────────────────────────────
+
+  function openProjDetail(proj: Venue) {
+    setViewVenue(proj);
+    setVenueEditForm({
+      name: proj.name, description: proj.description ?? "", region: proj.region ?? "",
+      address: proj.address ?? "", website: proj.website ?? "", phone: proj.phone ?? "",
+      venue_type: proj.venue_type ?? [], eco_labels: proj.eco_labels ?? [],
+      services: proj.services ?? [],
+      opening_hours: proj.opening_hours ?? "", facebook: proj.facebook ?? "", instagram: proj.instagram ?? "",
+    });
+    const imgs = (proj.photos?.length ? proj.photos : proj.photo ? [proj.photo] : [])
+      .filter((s) => s.startsWith("http"));
+    setProjEditImages(imgs.map((src) => ({ src })));
+    setProjEditCoverIdx(0);
+    setProjEditMapLat(proj.lat ?? null);
+    setProjEditMapLng(proj.lng ?? null);
+    setShowProjEditMap(false);
+    setProjEditError("");
+    setProjDetailMode("view");
+    setProjSliderIdx(0);
+    setProjDetailOpen(true);
   }
 
-  async function handleDeleteActivity() {
-    if (!viewActivity) return;
-    if (!confirm(`Supprimer l'activité "${viewActivity.title}" ? Cette action est irréversible.`)) return;
-    setActDeleting(true);
-    try {
-      await apiFetch(`/provider-activities/${viewActivity.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-      setActivities((prev) => prev.filter((a) => a.id !== viewActivity.id));
-      setActDetailOpen(false);
-    } catch { alert("Erreur lors de la suppression."); }
-    finally { setActDeleting(false); }
+  function closeProjDetail() {
+    setProjDetailOpen(false);
+    setViewVenue(null);
+    setProjDetailMode("view");
+    setProjSliderIdx(0);
+    setProjEditError("");
   }
 
-  async function handleSaveActivity(e: React.SyntheticEvent<HTMLFormElement>) {
+  async function handleSaveProject(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!actEditForm.title.trim()) { setActEditError("Le titre est obligatoire."); return; }
-    setActEditError(""); setActEditSaving(true);
+    if (!venueEditForm.name.trim()) { setProjEditError("Le nom est obligatoire."); return; }
+    setProjEditError(""); setProjEditSaving(true);
     try {
-      const updated = await apiFetch<Activity>(`/provider-activities/${viewActivity!.id}`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          title:       actEditForm.title.trim(),
-          category:    actEditForm.category    || undefined,
-          level:       actEditForm.level,
-          description: actEditForm.description.trim() || undefined,
-          region:      actEditForm.region.trim()       || undefined,
-          address:     actEditForm.address.trim()      || undefined,
-          website:     actEditForm.website.trim()      || undefined,
-          phone:       actEditForm.phone.trim()        || undefined,
-        }),
-      });
-      const finalImgSrcs = (await Promise.all(
-        actEditImages.map(async (img) => {
+      const finalImgs = (await Promise.all(
+        projEditImages.map(async (img) => {
           if (img.file) { try { return await uploadImage(img.file); } catch { return null; } }
           return img.src.startsWith("http") ? img.src : null;
         })
       )).filter((u): u is string => u !== null);
-      const cover = finalImgSrcs[actEditCoverIdx] ?? finalImgSrcs[0] ?? null;
-      if (finalImgSrcs.length) {
-        await apiFetch(`/provider-activities/${viewActivity!.id}`, {
-          method: "PATCH",
-          headers: { Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ photos: finalImgSrcs, photo: cover }),
-        }).catch(() => {});
-      }
-      const finalAct: Activity = { ...updated, photos: finalImgSrcs.length ? finalImgSrcs : null, photo: cover };
-      setActivities((prev) => prev.map((a) => a.id === viewActivity!.id ? finalAct : a));
-      setViewActivity(finalAct);
-      setActDetailMode("view");
+      const cover = finalImgs[projEditCoverIdx] ?? finalImgs[0];
+      const ordered = cover ? [cover, ...finalImgs.filter((u) => u !== cover)] : finalImgs;
+      const updated = await apiFetch<Venue>(`/provider/venues/${viewVenue!.id}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          name: venueEditForm.name.trim(),
+          description: venueEditForm.description.trim() || undefined,
+          region: venueEditForm.region.trim() || undefined,
+          address: venueEditForm.address.trim() || undefined,
+          website: venueEditForm.website.trim() || undefined,
+          phone: venueEditForm.phone.trim() || undefined,
+          venue_type: venueEditForm.venue_type,
+          eco_labels: venueEditForm.eco_labels,
+          services: venueEditForm.services,
+          lat: projEditMapLat ?? undefined,
+          lng: projEditMapLng ?? undefined,
+          opening_hours: venueEditForm.opening_hours.trim() || undefined,
+          facebook: venueEditForm.facebook.trim() || undefined,
+          instagram: venueEditForm.instagram.trim() || undefined,
+          photos: ordered.length ? ordered : [],
+        }),
+      });
+      const withPhotos = { ...updated, photos: ordered.length ? ordered : null, photo: ordered[0] ?? null };
+      setProfile((prev) => prev ? { ...prev, projects: prev.venues.map((p) => p.id === viewVenue!.id ? withPhotos : p) } : prev);
+      setViewVenue(withPhotos);
+      setProjDetailMode("view");
     } catch (err: any) {
-      setActEditError(err.message || "Erreur lors de la sauvegarde.");
+      setProjEditError(err.message || "Erreur lors de la sauvegarde.");
     } finally {
-      setActEditSaving(false);
+      setProjEditSaving(false);
     }
   }
 
-  async function submitActivityQuestionnaire() {
-    const score = Object.values(aqAnswers).reduce((s, v) => s + v, 0);
-    setAqSaving(true);
+  async function handleDeleteProject() {
+    if (!viewVenue) return;
+    if (!confirm(`Supprimer le projet "${viewVenue.name}" ? Cette action est irréversible.`)) return;
+    setProjDeleting(true);
     try {
-      const updated = await apiFetch<Activity>(`/provider-activities/${aqActId}/sustainability`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ score }),
-      });
-      setActivities((prev) => prev.map((a) => a.id === aqActId ? { ...a, sustainability_score: updated.sustainability_score } : a));
-      if (viewActivity?.id === aqActId) setViewActivity((v) => v ? { ...v, sustainability_score: updated.sustainability_score } : v);
-    } catch {}
-    finally { setAqSaving(false); }
-  }
-
-  // ── Activity type detail / edit modal handlers ────────────────────────────
-
-  function openActTypeModal(value: string, level: "primary" | "secondary") {
-    const meta = findProviderTypeMeta(value);
-    setActTypeCurrent({ value, level });
-    setActTypeEditCategory(meta.categoryValue);
-    setActTypeEditSubtype(value);
-    setActTypeEditDynFields({});
-    setActTypeSaveError("");
-    setActTypeMode("view");
-    setActTypeOpen(true);
-  }
-
-  async function saveActivityType() {
-    if (!profile || !actTypeCurrent) return;
-    setActTypeSaving(true);
-    setActTypeSaveError("");
-    try {
-      const newValue = actTypeEditSubtype || actTypeEditCategory;
-      let body: Record<string, any> = {};
-      if (actTypeCurrent.level === "primary") {
-        body = { activity_types: [newValue] };
-      } else {
-        const orig = actTypeCurrent.value;
-        const updated = (profile.secondary_activity_types ?? []).map((v) => v === orig ? newValue : v);
-        body = { secondary_activity_types: updated };
-      }
-      const updated = await apiFetch<ProviderProfile>("/providers/me", {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      setProfile(updated);
-      setActTypeOpen(false);
-    } catch (e: any) {
-      setActTypeSaveError(e.message ?? "Erreur lors de la sauvegarde.");
+      await apiFetch(`/provider/venues/${viewVenue.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      setProfile((prev) => prev ? { ...prev, venues: prev.venues.filter((p) => p.id !== viewVenue.id) } : prev);
+      closeProjDetail();
+    } catch (err: any) {
+      alert(err.message || "Erreur lors de la suppression.");
     } finally {
-      setActTypeSaving(false);
+      setProjDeleting(false);
     }
   }
 
@@ -1618,21 +939,15 @@ export default function ProviderProfilePage() {
   function openEditProfile() {
     if (!profile) return;
     setEditProfileForm({
-      full_name:        profile.full_name        ?? "",
-      bio:              profile.bio              ?? "",
-      country:          profile.country          ?? "",
-      language:         profile.language         ?? "",
-      organization:     profile.organization     ?? "",
-      position:         profile.position         ?? "",
-      phone:            profile.phone            ?? "",
-      provider_type:    profile.provider_type    ?? "",
-      region:           profile.region           ?? "",
-      website:          profile.website          ?? "",
-      years_experience: profile.years_experience !== null ? String(profile.years_experience) : "",
+      full_name:    profile.full_name    ?? "",
+      bio:          profile.bio          ?? "",
+      country:      profile.country      ?? "",
+      language:     profile.language     ?? "",
+      organization: profile.organization ?? "",
+      position:     profile.position     ?? "",
+      phone:        profile.phone        ?? "",
     });
-    setEditProfileActivities(profile.activity_types           ?? []);
-    setEditProfileSecActivities(profile.secondary_activity_types ?? []);
-    setEditProfilePhoto(profile.photo       ? { preview: profile.photo }       : null);
+    setEditProfilePhoto(profile.photo    ? { preview: profile.photo }       : null);
     setEditProfileCover(profile.cover_photo ? { preview: profile.cover_photo } : null);
     setEditProfileError("");
     setEditProfileOpen(true);
@@ -1660,25 +975,19 @@ export default function ProviderProfilePage() {
       if (editProfileCover?.file) coverUrl = await uploadImage(editProfileCover.file);
       else if (editProfileCover === null) coverUrl = undefined;
 
-      const updated = await apiFetch<ProviderProfile>("/providers/me", {
-        method: "PATCH",
+      const updated = await apiFetch<OwnerProfile>("/provider/profile", {
+        method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          full_name:                 editProfileForm.full_name.trim(),
-          bio:                       editProfileForm.bio.trim()          || undefined,
-          country:                   editProfileForm.country             || undefined,
-          language:                  editProfileForm.language            || undefined,
-          photo:                     photoUrl,
-          cover_photo:               coverUrl,
-          organization:              editProfileForm.organization.trim() || undefined,
-          position:                  editProfileForm.position.trim()     || undefined,
-          phone:                     editProfileForm.phone.trim()        || undefined,
-          provider_type:             editProfileForm.provider_type       || undefined,
-          region:                    editProfileForm.region.trim()       || undefined,
-          website:                   editProfileForm.website.trim()      || undefined,
-          years_experience:          editProfileForm.years_experience ? Number(editProfileForm.years_experience) : undefined,
-          activity_types:            editProfileActivities.length ? editProfileActivities : undefined,
-          secondary_activity_types:  editProfileSecActivities.length ? editProfileSecActivities : undefined,
+          full_name:    editProfileForm.full_name.trim(),
+          bio:          editProfileForm.bio.trim()          || undefined,
+          country:      editProfileForm.country             || undefined,
+          language:     editProfileForm.language            || undefined,
+          photo:        photoUrl,
+          cover_photo:  coverUrl,
+          organization: editProfileForm.organization.trim() || undefined,
+          position:     editProfileForm.position.trim()     || undefined,
+          phone:        editProfileForm.phone.trim()        || undefined,
         }),
       });
       setProfile((prev) => prev ? { ...prev, ...updated } : prev);
@@ -1703,40 +1012,19 @@ export default function ProviderProfilePage() {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  // Org logo > provider photo > placeholder
-  const AvatarImg = ({ cls = "" }: { cls?: string }) => {
-    const src = org?.logo ?? profile.photo;
-    return src ? (
-      <img src={src} alt="" className={`w-full h-full object-cover ${cls}`} />
+  const AvatarImg = ({ cls = "" }: { cls?: string }) =>
+    profile.photo ? (
+      <img src={profile.photo} alt="" className={`w-full h-full object-cover ${cls}`} />
     ) : (
-      <span className="material-symbols-outlined text-primary text-5xl">store</span>
+      <span className="material-symbols-outlined text-primary text-5xl">person</span>
     );
-  };
-
-  function openDoc(url: string) {
-    if (url.startsWith("data:")) {
-      const w = window.open("", "_blank");
-      if (w) w.document.write(`<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${url}" style="max-width:100%;max-height:100vh;object-fit:contain"/></body></html>`);
-    } else {
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
-  }
-
-  function socialHref(platform: string, value: string): string {
-    if (value.startsWith("http")) return value;
-    const handle = value.startsWith("@") ? value.slice(1) : value;
-    if (platform === "instagram") return `https://www.instagram.com/${handle}`;
-    if (platform === "facebook") return `https://www.facebook.com/${handle}`;
-    if (platform === "tiktok") return `https://www.tiktok.com/@${handle}`;
-    return value;
-  }
 
   const scoreLabel = (score: number | null) => {
-    if (score === null) return "Prestataire";
+    if (score === null) return "Propriétaire";
     if (score >= 80) return "Éco-Leader";
-    if (score >= 60) return "Prestataire Engagé";
-    if (score >= 40) return "Prestataire Sensible";
-    return "Prestataire en Développement";
+    if (score >= 60) return "Propriétaire Engagé";
+    if (score >= 40) return "Propriétaire Sensible";
+    return "Propriétaire en Développement";
   };
 
   const roleLabel =
@@ -1744,102 +1032,10 @@ export default function ProviderProfilePage() {
     profile.position ??
     scoreLabel(profile.sustainability_score);
 
-  // ── Activity card (style projet) ──────────────────────────────────────────
-  const ActivityCard = ({ value, level }: { value: string; level: "primary" | "secondary" }) => {
-    const meta = findProviderTypeMeta(value);
-    const isPrimary = level === "primary";
-
-    return (
-      <div className="bg-white rounded-3xl border border-slate-100/90 shadow-sm overflow-hidden hover:shadow-md transition-shadow duration-300">
-        {/* Cover gradient */}
-        <div className="relative h-48 w-full overflow-hidden">
-          <div className={`absolute inset-0 bg-gradient-to-br ${meta.gradient}`} />
-          <div className="absolute inset-0 flex items-center justify-center select-none opacity-20">
-            <span className="material-symbols-outlined" style={{ fontSize: 80 }}>{meta.categoryIcon}</span>
-          </div>
-          {/* Level badge */}
-          <div className={`absolute top-3 left-3 text-[10px] font-black tracking-widest uppercase px-3 py-1.5 rounded-xl shadow-md border ${isPrimary ? "bg-primary text-white border-white/20" : "bg-white/95 text-orange-500 border-orange-100"}`}>
-            {isPrimary ? "Principale" : "Secondaire"}
-          </div>
-          {/* Category badge */}
-          <div className="absolute top-3 right-3 bg-black/40 backdrop-blur-sm text-white text-[10px] font-bold px-2.5 py-1 rounded-xl">
-            <span className="material-symbols-outlined align-middle" style={{ fontSize: 13 }}>{meta.categoryIcon}</span> {meta.categoryLabel}
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-5">
-          <h3 className="text-lg font-extrabold text-slate-800 tracking-tight mb-1 leading-tight">{meta.label}</h3>
-          {profile?.bio && (
-            <p className="text-slate-500 text-sm leading-relaxed mb-3 line-clamp-2">{profile.bio}</p>
-          )}
-          {profile?.region && (
-            <div className="flex items-center gap-1.5 text-slate-400 text-xs font-semibold mb-3">
-              <MapPin size={12} /><span>{profile.region}</span>
-            </div>
-          )}
-          {profile?.sustainability_score !== null && profile?.sustainability_score !== undefined ? (
-            <div className="mb-3">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Durabilité</span>
-                <span className="text-[10px] font-black text-primary">{profile.sustainability_score}/100</span>
-              </div>
-              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-primary rounded-full" style={{ width: `${profile.sustainability_score}%` }} />
-              </div>
-            </div>
-          ) : (
-            <div className="border border-dashed border-primary/40 rounded-xl py-1.5 px-3 mb-3 text-center text-[11px] font-bold text-primary/70">
-              🌿 Évaluer la durabilité
-            </div>
-          )}
-          <div className="flex items-center justify-between border-t border-slate-50 pt-3">
-            <p className="text-[11px] font-bold text-slate-400">
-              {isPrimary ? "Activité principale" : "Activité secondaire"}
-            </p>
-            <button
-              onClick={() => openActTypeModal(value, level)}
-              className="text-primary hover:text-primary/80 font-extrabold text-xs inline-flex items-center gap-1 hover:translate-x-1 transition-transform duration-200"
-            >
-              <span>Voir les détails</span>
-              <ArrowRight size={14} strokeWidth={2.5} />
-            </button>
-          </div>
-        </div>
-
-        <PubInteractions
-          pubId={`activity-${value}-${profile?.user_id ?? ""}`}
-          token={token}
-          viewerId={profile?.user_id ?? ""}
-          shareUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/profile/provider/${profile?.user_id}`}
-          pubTitle={meta.label}
-          itemApiBase="/interactions/activity"
-          commentApiBase="/interactions"
-        />
-      </div>
-    );
-  };
-
-  // ── Launch activity CTA ────────────────────────────────────────────────────
-  const LaunchActivityCard = () => (
-    <div
-      onClick={() => setEditProfileOpen(true)}
-      className="bg-white rounded-3xl border-2 border-dashed border-slate-200 hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer flex flex-col items-center justify-center p-10 text-center min-h-[200px]"
-    >
-      <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 hover:scale-110 transition-transform">
-        <Plus size={22} className="text-primary" strokeWidth={2.5} />
-      </div>
-      <p className="font-extrabold text-slate-700 text-base mb-1">Ajouter une activité ?</p>
-      <p className="text-slate-400 text-sm leading-relaxed mb-4">Gérez vos activités principale et secondaires dans votre profil.</p>
-      <span className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-extrabold text-slate-600 hover:bg-slate-50 bg-white">
-        Nouvelle activité
-      </span>
-    </div>
-  );
-
   // ── Offer card ─────────────────────────────────────────────────────────────
   const OfferCard = ({ offer }: { offer: Offer }) => {
-    const typeData    = OFFER_TYPES.find((t) => t.value === offer.offer_type) ?? OFFER_TYPES[OFFER_TYPES.length - 1];
+    const typeData  = OFFER_TYPES.find((t) => t.value === offer.offer_type) ?? OFFER_TYPES[OFFER_TYPES.length - 1];
+    const linked    = profile.venues.find((p) => p.id === offer.venue_id);
     const statusLabel = offer.status === "approved" ? "Offre Active" : offer.status === "pending" ? "En attente" : "Refusée";
     const statusClass = offer.status === "approved" ? "bg-primary text-white border-white/20" : offer.status === "pending" ? "bg-amber-500 text-white border-white/20" : "bg-red-500 text-white border-white/20";
 
@@ -1882,9 +1078,14 @@ export default function ProviderProfilePage() {
                 <p className="text-slate-500 text-sm leading-relaxed mb-4 line-clamp-3">{offer.description}</p>
               )}
               <div className="flex flex-wrap gap-2.5 mb-5">
-                <span className="bg-emerald-50 text-emerald-600 border border-emerald-100/60 rounded-xl px-3 py-1 text-[11px] font-extrabold tracking-wider flex items-center gap-1 uppercase">
-                  <Sparkles size={11} className="text-emerald-500 shrink-0" />{typeData.label}
+                <span className="bg-emerald-50 text-primary border border-emerald-100/60 rounded-xl px-3 py-1 text-[11px] font-extrabold tracking-wider flex items-center gap-1 uppercase">
+                  <Sparkles size={11} className="text-primary shrink-0" />{typeData.label}
                 </span>
+                {linked && (
+                  <span className="bg-emerald-50 text-primary border border-emerald-100/60 rounded-xl px-3 py-1 text-[11px] font-extrabold tracking-wider flex items-center gap-1 uppercase">
+                    <Sparkles size={11} className="text-primary shrink-0" />{linked.name}
+                  </span>
+                )}
               </div>
             </div>
             {offer.sustainability_score !== null ? (
@@ -1937,2050 +1138,114 @@ export default function ProviderProfilePage() {
     );
   };
 
+  // ── Project card ───────────────────────────────────────────────────────────
+  const VenueCard = ({ proj }: { proj: Venue }) => {
+    const cover = proj.photos?.[0] ?? proj.photo ?? null;
+    return (
+      <div className="bg-white rounded-3xl border border-slate-100/90 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+      <div className="p-6 flex flex-col justify-between">
+        <div>
+          <div className="w-full h-28 rounded-xl mb-4 bg-gradient-to-br from-emerald-400 to-primary flex items-center justify-center relative overflow-hidden">
+            {cover
+              ? <img src={cover} alt={proj.name} className="w-full h-full object-cover" />
+              : <span className="material-symbols-outlined text-white/30 text-8xl">domain</span>}
+            <span className={`absolute top-2.5 right-2.5 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${proj.status === "active" ? "bg-green-500" : proj.status === "rejected" ? "bg-red-500" : "bg-amber-500"}`}>
+              {proj.status === "active" ? "Actif" : proj.status === "rejected" ? "Refusé" : "En attente"}
+            </span>
+          </div>
+          <div className="flex items-start justify-between gap-4 mb-2">
+            <h3 className="text-sm font-extrabold text-slate-800 leading-snug">{proj.name}</h3>
+          </div>
+          {proj.description && <p className="text-slate-500 text-xs leading-relaxed mb-4 line-clamp-2">{proj.description}</p>}
+          {(proj.region || proj.venue_type?.length) && (
+            <div className="space-y-1.5 mb-4 bg-slate-50/50 p-3 rounded-xl border border-slate-100/50">
+              {proj.region && (
+                <div className="flex items-center gap-2 text-[11px] font-bold text-slate-500">
+                  <MapPin size={12} className="text-slate-400" /><span>{proj.region}</span>
+                </div>
+              )}
+              {proj.venue_type?.length ? (
+                <div className="flex flex-wrap gap-1">
+                  {proj.venue_type.map((t) => (
+                    <span key={t} className="text-[10px] font-bold text-primary">{VENUE_TYPE_LABELS[t] ?? t}</span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          )}
+          {/* Sustainability score */}
+          {proj.sustainability_score !== null ? (
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Durabilité</span>
+                <span className="text-xs font-black text-primary">{proj.sustainability_score}/100</span>
+              </div>
+              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-primary to-emerald-400 rounded-full transition-all duration-700"
+                  style={{ width: `${proj.sustainability_score}%` }} />
+              </div>
+              <p className="text-[10px] font-bold text-slate-400 mt-1">{getSustainabilityLevel(proj.sustainability_score).emoji} {getSustainabilityLevel(proj.sustainability_score).label}</p>
+            </div>
+          ) : (
+            <button
+              onClick={(e) => { e.stopPropagation(); setQProjectId(proj.id); setQStep(0); setQAnswers({}); setQOpen(true); }}
+              className="w-full mb-4 py-2 rounded-xl border-2 border-dashed border-primary/30 text-primary text-xs font-bold hover:bg-primary/5 transition-colors flex items-center justify-center gap-1.5"
+            >
+              <span>🌿</span> Évaluer la durabilité
+            </button>
+          )}
+        </div>
+        <div className="border-t border-slate-50 pt-4 mt-2">
+          <button onClick={() => openProjDetail(proj)}
+            className="text-primary hover:text-primary/80 font-extrabold text-xs inline-flex items-center gap-1 hover:translate-x-1 transition-transform duration-200">
+            <span>Voir les détails</span>
+            <ArrowRight size={14} strokeWidth={2.5} />
+          </button>
+        </div>
+      </div>
+      {proj.status === "active" && (
+        <PubInteractions
+          pubId={proj.id}
+          token={token}
+          viewerId={profile?.user_id ?? ""}
+          shareUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/profile/provider/${profile?.user_id}?project=${proj.id}`}
+          pubTitle={proj.name}
+          itemApiBase="/interactions/venue"
+          commentApiBase="/interactions"
+        />
+      )}
+      </div>
+    );
+  };
+
+  // ── Launch project CTA ─────────────────────────────────────────────────────
+  const LaunchVenueCard = () => (
+    <div className="bg-slate-50/50 border-2 border-dashed border-slate-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center relative overflow-hidden hover:border-primary/40 hover:bg-primary/5 transition-all duration-300">
+      <button
+        onClick={openProjModal}
+        className="w-12 h-12 rounded-full bg-white shadow-md border border-slate-100 flex items-center justify-center text-primary hover:scale-110 active:scale-95 transition-transform mb-4"
+      >
+        <Plus size={24} strokeWidth={2.5} />
+      </button>
+      <h4 className="text-lg font-extrabold text-slate-800 tracking-tight mb-2">Créer un nouvel établissement ?</h4>
+      <p className="text-slate-400 text-sm max-w-sm mb-6 leading-relaxed">
+        Vous avez une idée pour un voyage encore plus durable ? Créez un établissement et rassemblez la communauté.
+      </p>
+      <button
+        onClick={openProjModal}
+        className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold px-6 py-2.5 rounded-2xl shadow-sm text-xs hover:border-primary/40 active:scale-95 transition-all"
+      >
+        Nouvel Établissement
+      </button>
+    </div>
+  );
+
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-    {/* ══ ACTIVITY CREATE MODAL ════════════════════════════════════════════ */}
-    {actModalOpen && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-        <div className="bg-white rounded-3xl w-full max-w-xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
-          <button onClick={() => setActModalOpen(false)} className="absolute top-5 right-5 z-10 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors"><X size={16} /></button>
-          <div className="px-8 pt-8 pb-5 border-b border-slate-100 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-orange-50 flex items-center justify-center"><span className="material-symbols-outlined text-orange-500 text-xl">add_circle</span></div>
-              <div>
-                <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">Nouvelle activité secondaire</h3>
-                <p className="text-slate-400 text-xs mt-0.5">Activité complémentaire à votre offre principale</p>
-              </div>
-            </div>
-          </div>
-          <div className="overflow-y-auto flex-1">
-            <form id="act-create-form" onSubmit={handleCreateActivity} className="px-8 py-6 space-y-6">
-
-              {/* ── Catégorie ── */}
-              <div>
-                <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Catégorie *</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {PROVIDER_SCHEMA.map((cat) => {
-                    const active = actSelCategory === cat.value;
-                    return (
-                      <button key={cat.value} type="button"
-                        onClick={() => { setActSelCategory(active ? "" : cat.value); setActSelSubtypes([]); setActFieldValues({}); setActFormError(""); }}
-                        className={`flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl border-2 text-center transition-all cursor-pointer ${active ? "bg-primary/10 border-primary text-slate-900 shadow-sm" : "bg-slate-50 border-slate-200 text-slate-500 hover:border-primary/40 hover:bg-white"}`}>
-                        <span className={`material-symbols-outlined text-xl ${active ? "text-primary" : "text-slate-400"}`}>{cat.icon}</span>
-                        <span className="text-[10px] font-extrabold leading-tight">{cat.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* ── Sous-types ── */}
-              {actSelCategory && (() => {
-                const cat = PROVIDER_SCHEMA.find((c) => c.value === actSelCategory);
-                if (!cat || !cat.subtypes.length) return null;
-                return (
-                  <div>
-                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Sous-types</label>
-                    <div className="flex flex-wrap gap-2">
-                      {cat.subtypes.map((st) => {
-                        const sel = actSelSubtypes.includes(st.value);
-                        return (
-                          <button key={st.value} type="button"
-                            onClick={() => {
-                              setActSelSubtypes((prev) => sel ? prev.filter((v) => v !== st.value) : [...prev, st.value]);
-                              if (sel) setActFieldValues((prev) => { const n = { ...prev }; delete n[st.value]; return n; });
-                            }}
-                            className={`px-3 py-1.5 rounded-xl border-2 text-[11px] font-extrabold transition-all cursor-pointer ${sel ? "bg-primary/10 border-primary text-primary" : "bg-slate-50 border-slate-200 text-slate-600 hover:border-primary/40"}`}>
-                            {st.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* ── Champs par sous-type (SUBTYPE_FIELDS) ── */}
-              {actSelSubtypes.map((stVal) => {
-                const config = SUBTYPE_FIELDS[stVal];
-                if (!config) return null;
-                return (
-                  <div key={stVal} className="rounded-2xl border border-slate-100 overflow-hidden">
-                    <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-100">
-                      <p className="text-[11px] font-black tracking-widest text-slate-500 uppercase">{config.label}</p>
-                    </div>
-                    <div className="p-4 space-y-4">
-                      {config.sections.map((sec, si) => {
-                        const visibleFields = sec.fields.filter((f) => {
-                          if (!f.dependsOn) return true;
-                          return actFieldValues[stVal]?.[f.dependsOn.field] === f.dependsOn.value;
-                        });
-                        if (!visibleFields.length) return null;
-                        return (
-                          <div key={si}>
-                            <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">{sec.section}</p>
-                            <div className="space-y-3">
-                              {visibleFields.map((field) => {
-                                const val = actFieldValues[stVal]?.[field.key];
-                                const setVal = (v: any) => setActFieldValues((prev) => ({ ...prev, [stVal]: { ...(prev[stVal] ?? {}), [field.key]: v } }));
-                                if (field.type === "boolean") return (
-                                  <div key={field.key} className="flex items-center justify-between">
-                                    <span className="text-sm font-semibold text-slate-700">{field.label}</span>
-                                    <button type="button" onClick={() => setVal(!val)}
-                                      className={`w-10 h-5 rounded-full transition-colors ${val ? "bg-primary" : "bg-slate-200"}`}>
-                                      <div className={`w-4 h-4 rounded-full bg-white mx-auto transition-transform ${val ? "translate-x-2.5" : "-translate-x-2.5"}`} />
-                                    </button>
-                                  </div>
-                                );
-                                if (field.type === "multiselect") return (
-                                  <div key={field.key}>
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{field.label}</label>
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {(field.options ?? []).map((opt) => {
-                                        const chosen = Array.isArray(val) && val.includes(opt);
-                                        return (
-                                          <button key={opt} type="button"
-                                            onClick={() => setVal(chosen ? (val as string[]).filter((v: string) => v !== opt) : [...(val as string[] ?? []), opt])}
-                                            className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold border transition-all ${chosen ? "bg-primary/10 border-primary text-primary" : "bg-slate-50 border-slate-200 text-slate-600 hover:border-primary/30"}`}>
-                                            {opt}
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                );
-                                if (field.type === "select") return (
-                                  <div key={field.key}>
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{field.label}</label>
-                                    <select value={val ?? ""} onChange={(e) => setVal(e.target.value)}
-                                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                                      <option value="">— Sélectionner —</option>
-                                      {(field.options ?? []).map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                                    </select>
-                                  </div>
-                                );
-                                if (field.type === "number") return (
-                                  <div key={field.key}>
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{field.label}</label>
-                                    <input type="number" min="0" value={val ?? ""} onChange={(e) => setVal(e.target.value ? Number(e.target.value) : undefined)}
-                                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                                  </div>
-                                );
-                                if (field.type === "textarea") return (
-                                  <div key={field.key}>
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{field.label}</label>
-                                    <textarea rows={3} value={val ?? ""} onChange={(e) => setVal(e.target.value)}
-                                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
-                                  </div>
-                                );
-                                return (
-                                  <div key={field.key}>
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{field.label}</label>
-                                    <input type={field.type === "url" ? "url" : "text"} value={val ?? ""} onChange={(e) => setVal(e.target.value)}
-                                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* ── Années d'expérience ── */}
-              {actSelCategory && (
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Années d'expérience</label>
-                  <input type="number" min="0" max="50" placeholder="Ex : 3"
-                    value={actYearsExp} onChange={(e) => setActYearsExp(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                </div>
-              )}
-
-              {/* ── Photos ── */}
-              {actSelCategory && (
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Photos</label>
-                  {actImages.length === 0 ? (
-                    <label htmlFor="act-create-images" className="flex flex-col items-center justify-center gap-2 w-full h-24 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
-                      <span className="material-symbols-outlined text-slate-300 text-3xl">add_photo_alternate</span>
-                      <p className="text-xs font-semibold text-slate-400">Ajouter des photos</p>
-                      <input id="act-create-images" type="file" accept="image/*" multiple className="hidden"
-                        onChange={(e) => { const files = Array.from(e.target.files ?? []); setActImages((prev) => [...prev, ...files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))]); e.target.value = ""; }}
-                      />
-                    </label>
-                  ) : (
-                    <div className="grid grid-cols-4 gap-2">
-                      {actImages.map((img, i) => (
-                        <div key={i} onClick={() => setActCoverIdx(i)} className={`relative group aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${i === actCoverIdx ? "border-primary shadow-md" : "border-transparent hover:border-slate-300"}`}>
-                          <img src={img.preview} alt="" className="w-full h-full object-cover" />
-                          {i === actCoverIdx && <div className="absolute top-1 left-1 bg-primary text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Cover</div>}
-                          <button type="button" onClick={(ev) => { ev.stopPropagation(); URL.revokeObjectURL(img.preview); setActImages((prev) => prev.filter((_, idx) => idx !== i)); setActCoverIdx((c) => c >= i && c > 0 ? c - 1 : c); }} className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
-                        </div>
-                      ))}
-                      <label htmlFor="act-create-images" className="flex items-center justify-center aspect-square border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-primary/50 bg-slate-50/70">
-                        <span className="material-symbols-outlined text-slate-300 text-2xl">add</span>
-                        <input id="act-create-images" type="file" accept="image/*" multiple className="hidden"
-                          onChange={(e) => { const files = Array.from(e.target.files ?? []); setActImages((prev) => [...prev, ...files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))]); e.target.value = ""; }}
-                        />
-                      </label>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {actFormError && (
-                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
-                  <span className="material-symbols-outlined text-red-500 text-base">error</span>
-                  <p className="text-sm font-semibold text-red-600">{actFormError}</p>
-                </div>
-              )}
-            </form>
-          </div>
-          <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/80 flex items-center justify-end gap-3 shrink-0">
-            <button type="button" onClick={() => setActModalOpen(false)} className="px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer">Annuler</button>
-            <button type="submit" form="act-create-form" disabled={actPublishing} className="flex items-center gap-2 px-6 py-2.5 bg-orange-500 hover:bg-orange-400 text-white font-extrabold rounded-2xl text-xs shadow-sm transition-all active:scale-95 disabled:opacity-60 cursor-pointer">
-              {actPublishing ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Création…</> : <><Send size={14} />Ajouter l'activité</>}
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
-
-    {/* ══ CIRCUIT MODAL ════════════════════════════════════════════════════ */}
-    {/* ── Modal Détails Circuit ── */}
-    {viewingCircuit && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setViewingCircuit(null)}>
-        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
-
-          {/* Header with cover */}
-          <div className="relative shrink-0">
-            {viewingCircuit.cover_image
-              ? <img src={viewingCircuit.cover_image} alt="" className="w-full h-40 object-cover" />
-              : <div className="w-full h-40 bg-gradient-to-br from-primary/20 to-emerald-100 flex items-center justify-center"><Route size={40} className="text-primary/30" /></div>
-            }
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-            <div className="absolute bottom-0 left-0 right-0 px-6 pb-4">
-              <h3 className="text-xl font-extrabold text-white leading-tight">{viewingCircuit.title}</h3>
-              <div className="flex items-center gap-3 mt-1">
-                <span className="flex items-center gap-1 text-[11px] font-black text-white/90">
-                  <Calendar size={11} />{viewingCircuit.nb_jours} jour{viewingCircuit.nb_jours > 1 ? "s" : ""}
-                </span>
-                <span className="flex items-center gap-1 text-[11px] font-black text-white/90">
-                  <MapPin size={11} />{viewingCircuit.etapes.length} étape{viewingCircuit.etapes.length > 1 ? "s" : ""}
-                </span>
-              </div>
-            </div>
-            <button onClick={() => setViewingCircuit(null)} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors cursor-pointer">
-              <X size={15} />
-            </button>
-          </div>
-
-          {/* Body */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
-
-            {/* Description */}
-            {viewingCircuit.description && (
-              <div>
-                <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1">Description</p>
-                <p className="text-sm text-slate-600 leading-relaxed">{viewingCircuit.description}</p>
-              </div>
-            )}
-
-            {/* Disponibilité */}
-            {viewingCircuit.availability && (
-              <div>
-                <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Disponibilité</p>
-                <div className="bg-slate-50 rounded-2xl p-4 space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <Calendar size={13} className="text-primary shrink-0" />
-                    <span className="text-sm font-semibold text-slate-700">
-                      {AVAILABILITY_TYPES.find((a) => a.value === viewingCircuit.availability?.mode)?.label ?? viewingCircuit.availability.mode}
-                    </span>
-                  </div>
-                  {viewingCircuit.availability.mode === "specific" && viewingCircuit.availability.specific_dates && (
-                    <div className="flex flex-wrap gap-1.5 pl-5">
-                      {viewingCircuit.availability.specific_dates.map((slot) => {
-                        const [start, end] = slot.includes(':') ? slot.split(':') : [slot, slot];
-                        const fmt = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
-                        return (
-                          <span key={slot} className="flex items-center gap-1 text-[11px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-lg">
-                            <Calendar size={9} />{fmt(start)}{start !== end ? ` → ${fmt(end)}` : ''}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {viewingCircuit.availability.mode === "weekly" && viewingCircuit.availability.weekdays && (
-                    <div className="flex flex-wrap gap-1.5 pl-5">
-                      {viewingCircuit.availability.weekdays.map((d) => (
-                        <span key={d} className="text-[11px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-lg">
-                          {["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"][d]}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {viewingCircuit.availability.mode === "period" && (viewingCircuit.availability.avail_start || viewingCircuit.availability.avail_end) && (
-                    <p className="text-xs text-slate-500 pl-5">{viewingCircuit.availability.avail_start} → {viewingCircuit.availability.avail_end}</p>
-                  )}
-                  {viewingCircuit.availability.mode === "season" && viewingCircuit.availability.saisons && (
-                    <div className="flex flex-wrap gap-1.5 pl-5">
-                      {viewingCircuit.availability.saisons.map((s) => (
-                        <span key={s} className="text-[11px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-lg">{s}</span>
-                      ))}
-                    </div>
-                  )}
-                  {viewingCircuit.availability.heure_debut && viewingCircuit.availability.heure_fin && (
-                    <div className="flex items-center gap-2 pl-5">
-                      <Clock size={12} className="text-slate-400" />
-                      <span className="text-xs text-slate-500">{viewingCircuit.availability.heure_debut} – {viewingCircuit.availability.heure_fin}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Hébergement */}
-            {viewingCircuit.hebergement && (
-              <div>
-                <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Hébergement</p>
-                <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
-                  {!viewingCircuit.hebergement.inclus ? (
-                    <div className="flex items-center gap-2 text-sm text-slate-500">
-                      <span className="material-symbols-outlined text-[16px]">hotel_class</span>Non inclus
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
-                        <span className="material-symbols-outlined text-[16px] text-primary">hotel</span>
-                        {viewingCircuit.hebergement.type === "same" ? "Même hébergement sur tout le circuit" : "Hébergement variable par jour (voir programme)"}
-                      </div>
-                      {viewingCircuit.hebergement.type === "same" && viewingCircuit.hebergement.etape && (() => {
-                        const hb = viewingCircuit.hebergement!.etape!;
-                        const hbCat = PROVIDER_SCHEMA.find((c) => c.value === "hebergement");
-                        return (
-                          <div className="space-y-3 pt-1">
-                            {/* Titre + localisation */}
-                            <div>
-                              <p className="text-sm font-extrabold text-slate-800">{hb.titre}</p>
-                              {hb.destination && (
-                                <div className="flex items-center gap-1 text-[11px] text-slate-400 mt-0.5">
-                                  <MapPin size={10} />{hb.destination}
-                                </div>
-                              )}
-                            </div>
-                            {/* Descriptions */}
-                            {hb.description_courte && <p className="text-xs text-slate-600">{hb.description_courte}</p>}
-                            {hb.description_longue && <p className="text-xs text-slate-500">{hb.description_longue}</p>}
-                            {/* Sous-types avec photos + tarifs + détails par unité */}
-                            {hb.subtypes.length > 0 && (
-                              <div className="space-y-3">
-                                {hb.subtypes.map((sv) => {
-                                  const stLabel = hbCat?.subtypes.find((s) => s.value === sv)?.label ?? sv;
-                                  const nbU = hb.nb_unites?.[sv] ?? 1;
-                                  const cfg = hb.form_config?.[sv] ?? {};
-                                  const fieldConfig = OFFER_DETAIL_FIELDS[sv];
-                                  const hasPrice = cfg.prixGroupe || cfg.prixEnfant || cfg.suppPrivatisation;
-
-                                  const renderFieldRows = (data: Record<string, any>) => {
-                                    if (!fieldConfig || Object.keys(data).length === 0) return null;
-                                    const rows: { label: string; display: string }[] = [];
-                                    fieldConfig.sections.forEach((sec) => {
-                                      sec.fields.forEach((f) => {
-                                        const v = data[f.key];
-                                        if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) return;
-                                        if (f.type === 'boolean') { rows.push({ label: f.label, display: v ? 'Oui' : 'Non' }); return; }
-                                        if (Array.isArray(v)) { rows.push({ label: f.label, display: v.join(', ') }); return; }
-                                        rows.push({ label: f.label, display: String(v) });
-                                      });
-                                    });
-                                    if (rows.length === 0) return null;
-                                    return (
-                                      <div className="space-y-1 pt-1 border-t border-slate-100">
-                                        {rows.map((r) => (
-                                          <div key={r.label} className="flex items-start gap-2">
-                                            <span className="text-[10px] text-slate-400 font-semibold shrink-0 min-w-[100px]">{r.label}</span>
-                                            <span className="text-[10px] text-slate-700 font-bold">{r.display}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    );
-                                  };
-
-                                  return (
-                                    <div key={sv} className="bg-white rounded-xl border border-slate-100 overflow-hidden">
-                                      {/* Header */}
-                                      <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-100">
-                                        <span className="text-[11px] font-extrabold text-slate-700">{stLabel}</span>
-                                        <span className="text-[10px] font-bold text-slate-500">{nbU} unité{nbU > 1 ? 's' : ''}</span>
-                                      </div>
-                                      {/* Tarification commune */}
-                                      {hasPrice && (
-                                        <div className="flex flex-wrap gap-2 px-3 py-2 border-b border-slate-50">
-                                          {cfg.prixGroupe && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg">{cfg.prixGroupe} DT{cfg.nbPersonnesGroupe ? ` / ${cfg.nbPersonnesGroupe} pers.` : ''}</span>}
-                                          {cfg.prixEnfant && <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-lg">{cfg.prixEnfant} DT enfant{cfg.ageMaxEnfant ? ` (≤${cfg.ageMaxEnfant} ans)` : ''}</span>}
-                                          {cfg.suppPrivatisation && <span className="text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-100 px-2 py-0.5 rounded-lg">+{cfg.suppPrivatisation} DT privatisation</span>}
-                                        </div>
-                                      )}
-                                      {/* Détails par unité */}
-                                      <div className="divide-y divide-slate-50">
-                                        {Array.from({ length: nbU }, (_, i) => {
-                                          const unitPhotos = hb.entity_photos?.[`${sv}_unit_${i}`] ?? (i === 0 ? (hb.entity_photos?.[sv] ?? []) : []);
-                                          const unitData: Record<string, any> =
-                                            ((hb.unit_details as Record<string, Array<Record<string, any>>>)?.[sv]?.[i] ?? {});
-                                          const unitName = unitData?.nom_chambre ?? unitData?.nom_suite ?? unitData?.nom_tente ?? unitData?.nom_bungalow;
-                                          return (
-                                            <div key={i} className="p-3 space-y-2">
-                                              {nbU > 1 && (
-                                                <p className="text-[10px] font-black text-primary uppercase tracking-widest">{unitName || `Unité ${i + 1}`}</p>
-                                              )}
-                                              {unitPhotos.length > 0 && (
-                                                <div className="flex gap-1.5 overflow-x-auto">
-                                                  {unitPhotos.slice(0, 5).map((url, pi) => (
-                                                    <img key={pi} src={url} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
-                                                  ))}
-                                                </div>
-                                              )}
-                                              {renderFieldRows(unitData) ?? (
-                                                <p className="text-[10px] text-slate-300 italic">Aucun détail renseigné — modifiez l'hébergement pour compléter.</p>
-                                              )}
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Étapes par jour */}
-            <div>
-              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-3">Programme jour par jour</p>
-              {viewingCircuit.etapes.length === 0 ? (
-                <p className="text-sm text-slate-400 italic">Aucune étape configurée.</p>
-              ) : (
-                <div className="space-y-4">
-                  {Array.from({ length: viewingCircuit.nb_jours }, (_, i) => i + 1).map((jour) => {
-                    const etapesJour = viewingCircuit.etapes.filter((e) => e.jour === jour).sort((a, b) => {
-                      const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-                      return toMin(a.heure_debut || '00:00') - toMin(b.heure_debut || '00:00');
-                    });
-                    return (
-                      <div key={jour} className="border border-slate-100 rounded-2xl overflow-hidden">
-                        {/* Jour header */}
-                        <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 border-b border-slate-100">
-                          <div className="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-black shrink-0">{jour}</div>
-                          <p className="text-xs font-extrabold text-slate-700">Jour {jour}</p>
-                          <span className="ml-auto text-[10px] text-slate-400 font-semibold">{etapesJour.length} activité{etapesJour.length > 1 ? 's' : ''}</span>
-                        </div>
-                        {etapesJour.length === 0 ? (
-                          <p className="text-[11px] text-slate-300 italic px-4 py-3">Aucune activité ce jour.</p>
-                        ) : (
-                          <div className="divide-y divide-slate-100">
-                            {etapesJour.map((etape) => {
-                              const cat = PROVIDER_SCHEMA.find((c) => c.value === etape.categorie);
-                              const allPhotos = Object.values(etape.entity_photos ?? {}).flat();
-                              const coverPhoto = allPhotos[0] ?? etape.photos?.[0];
-                              return (
-                                <div key={etape.id} className="p-4 space-y-3">
-                                  {/* Top row: categorie + horaires */}
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-[10px] font-black tracking-widest uppercase text-primary bg-primary/10 px-2 py-0.5 rounded-lg">{cat?.label ?? etape.categorie}</span>
-                                    {etape.heure_debut && etape.heure_fin && (
-                                      <span className="flex items-center gap-1 text-[10px] text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded-lg">
-                                        <Clock size={9} />{etape.heure_debut} – {etape.heure_fin}
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {/* Photo + titre + localisation */}
-                                  <div className="flex gap-3">
-                                    {coverPhoto && (
-                                      <img src={coverPhoto} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" />
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-extrabold text-slate-800 leading-tight">{etape.titre || etape.destination}</p>
-                                      {etape.destination && etape.titre && (
-                                        <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
-                                          <MapPin size={9} />{etape.destination}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {/* Descriptions */}
-                                  {etape.description_courte && (
-                                    <p className="text-xs text-slate-600 leading-relaxed">{etape.description_courte}</p>
-                                  )}
-                                  {etape.description_longue && (
-                                    <p className="text-xs text-slate-500 leading-relaxed">{etape.description_longue}</p>
-                                  )}
-
-                                  {/* Sous-types avec leurs détails */}
-                                  {etape.subtypes.length > 0 && (
-                                    <div className="space-y-2">
-                                      {etape.subtypes.map((sv) => {
-                                        const stDef = cat?.subtypes.find((s) => s.value === sv);
-                                        const stLabel = stDef?.label ?? sv;
-                                        const nbU = etape.nb_unites?.[sv] ?? 1;
-                                        const cfg = etape.form_config?.[sv] ?? {};
-                                        const hasPrice = cfg.prixGroupe || cfg.prixEnfant || cfg.suppPrivatisation;
-                                        const etapeFieldConfig = OFFER_DETAIL_FIELDS[sv];
-
-                                        const renderEtapeFieldRows = (data: Record<string, any>) => {
-                                          if (!etapeFieldConfig || Object.keys(data).length === 0) return null;
-                                          const rows: { label: string; display: string }[] = [];
-                                          etapeFieldConfig.sections.forEach((sec) => {
-                                            sec.fields.forEach((f) => {
-                                              const v = data[f.key];
-                                              if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) return;
-                                              if (f.type === 'boolean') { rows.push({ label: f.label, display: v ? 'Oui' : 'Non' }); return; }
-                                              if (Array.isArray(v)) { rows.push({ label: f.label, display: v.join(', ') }); return; }
-                                              rows.push({ label: f.label, display: String(v) });
-                                            });
-                                          });
-                                          if (rows.length === 0) return null;
-                                          return (
-                                            <div className="space-y-1 pt-1 border-t border-slate-200">
-                                              {rows.map((r) => (
-                                                <div key={r.label} className="flex items-start gap-2">
-                                                  <span className="text-[10px] text-slate-400 font-semibold shrink-0 min-w-[100px]">{r.label}</span>
-                                                  <span className="text-[10px] text-slate-700 font-bold">{r.display}</span>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          );
-                                        };
-
-                                        return (
-                                          <div key={sv} className="bg-slate-50 rounded-xl overflow-hidden">
-                                            {/* Header sous-type */}
-                                            <div className="flex items-center justify-between px-3 py-2 bg-slate-100">
-                                              <span className="text-[11px] font-extrabold text-slate-700">{stLabel}</span>
-                                              <span className="text-[10px] font-bold text-slate-500">{nbU} unité{nbU > 1 ? 's' : ''}</span>
-                                            </div>
-                                            {/* Tarif commun */}
-                                            {hasPrice && (
-                                              <div className="flex flex-wrap gap-2 px-3 py-2 border-b border-slate-100">
-                                                {cfg.prixGroupe && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg">{cfg.prixGroupe} DT{cfg.nbPersonnesGroupe ? ` / ${cfg.nbPersonnesGroupe} pers.` : ' groupe'}</span>}
-                                                {cfg.prixEnfant && <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-lg">{cfg.prixEnfant} DT enfant{cfg.ageMaxEnfant ? ` (≤${cfg.ageMaxEnfant} ans)` : ''}</span>}
-                                                {cfg.suppPrivatisation && <span className="text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-100 px-2 py-0.5 rounded-lg">+{cfg.suppPrivatisation} DT privatisation</span>}
-                                              </div>
-                                            )}
-                                            {/* Per-unit display */}
-                                            <div className="divide-y divide-slate-100">
-                                              {Array.from({ length: nbU }, (_, i) => {
-                                                const unitPhotos = etape.entity_photos?.[`${sv}_unit_${i}`] ?? (i === 0 ? (etape.entity_photos?.[sv] ?? []) : []);
-                                                const unitData: Record<string, any> = etape.categorie === 'hebergement'
-                                                  ? ((etape.unit_details as Record<string, Array<Record<string, any>>>)?.[sv]?.[i] ?? {})
-                                                  : (nbU === 1
-                                                    ? ((etape.fields as Record<string, Record<string, any>>)?.[sv] ?? {})
-                                                    : ((etape.unit_details as Record<string, Array<Record<string, any>>>)?.[sv]?.[i] ?? {}));
-                                                const unitName = unitData?.nom_chambre ?? unitData?.nom_suite ?? unitData?.nom_tente ?? unitData?.nom_bungalow ?? unitData?.nom;
-                                                return (
-                                                  <div key={i} className="p-3 space-y-2">
-                                                    {nbU > 1 && <p className="text-[10px] font-black text-primary uppercase tracking-widest">{unitName || `Unité ${i + 1}`}</p>}
-                                                    {unitPhotos.length > 0 && (
-                                                      <div className="flex gap-1.5 overflow-x-auto">
-                                                        {unitPhotos.slice(0, 5).map((url: string, pi: number) => (
-                                                          <img key={pi} src={url} alt="" className="w-14 h-14 rounded-lg object-cover shrink-0" />
-                                                        ))}
-                                                      </div>
-                                                    )}
-                                                    {renderEtapeFieldRows(unitData) ?? (
-                                                      <p className="text-[10px] text-slate-300 italic">Aucun détail renseigné.</p>
-                                                    )}
-                                                  </div>
-                                                );
-                                              })}
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-
-                                  {/* Prix global de l'étape */}
-                                  {etape.prix !== null && etape.prix !== undefined && (
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-[10px] font-black text-slate-400 uppercase">Prix indicatif</span>
-                                      <span className="text-sm font-extrabold text-primary">{etape.prix} DT</span>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Carte du tracé */}
-            {(() => {
-              const pts = viewingCircuit.etapes
-                .filter((e) => e.lat !== null && e.lng !== null)
-                .sort((a, b) => a.jour - b.jour)
-                .map((e) => ({ jour: e.jour, lat: e.lat as number, lng: e.lng as number, destination: e.destination }));
-              const hbEtape = viewingCircuit.hebergement?.inclus && viewingCircuit.hebergement.type === "same" ? viewingCircuit.hebergement.etape : null;
-              const hb = (hbEtape?.lat && hbEtape?.lng)
-                ? { lat: hbEtape.lat as number, lng: hbEtape.lng as number, nom: hbEtape.titre || hbEtape.destination || "Hébergement" }
-                : undefined;
-              if (pts.length === 0 && !hb) return null;
-              return (
-                <div>
-                  <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Tracé du circuit</p>
-                  <CircuitRouteMap points={pts} hebergementPoint={hb} />
-                </div>
-              );
-            })()}
-          </div>
-
-          {/* Footer */}
-          <div className="px-6 py-4 border-t border-slate-100 shrink-0 flex items-center justify-between gap-3">
-            <button
-              onClick={() => { setViewingCircuit(null); openCircuitModal(viewingCircuit); }}
-              className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold rounded-2xl text-xs transition-all cursor-pointer"
-            >
-              <Edit3 size={12} />Modifier
-            </button>
-            <button
-              onClick={() => setViewingCircuit(null)}
-              className="px-5 py-2 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs transition-all cursor-pointer"
-            >
-              Fermer
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
-
-    {circuitModalOpen && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
-
-          {/* Header */}
-          <div className="px-8 pt-7 pb-5 border-b border-slate-100 shrink-0 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <Route size={20} className="text-primary" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">{editingCircuit ? "Modifier le circuit" : "Nouveau circuit"}</h3>
-              <p className="text-slate-400 text-xs mt-0.5">Itinéraire multi-destinations avec activités, hébergements et plus</p>
-            </div>
-            <button onClick={() => setCircuitModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer">
-              <X size={16} />
-            </button>
-          </div>
-
-          <div className="overflow-y-auto flex-1 px-8 py-6 space-y-7">
-
-            {/* ── Infos générales ── */}
-            <div className="space-y-4">
-              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Informations générales</p>
-              <div>
-                <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Titre du circuit *</label>
-                <input type="text" placeholder="Ex : Tour du Nord Tunisien — 5 jours"
-                  value={circuitTitle} onChange={(e) => { setCircuitTitle(e.target.value); setCircuitFormError(""); }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Nombre de jours</label>
-                  <input type="number" min="1" max="30"
-                    value={circuitNbJours} onChange={(e) => {
-                      const n = Math.max(1, Number(e.target.value));
-                      if (n < circuitNbJours) {
-                        setCircuitEtapes((prev) => prev.filter((ep) => ep.jour <= n));
-                        if (etapeFormOpen && etapeJour > n) { setEtapeFormOpen(false); resetEtapeForm(); }
-                      }
-                      setCircuitNbJours(n);
-                      // sync availability end date if in period mode
-                      if (circuitAvailMode === 'period' && circuitAvailStart) {
-                        const d = new Date(circuitAvailStart);
-                        d.setDate(d.getDate() + n - 1);
-                        setCircuitAvailEnd(d.toISOString().split('T')[0]);
-                      }
-                    }}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Photo de couverture</label>
-                  <label className="flex items-center gap-2 cursor-pointer w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 hover:border-primary/50 transition-colors">
-                    {circuitCoverImg
-                      ? <img src={circuitCoverImg.preview} alt="" className="w-8 h-8 rounded-lg object-cover" />
-                      : circuitCoverExisting
-                        ? <img src={circuitCoverExisting} alt="" className="w-8 h-8 rounded-lg object-cover" />
-                        : <span className="material-symbols-outlined text-slate-300 text-xl">add_photo_alternate</span>}
-                    <span className="text-xs font-semibold text-slate-400">
-                      {circuitCoverImg || circuitCoverExisting ? "Changer" : "Choisir"}
-                    </span>
-                    <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-                      const f = e.target.files?.[0]; if (!f) return;
-                      if (circuitCoverImg) URL.revokeObjectURL(circuitCoverImg.preview);
-                      setCircuitCoverImg({ file: f, preview: URL.createObjectURL(f) });
-                      e.target.value = "";
-                    }} />
-                  </label>
-                </div>
-              </div>
-              <div>
-                <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Description</label>
-                <textarea rows={3} placeholder="Décrivez le circuit, les points forts…"
-                  value={circuitDescription} onChange={(e) => setCircuitDescription(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none placeholder:text-slate-400" />
-              </div>
-            </div>
-
-            {/* ── Disponibilité du circuit ── */}
-            <div className="space-y-3">
-              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Disponibilité</p>
-              <div className="grid grid-cols-2 gap-2">
-                {AVAILABILITY_TYPES.map((m) => (
-                  <button key={m.value} type="button" onClick={() => setCircuitAvailMode(m.value)}
-                    className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border-2 text-[10px] font-bold transition-all ${circuitAvailMode === m.value ? 'border-primary bg-primary/10 text-slate-900' : 'border-slate-200 bg-white text-slate-500 hover:border-primary/30'}`}>
-                    <span className={`material-symbols-outlined text-sm ${circuitAvailMode === m.value ? 'text-primary' : 'text-slate-400'}`}>{m.icon}</span>{m.label}
-                  </button>
-                ))}
-              </div>
-
-              {circuitAvailMode === 'specific' && (
-                <div className="space-y-1.5">
-                  <p className="text-[10px] text-slate-400 font-semibold">
-                    Choisissez la <span className="font-black text-slate-500">date de départ</span> — le circuit durera automatiquement {circuitNbJours} jour{circuitNbJours > 1 ? 's' : ''}.
-                  </p>
-                  <div className="flex gap-2">
-                    <input type="date" value={circuitAvailNewDate} onChange={(e) => setCircuitAvailNewDate(e.target.value)}
-                      className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                    <button type="button" onClick={() => {
-                      if (!circuitAvailNewDate) return;
-                      if (circuitAvailDates.includes(circuitAvailNewDate)) return;
-                      // compute end date = start + nb_jours - 1
-                      const start = new Date(circuitAvailNewDate);
-                      const end = new Date(start);
-                      end.setDate(end.getDate() + circuitNbJours - 1);
-                      const endStr = end.toISOString().split('T')[0];
-                      // store as "startDate:endDate" to carry the range
-                      const slot = `${circuitAvailNewDate}:${endStr}`;
-                      if (!circuitAvailDates.includes(slot)) {
-                        setCircuitAvailDates((prev) => [...prev, slot].sort());
-                        setCircuitAvailNewDate("");
-                      }
-                    }} className="px-3 py-2 bg-primary text-white rounded-xl text-xs font-extrabold hover:bg-primary/90">Ajouter</button>
-                  </div>
-                  {circuitAvailDates.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {circuitAvailDates.map((slot) => {
-                        const [start, end] = slot.includes(':') ? slot.split(':') : [slot, slot];
-                        const fmt = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-                        return (
-                          <span key={slot} className="flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 text-primary rounded-full text-[10px] font-bold border border-primary/20">
-                            <Calendar size={9} />{fmt(start)}{start !== end ? ` → ${fmt(end)}` : ''}
-                            <button type="button" onClick={() => setCircuitAvailDates((prev) => prev.filter((x) => x !== slot))}><X size={8} /></button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {circuitAvailMode === 'weekly' && (
-                <div className="space-y-1.5">
-                  <div className="flex gap-1">
-                    {['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map((day, i) => (
-                      <button key={i} type="button"
-                        onClick={() => setCircuitAvailWeekdays((prev) => prev.includes(i) ? prev.filter((d) => d !== i) : [...prev, i])}
-                        className={`flex-1 py-1.5 rounded-lg text-[9px] font-black border-2 transition-all ${circuitAvailWeekdays.includes(i) ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{day}</button>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début</label><input type="date" value={circuitAvailStart} onChange={(e) => setCircuitAvailStart(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                    <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin</label><input type="date" value={circuitAvailEnd} onChange={(e) => setCircuitAvailEnd(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                  </div>
-                </div>
-              )}
-
-              {circuitAvailMode === 'period' && (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début *</label>
-                      <input type="date" value={circuitAvailStart}
-                        onChange={(e) => {
-                          const start = e.target.value;
-                          setCircuitAvailStart(start);
-                          // auto-calculate end from nb_jours
-                          if (start && circuitNbJours > 0) {
-                            const d = new Date(start);
-                            d.setDate(d.getDate() + circuitNbJours - 1);
-                            setCircuitAvailEnd(d.toISOString().split('T')[0]);
-                          }
-                        }}
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin *</label>
-                      <input type="date" value={circuitAvailEnd}
-                        onChange={(e) => {
-                          const end = e.target.value;
-                          setCircuitAvailEnd(end);
-                          // sync nb_jours from the date range
-                          if (circuitAvailStart && end && end >= circuitAvailStart) {
-                            const diff = Math.round((new Date(end).getTime() - new Date(circuitAvailStart).getTime()) / 86400000) + 1;
-                            if (diff !== circuitNbJours) {
-                              if (diff < circuitNbJours) setCircuitEtapes((prev) => prev.filter((ep) => ep.jour <= diff));
-                              setCircuitNbJours(diff);
-                            }
-                          }
-                        }}
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                    </div>
-                  </div>
-                  {circuitAvailStart && circuitAvailEnd && (
-                    <p className="text-[10px] text-primary font-bold">
-                      Circuit de {circuitNbJours} jour{circuitNbJours > 1 ? 's' : ''} · {circuitAvailStart} → {circuitAvailEnd}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {circuitAvailMode === 'on_demand' && (
-                <div className="flex gap-2">
-                  {['24h','48h','72h'].map((d) => (
-                    <button key={d} type="button" onClick={() => setCircuitAvailDelai(d)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border-2 transition-all ${circuitAvailDelai === d ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 bg-white text-slate-500'}`}>{d}</button>
-                  ))}
-                </div>
-              )}
-
-              {circuitAvailMode === 'season' && (
-                <div className="flex gap-1.5">
-                  {SAISONS.map((s) => (
-                    <button key={s} type="button"
-                      onClick={() => setCircuitAvailSaisons((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s])}
-                      className={`flex-1 py-1.5 rounded-xl text-[9px] font-black border-2 transition-all ${circuitAvailSaisons.includes(s) ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{s}</button>
-                  ))}
-                </div>
-              )}
-
-              {circuitAvailMode !== 'on_demand' && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Heure début</label><input type="time" value={circuitAvailHDebut} onChange={(e) => setCircuitAvailHDebut(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                  <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Heure fin</label><input type="time" value={circuitAvailHFin} onChange={(e) => setCircuitAvailHFin(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                </div>
-              )}
-            </div>
-
-            {/* ── Hébergement du circuit ── */}
-            <div className="space-y-3">
-              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Hébergement</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => setCircuitHebergInclus(false)}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-xs font-bold transition-all ${!circuitHebergInclus ? 'border-primary bg-primary/10 text-slate-900' : 'border-slate-200 bg-white text-slate-500 hover:border-primary/30'}`}>
-                  <span className={`material-symbols-outlined text-sm ${!circuitHebergInclus ? 'text-primary' : 'text-slate-400'}`}>hotel_class</span>
-                  Non inclus
-                </button>
-                <button type="button" onClick={() => setCircuitHebergInclus(true)}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-xs font-bold transition-all ${circuitHebergInclus ? 'border-primary bg-primary/10 text-slate-900' : 'border-slate-200 bg-white text-slate-500 hover:border-primary/30'}`}>
-                  <span className={`material-symbols-outlined text-sm ${circuitHebergInclus ? 'text-primary' : 'text-slate-400'}`}>hotel</span>
-                  Hébergement inclus
-                </button>
-              </div>
-
-              {circuitHebergInclus && (
-                <div className="space-y-3 pl-2 border-l-2 border-primary/20">
-                  <div className="grid grid-cols-2 gap-2">
-                    {([
-                      { value: "same",    label: "Même sur tout le circuit", icon: "sync" },
-                      { value: "per_day", label: "Variable par jour",         icon: "calendar_view_day" },
-                    ] as const).map((opt) => (
-                      <button key={opt.value} type="button" onClick={() => setCircuitHebergType(opt.value)}
-                        className={`flex items-center gap-1.5 px-2.5 py-2.5 rounded-xl border-2 text-[10px] font-bold transition-all ${circuitHebergType === opt.value ? 'border-primary bg-primary/10 text-slate-900' : 'border-slate-200 bg-white text-slate-500 hover:border-primary/30'}`}>
-                        <span className={`material-symbols-outlined text-sm ${circuitHebergType === opt.value ? 'text-primary' : 'text-slate-400'}`}>{opt.icon}</span>
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {circuitHebergType === 'same' && (
-                    <p className="text-[10px] text-slate-400">
-                      <span className="material-symbols-outlined text-[12px] align-middle mr-0.5">info</span>
-                      Configurez l'hébergement dans le slot "Hébergement du circuit" ci-dessous. Il est retiré des activités par jour.
-                    </p>
-                  )}
-
-                  {circuitHebergType === 'per_day' && (
-                    <p className="text-[10px] text-slate-400">
-                      <span className="material-symbols-outlined text-[12px] align-middle mr-0.5">info</span>
-                      Configurez l'hébergement dans chaque jour directement.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* ── Étapes — un slot par jour ── */}
-            <div className="space-y-4">
-              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
-                Étapes ({circuitEtapes.length}/{circuitNbJours} jours configurés)
-              </p>
-
-              {[
-                ...(circuitHebergInclus && circuitHebergType === 'same' ? [-1] : []),
-                ...Array.from({ length: circuitNbJours }, (_, i) => i + 1),
-              ].map((jour) => {
-                const isCircuitHebergSlot = jour === -1;
-                const activitesJour = isCircuitHebergSlot
-                  ? (circuitHebergEtape ? [circuitHebergEtape] : [])
-                  : circuitEtapes.filter((e) => e.jour === jour);
-                const isFormOpenForThisJour = etapeFormOpen && etapeJour === jour;
-
-                return (
-                  <div key={jour} className="space-y-2">
-                    {/* Jour header */}
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-full font-black text-xs flex items-center justify-center shrink-0 ${activitesJour.length > 0 ? "bg-primary text-white" : "bg-slate-100 text-slate-400"}`}>
-                        {isCircuitHebergSlot ? <span className="material-symbols-outlined text-[13px]">hotel</span> : jour}
-                      </div>
-                      <p className="text-xs font-extrabold text-slate-600">{isCircuitHebergSlot ? "Hébergement du circuit" : `Jour ${jour}`}</p>
-                      {isFormOpenForThisJour && activitesJour.length > 0 && (
-                        <span className="ml-auto text-[10px] text-slate-400 font-semibold">{activitesJour.length} activité{activitesJour.length > 1 ? "s" : ""}</span>
-                      )}
-                      {isFormOpenForThisJour && (
-                        <button type="button" onClick={() => { setEtapeFormOpen(false); resetEtapeForm(); }}
-                          className="ml-auto text-[10px] font-bold text-slate-400 hover:text-slate-600 cursor-pointer">Annuler</button>
-                      )}
-                    </div>
-
-                    {/* Liste des activités */}
-                    {activitesJour.map((act) => {
-                      const actCat = PROVIDER_SCHEMA.find((c) => c.value === act.categorie);
-                      const actStLabels = act.subtypes.map((sv) => actCat?.subtypes.find((s) => s.value === sv)?.label ?? sv);
-                      const firstPhoto = Object.values(act.entity_photos ?? {}).flat()[0] ?? act.photos?.[0];
-                      return (
-                        <div key={act.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100 ml-9">
-                          {firstPhoto && <img src={firstPhoto} alt="" className="w-10 h-10 rounded-xl object-cover shrink-0" />}
-                          <div className="flex-1 min-w-0">
-                            {(act.heure_debut || act.heure_fin) && (
-                              <p className="text-[10px] font-black text-primary mb-0.5">{act.heure_debut || "?"} → {act.heure_fin || "?"}</p>
-                            )}
-                            <p className="text-sm font-extrabold text-slate-800 truncate">{act.titre || act.destination}</p>
-                            <p className="text-[10px] text-slate-400 font-semibold truncate">{act.destination} · {actCat?.label}{actStLabels.length > 0 && ` · ${actStLabels.join(", ")}`}</p>
-                            {act.prix != null && <p className="text-[10px] font-black text-primary mt-0.5">{act.prix} TND</p>}
-                          </div>
-                          <div className="flex flex-col gap-1 shrink-0">
-                            <button type="button" onClick={() => {
-                              if (isCircuitHebergSlot) { openCircuitHebergConfig(); return; }
-                              resetEtapeForm();
-                              setEditingEtapeId(act.id);
-                              setEtapeJour(jour);
-                              setEtapeDestination(act.destination);
-                              setEtapeAddress(act.address);
-                              setEtapeLat(act.lat); setEtapeLng(act.lng);
-                              setEtapeCategorie(act.categorie);
-                              setEtapeSubtypes(act.subtypes);
-                              setEtapeTitre(act.titre);
-                              setEtapeDescCourte(act.description_courte);
-                              setEtapeDescLongue(act.description_longue);
-                              setEtapePrix(act.prix?.toString() ?? '');
-                              setEtapeHeureDebut(act.heure_debut ?? '');
-                              setEtapeHeureFin(act.heure_fin ?? '');
-                              setEtapeSubtypeDetails(act.fields ?? {});
-                              setEtapeSubtypeUnitDetails(act.unit_details ?? {});
-                              setEtapeSubtypeNbUnites(act.nb_unites ?? {});
-                              setEtapeSubtypeFormConfig(act.form_config ?? {});
-                              setEtapeEntityExistingImages(act.entity_photos ?? {});
-                              setEtapeFormOpen(true); setEtapeFormError('');
-                            }} className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-primary flex items-center justify-center transition-colors cursor-pointer">
-                              <Edit3 size={10} />
-                            </button>
-                            <button type="button" onClick={() => {
-                              if (isCircuitHebergSlot) { setCircuitHebergEtape(null); return; }
-                              setCircuitEtapes((prev) => prev.filter((e) => e.id !== act.id));
-                            }} className="w-6 h-6 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 flex items-center justify-center transition-colors cursor-pointer">
-                              <X size={10} />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {/* Slot vide ou bouton ajouter — toujours dans la zone indentée */}
-                    {!isFormOpenForThisJour && (
-                      <div className="ml-9">
-                        {activitesJour.length === 0 ? (
-                          <div className="flex items-center justify-between px-4 py-3 border-2 border-dashed border-slate-200 rounded-2xl">
-                            <p className="text-xs text-slate-400 font-semibold">Non configuré</p>
-                            <button type="button"
-                              onClick={() => isCircuitHebergSlot ? openCircuitHebergConfig() : (resetEtapeForm(), setEditingEtapeId(null), setEtapeJour(jour), setEtapeFormOpen(true), setEtapeFormError(''))}
-                              className="text-[11px] font-extrabold text-primary hover:text-primary/80 cursor-pointer">
-                              Configurer →
-                            </button>
-                          </div>
-                        ) : !isCircuitHebergSlot ? (
-                          <button type="button"
-                            onClick={() => { resetEtapeForm(); setEditingEtapeId(null); setEtapeJour(jour); setEtapeFormOpen(true); setEtapeFormError(''); }}
-                            className="w-full py-2 border-2 border-dashed border-primary/30 rounded-xl text-[11px] font-extrabold text-primary hover:bg-primary/5 transition-colors cursor-pointer">
-                            + Ajouter une activité pour ce jour
-                          </button>
-                        ) : null}
-                      </div>
-                    )}
-
-                    {/* Formulaire activité */}
-                    {isFormOpenForThisJour && (
-                      <div className="ml-9 border-2 border-primary/20 rounded-2xl p-5 bg-primary/5 space-y-4">
-                        <p className="text-[10px] font-black tracking-widest text-primary uppercase">
-                          {isCircuitHebergSlot ? (editingEtapeId ? "Modifier l'hébergement" : "Configurer l'hébergement") : (editingEtapeId ? "Modifier l'activité" : "Nouvelle activité") + ` — Jour ${jour}`}
-                        </p>
-
-                        {/* Horaires dans le circuit — masqués pour l'hébergement circuit */}
-                        {!isCircuitHebergSlot && <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">
-                            Plage horaire dans le circuit <span className="text-red-400">*</span>
-                          </label>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="text-[9px] text-slate-400 mb-0.5 block">Début</label>
-                              <input type="time" value={etapeHeureDebut} onChange={(e) => setEtapeHeureDebut(e.target.value)}
-                                className={`w-full bg-white border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${!etapeHeureDebut && etapeFormError ? "border-red-300" : "border-slate-200"}`} />
-                            </div>
-                            <div>
-                              <label className="text-[9px] text-slate-400 mb-0.5 block">Fin</label>
-                              <input type="time" value={etapeHeureFin} onChange={(e) => setEtapeHeureFin(e.target.value)}
-                                className={`w-full bg-white border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${!etapeHeureFin && etapeFormError ? "border-red-300" : "border-slate-200"}`} />
-                            </div>
-                          </div>
-                        </div>}
-
-                        {!isCircuitHebergSlot && <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Nom affiché (optionnel)</label>
-                          <input type="text" placeholder="Ex : Ain Draham" value={etapeDestination}
-                            onChange={(e) => setEtapeDestination(e.target.value)}
-                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-slate-300" />
-                        </div>}
-
-                  {/* Carte */}
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">
-                      Localisation sur la carte *
-                      {etapeLat && <span className="ml-2 text-primary font-black">✓ Positionnée</span>}
-                    </label>
-                    <MapPicker
-                      lat={etapeLat}
-                      lng={etapeLng}
-                      onPick={(lat, lng, address) => {
-                        setEtapeLat(lat); setEtapeLng(lng); setEtapeAddress(address);
-                        if (!etapeDestination) setEtapeDestination(address.split(",")[0].trim());
-                        setEtapeFormError("");
-                      }}
-                    />
-                    {etapeAddress && (
-                      <p className="text-[10px] text-slate-400 mt-1 truncate">{etapeAddress}</p>
-                    )}
-                  </div>
-
-                  {/* Catégorie — masquée pour hébergement circuit (pré-défini à 'hebergement') */}
-                  {!isCircuitHebergSlot && <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Type d'activité *</label>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {PROVIDER_SCHEMA.filter((cat) => !(circuitHebergInclus && circuitHebergType === 'same' && cat.value === 'hebergement')).map((cat) => {
-                        const active = etapeCategorie === cat.value;
-                        return (
-                          <button key={cat.value} type="button"
-                            onClick={() => { setEtapeCategorie(active ? "" : cat.value); setEtapeSubtypes([]); setEtapeFields({}); setEtapeFormError(""); }}
-                            className={`flex flex-col items-center justify-center gap-1 py-2.5 px-1 rounded-xl border-2 text-center transition-all cursor-pointer ${active ? "bg-primary/10 border-primary text-slate-900 shadow-sm" : "bg-white border-slate-200 text-slate-500 hover:border-primary/40"}`}>
-                            <span className={`material-symbols-outlined text-base ${active ? "text-primary" : "text-slate-400"}`}>{cat.icon}</span>
-                            <span className="text-[9px] font-extrabold leading-tight">{cat.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>}
-
-                  {/* Sous-types — multi-sélection */}
-                  {etapeCategorie && (() => {
-                    const cat = PROVIDER_SCHEMA.find((c) => c.value === etapeCategorie);
-                    if (!cat?.subtypes.length) return null;
-                    return (
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Sous-types *</label>
-                        <div className="flex flex-wrap gap-1.5">
-                          {cat.subtypes.map((st) => {
-                            const sel = etapeSubtypes.includes(st.value);
-                            return (
-                              <button key={st.value} type="button"
-                                onClick={() => {
-                                  setEtapeSubtypes((prev) => sel ? prev.filter((v) => v !== st.value) : [...prev, st.value]);
-                                  if (sel) setEtapeFields((prev) => { const n = { ...prev }; delete n[st.value]; return n; });
-                                  setEtapeFormError("");
-                                }}
-                                className={`px-3 py-1.5 rounded-xl border-2 text-[11px] font-extrabold transition-all cursor-pointer ${sel ? "bg-primary/10 border-primary text-primary" : "bg-white border-slate-200 text-slate-600 hover:border-primary/40"}`}>
-                                {st.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* ── Champs communs (identiques à toute offre) ── */}
-                  {etapeSubtypes.length > 0 && (
-                    <div className="space-y-3">
-                      <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Informations de l'offre</p>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Titre *</label>
-                        <input type="text" placeholder="Ex : Randonnée au Djebel Zaghouan"
-                          value={etapeTitre} onChange={(e) => { setEtapeTitre(e.target.value); setEtapeFormError(""); }}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Description courte</label>
-                        <textarea rows={2} placeholder="Résumé de l'étape en 1-2 phrases…"
-                          value={etapeDescCourte} onChange={(e) => setEtapeDescCourte(e.target.value)}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary resize-none placeholder:text-slate-300" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Description détaillée</label>
-                        <textarea rows={3} placeholder="Description complète de l'étape…"
-                          value={etapeDescLongue} onChange={(e) => setEtapeDescLongue(e.target.value)}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary resize-none placeholder:text-slate-300" />
-                      </div>
-                      {etapeCategorie !== 'hebergement' && (
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Prix de base (TND)</label>
-                          <input type="number" min="0" placeholder="0"
-                            value={etapePrix} onChange={(e) => setEtapePrix(e.target.value)}
-                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary" />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* ── Détails spécifiques (réplique exacte du formulaire de publication) ── */}
-                  {etapeSubtypes.length > 0 && (() => {
-                    const isEtapeHeberg = etapeCategorie === 'hebergement';
-
-                    // Résolution des dynamicOptions depuis les données d'onboarding des activités
-                    const flatOrgOnboarding = orgActivities.reduce<Record<string, any>>((acc, act) => {
-                      return { ...acc, ...Object.values(act.fields ?? {}).reduce<Record<string, any>>((a, s) => ({ ...a, ...(s as Record<string, any>) }), {}) };
-                    }, {});
-                    const resolveEtapeOptions = (field: { options?: string[]; dynamicOptions?: string }): string[] => {
-                      if (!field.dynamicOptions) return field.options ?? [];
-                      const key = field.dynamicOptions.replace('onboarding.', '');
-                      const val = flatOrgOnboarding[key];
-                      if (Array.isArray(val)) return val as string[];
-                      if (typeof val === 'string' && val.trim()) return [val];
-                      return field.options ?? [];
-                    };
-
-                    const renderEtapePhotoSection = (entityKey: string, label: string) => {
-                      const existingUrls = etapeEntityExistingImages[entityKey] ?? [];
-                      const newImgs = etapeEntityImages[entityKey] ?? [];
-                      const coverI = etapeEntityCoverIdx[entityKey] ?? 0;
-                      const inputId = `ep-${entityKey.replace(/[^a-z0-9]/gi, '-')}`;
-                      const hasAny = existingUrls.length > 0 || newImgs.length > 0;
-                      return (
-                        <div className="mb-4 pb-4 border-b border-slate-200 last:border-0">
-                          <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">📷 {label}</label>
-                          {!hasAny && (
-                            <label htmlFor={inputId}
-                              className="flex flex-col items-center justify-center gap-1.5 w-full h-20 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
-                              <span className="material-symbols-outlined text-slate-300 text-2xl">add_photo_alternate</span>
-                              <p className="text-[10px] font-semibold text-slate-400">Cliquez pour ajouter des photos</p>
-                              <input id={inputId} type="file" accept="image/*" multiple className="hidden"
-                                onChange={(e) => { const files = Array.from(e.target.files ?? []); setEtapeEntityImages((prev) => ({ ...prev, [entityKey]: [...(prev[entityKey] ?? []), ...files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))] })); e.target.value = ""; }}
-                              />
-                            </label>
-                          )}
-                          {hasAny && (
-                            <>
-                              <div className="mt-1 grid grid-cols-4 gap-1.5">
-                                {/* Photos déjà sauvegardées */}
-                                {existingUrls.map((url, i) => (
-                                  <div key={`ex-${i}`}
-                                    className={`relative group aspect-square rounded-xl overflow-hidden border-2 transition-all ${i === 0 && newImgs.length === 0 ? "border-primary shadow-md" : "border-slate-200"}`}>
-                                    <img src={url} alt="" className="w-full h-full object-cover" />
-                                    {i === 0 && newImgs.length === 0 && <div className="absolute top-1 left-1 bg-primary text-white text-[8px] font-black px-1.5 py-0.5 rounded-md leading-none">Cover</div>}
-                                    <button type="button"
-                                      onClick={() => setEtapeEntityExistingImages((prev) => ({ ...prev, [entityKey]: (prev[entityKey] ?? []).filter((_, idx) => idx !== i) }))}
-                                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <X size={10} />
-                                    </button>
-                                  </div>
-                                ))}
-                                {/* Nouvelles photos à uploader */}
-                                {newImgs.map((img, i) => {
-                                  const isCover = existingUrls.length === 0 && i === coverI;
-                                  return (
-                                    <div key={`new-${i}`}
-                                      onClick={() => { if (existingUrls.length === 0) setEtapeEntityCoverIdx((prev) => ({ ...prev, [entityKey]: i })); }}
-                                      className={`relative group aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${isCover ? "border-primary shadow-md" : "border-transparent hover:border-slate-300"}`}>
-                                      <img src={img.preview} alt="" className="w-full h-full object-cover" />
-                                      {isCover && <div className="absolute top-1 left-1 bg-primary text-white text-[8px] font-black px-1.5 py-0.5 rounded-md leading-none">Cover</div>}
-                                      <button type="button"
-                                        onClick={(e) => { e.stopPropagation(); URL.revokeObjectURL(img.preview); setEtapeEntityImages((prev) => { const cur = prev[entityKey] ?? []; return { ...prev, [entityKey]: cur.filter((_, idx) => idx !== i) }; }); setEtapeEntityCoverIdx((prev) => { const cur = prev[entityKey] ?? 0; return { ...prev, [entityKey]: cur >= i && cur > 0 ? cur - 1 : cur }; }); }}
-                                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <X size={10} />
-                                      </button>
-                                    </div>
-                                  );
-                                })}
-                                {/* Bouton ajouter */}
-                                <label htmlFor={inputId}
-                                  className="flex flex-col items-center justify-center aspect-square border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
-                                  <span className="material-symbols-outlined text-slate-300 text-xl">add</span>
-                                  <input id={inputId} type="file" accept="image/*" multiple className="hidden"
-                                    onChange={(e) => { const files = Array.from(e.target.files ?? []); setEtapeEntityImages((prev) => ({ ...prev, [entityKey]: [...(prev[entityKey] ?? []), ...files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))] })); e.target.value = ""; }}
-                                  />
-                                </label>
-                              </div>
-                              {(existingUrls.length + newImgs.length) > 1 && existingUrls.length === 0 && (
-                                <p className="text-[9px] text-slate-400 font-medium mt-1">Cliquez sur une photo pour la définir comme image principale.</p>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      );
-                    };
-
-                    const eGetNb = (st: string) => etapeSubtypeNbUnites[st] ?? 1;
-                    const eGetUD = (st: string) => etapeSubtypeUnitDetails[st] ?? [{}];
-                    const eGetTab = (st: string) => etapeActiveSubtypeTab[st] ?? 0;
-                    const eSetNb = (st: string, n: number) => setEtapeSubtypeNbUnites((prev) => ({ ...prev, [st]: n }));
-                    const eSetUD = (st: string, arr: Array<Record<string, any>>) => setEtapeSubtypeUnitDetails((prev) => ({ ...prev, [st]: arr }));
-                    const eSetTab = (st: string, i: number) => setEtapeActiveSubtypeTab((prev) => ({ ...prev, [st]: i }));
-                    const eGetCfg = (st: string): Record<string, any> => etapeSubtypeFormConfig[st] ?? {};
-                    const eSetCfg = (st: string, f: string, v: any) => setEtapeSubtypeFormConfig((prev) => ({ ...prev, [st]: { ...(prev[st] ?? {}), [f]: v } }));
-
-                    const renderEtapeFields = (st: string, getData: (k: string) => any, setData: (k: string, v: any) => void) => {
-                      const config = OFFER_DETAIL_FIELDS[st];
-                      if (!config) return null;
-                      return config.sections.map((sec, si) => {
-                        if ((sec.conditionalOn as any)?.onboardingKey) return null;
-                        const visible = sec.fields.filter((f) => {
-                          if (!f.conditionalOn) return true;
-                          if (f.conditionalOn.field && f.conditionalOn.value !== undefined) return getData(f.conditionalOn.field) === f.conditionalOn.value;
-                          if (f.conditionalOn.field && f.conditionalOn.notValue !== undefined) return getData(f.conditionalOn.field) !== f.conditionalOn.notValue;
-                          return true;
-                        });
-                        if (!visible.length) return null;
-                        return (
-                          <div key={si} className="mb-4 last:mb-0">
-                            <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">{sec.label}</p>
-                            <div className="space-y-2.5">
-                              {visible.map((field) => {
-                                const val = getData(field.key);
-                                const sv = (v: any) => setData(field.key, v);
-                                if (field.type === "boolean") return (
-                                  <div key={field.key} className="flex items-center justify-between">
-                                    <span className="text-xs font-semibold text-slate-700">{field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}</span>
-                                    <button type="button" onClick={() => sv(!val)} className={`w-10 h-5 rounded-full transition-colors shrink-0 ${val ? "bg-primary" : "bg-slate-200"}`}>
-                                      <div className={`w-4 h-4 rounded-full bg-white mx-auto transition-transform ${val ? "translate-x-2.5" : "-translate-x-2.5"}`} />
-                                    </button>
-                                  </div>
-                                );
-                                if (field.type === "multiselect") {
-                                  const opts = resolveEtapeOptions(field);
-                                  if (!opts.length) return (
-                                    <div key={field.key}>
-                                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}</label>
-                                      <input type="text" placeholder={`Saisir ${field.label.toLowerCase()}…`} value={Array.isArray(val) ? (val as string[]).join(", ") : (val ?? "")} onChange={(e) => sv(e.target.value ? e.target.value.split(",").map((s: string) => s.trim()).filter(Boolean) : [])} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                                    </div>
-                                  );
-                                  return (
-                                    <div key={field.key}>
-                                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}</label>
-                                      <div className="flex flex-wrap gap-1">
-                                        {opts.map((opt) => { const chosen = Array.isArray(val) && val.includes(opt); return (<button key={opt} type="button" onClick={() => sv(chosen ? (val as string[]).filter((v: string) => v !== opt) : [...(val as string[] ?? []), opt])} className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border transition-all ${chosen ? "bg-primary/10 border-primary text-primary" : "bg-white border-slate-200 text-slate-600"}`}>{opt}</button>); })}
-                                      </div>
-                                    </div>
-                                  );
-                                }
-                                if (field.type === "select") {
-                                  const opts = resolveEtapeOptions(field);
-                                  if (!opts.length) return (
-                                    <div key={field.key}>
-                                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}</label>
-                                      <input type="text" placeholder={`Saisir ${field.label.toLowerCase()}…`} value={val ?? ""} onChange={(e) => sv(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                                    </div>
-                                  );
-                                  return (
-                                    <div key={field.key}>
-                                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}</label>
-                                      <select value={val ?? ""} onChange={(e) => sv(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                                        <option value="">— Sélectionner —</option>
-                                        {opts.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                                      </select>
-                                    </div>
-                                  );
-                                }
-                                if (field.type === "number") return (
-                                  <div key={field.key}>
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{field.label}{field.unit && <span className="text-slate-300 ml-1">({field.unit})</span>}{field.required && <span className="text-red-400 ml-0.5">*</span>}</label>
-                                    <input type="number" min="0" placeholder={field.placeholder} value={val ?? ""} onChange={(e) => sv(e.target.value ? Number(e.target.value) : undefined)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                                  </div>
-                                );
-                                if (field.type === "time") return (
-                                  <div key={field.key}>
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}</label>
-                                    <input type="time" value={val ?? ""} onChange={(e) => sv(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                                  </div>
-                                );
-                                if (field.type === "textarea") return (
-                                  <div key={field.key}>
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}</label>
-                                    <textarea rows={2} placeholder={field.placeholder} value={val ?? ""} onChange={(e) => sv(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
-                                  </div>
-                                );
-                                if (field.type === "repeater") {
-                                  const rows = Array.isArray(val) ? val as Array<Record<string, any>> : [];
-                                  return (
-                                    <div key={field.key}>
-                                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{field.label}</label>
-                                      {rows.map((row, ri) => (
-                                        <div key={ri} className="flex gap-1.5 mb-1.5">
-                                          {(field.subfields ?? []).map((sf) => (
-                                            <input key={sf.key} type={sf.type === "number" ? "number" : "text"} placeholder={sf.placeholder}
-                                              value={(row[sf.key] as string) ?? ""}
-                                              onChange={(e) => { const nr = [...rows]; nr[ri] = { ...nr[ri], [sf.key]: sf.type === "number" ? Number(e.target.value) : e.target.value }; sv(nr); }}
-                                              className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                                          ))}
-                                          <button type="button" onClick={() => sv(rows.filter((_, idx) => idx !== ri))}
-                                            className="w-7 h-7 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 flex items-center justify-center shrink-0 mt-0.5"><X size={12} /></button>
-                                        </div>
-                                      ))}
-                                      <button type="button" onClick={() => sv([...rows, {}])}
-                                        className="w-full py-1.5 rounded-xl border-2 border-dashed border-slate-200 text-[10px] font-extrabold text-slate-400 hover:border-primary/40 hover:text-primary transition-all">+ Ajouter {field.label}</button>
-                                    </div>
-                                  );
-                                }
-                                if (field.type === "file") return null;
-                                return (
-                                  <div key={field.key}>
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}</label>
-                                    <input type="text" placeholder={field.placeholder} value={val ?? ""} onChange={(e) => sv(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      });
-                    };
-
-                    const renderEtapeAvailBloc = (st: string) => {
-                      const cfg = eGetCfg(st);
-                      const mode = (cfg.availMode as string) ?? 'specific';
-                      const weekdays: number[] = (cfg.availWeekdays as number[]) ?? [];
-                      const specificDates: string[] = (cfg.specificDates as string[]) ?? [];
-                      const saisons: string[] = (cfg.saisons as string[]) ?? [];
-                      return (
-                        <div className="mb-4 pb-4 border-b border-slate-200">
-                          <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Disponibilité</p>
-                          <div className="grid grid-cols-2 gap-2 mb-2">
-                            {AVAILABILITY_TYPES.map((m) => (
-                              <button key={m.value} type="button" onClick={() => eSetCfg(st, 'availMode', m.value)}
-                                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border-2 text-[10px] font-bold transition-all ${mode === m.value ? 'border-primary bg-primary/10 text-slate-900' : 'border-slate-200 bg-white text-slate-500 hover:border-primary/30'}`}>
-                                <span className={`material-symbols-outlined text-sm ${mode === m.value ? 'text-primary' : 'text-slate-400'}`}>{m.icon}</span>{m.label}
-                              </button>
-                            ))}
-                          </div>
-                          {mode === 'specific' && (
-                            <div className="space-y-1.5">
-                              <div className="flex gap-2">
-                                <input type="date" value={(cfg.newSpecificDate as string) ?? ''} onChange={(e) => eSetCfg(st, 'newSpecificDate', e.target.value)} className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                                <button type="button" onClick={() => { const d = (cfg.newSpecificDate as string) ?? ''; if (d && !specificDates.includes(d)) { eSetCfg(st, 'specificDates', [...specificDates, d].sort()); eSetCfg(st, 'newSpecificDate', ''); } }} className="px-3 py-2 bg-primary text-white rounded-xl text-xs font-extrabold hover:bg-primary/90">Ajouter</button>
-                              </div>
-                              {specificDates.length > 0 && <div className="flex flex-wrap gap-1">{specificDates.map((d) => <span key={d} className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded-full text-[10px] font-bold border border-primary/20">{d}<button type="button" onClick={() => eSetCfg(st, 'specificDates', specificDates.filter((x) => x !== d))}><X size={8} /></button></span>)}</div>}
-                            </div>
-                          )}
-                          {mode === 'weekly' && (
-                            <div className="space-y-1.5">
-                              <div className="flex gap-1">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map((day, i) => <button key={i} type="button" onClick={() => eSetCfg(st, 'availWeekdays', weekdays.includes(i) ? weekdays.filter((d) => d !== i) : [...weekdays, i])} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black border-2 transition-all ${weekdays.includes(i) ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{day}</button>)}</div>
-                              <div className="grid grid-cols-2 gap-2">
-                                <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début</label><input type="date" value={(cfg.availStart as string) ?? ''} onChange={(e) => eSetCfg(st, 'availStart', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                                <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin</label><input type="date" value={(cfg.availEnd as string) ?? ''} onChange={(e) => eSetCfg(st, 'availEnd', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                              </div>
-                            </div>
-                          )}
-                          {mode === 'period' && (
-                            <div className="grid grid-cols-2 gap-2">
-                              <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début *</label><input type="date" value={(cfg.availStart as string) ?? ''} onChange={(e) => eSetCfg(st, 'availStart', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                              <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin *</label><input type="date" value={(cfg.availEnd as string) ?? ''} onChange={(e) => eSetCfg(st, 'availEnd', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                            </div>
-                          )}
-                          {mode === 'on_demand' && (
-                            <div className="flex gap-2">{['24h','48h','72h'].map((d) => <button key={d} type="button" onClick={() => eSetCfg(st, 'delaiReponse', d)} className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border-2 transition-all ${(cfg.delaiReponse ?? '24h') === d ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 bg-white text-slate-500'}`}>{d}</button>)}</div>
-                          )}
-                          {mode === 'season' && (
-                            <div className="flex gap-1.5">{SAISONS.map((s) => <button key={s} type="button" onClick={() => eSetCfg(st, 'saisons', saisons.includes(s) ? saisons.filter((x) => x !== s) : [...saisons, s])} className={`flex-1 py-1.5 rounded-xl text-[9px] font-black border-2 transition-all ${saisons.includes(s) ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{s}</button>)}</div>
-                          )}
-                          {mode !== 'on_demand' && (
-                            <div className="grid grid-cols-2 gap-2 mt-2">
-                              <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Heure début</label><input type="time" value={(cfg.heureDebut as string) ?? ''} onChange={(e) => eSetCfg(st, 'heureDebut', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                              <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Heure fin</label><input type="time" value={(cfg.heureFin as string) ?? ''} onChange={(e) => eSetCfg(st, 'heureFin', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    };
-
-                    const renderEtapePricingBloc = (st: string) => {
-                      const cfg = eGetCfg(st);
-                      return (
-                        <div className="mb-4 pb-4 border-b border-slate-200 space-y-2.5">
-                          <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Tarification</p>
-                          <div>
-                            <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Prix groupe <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-bold">DT</span><input type="number" min="0" placeholder="1200" value={(cfg.prixGroupe as string) ?? ''} onChange={(e) => eSetCfg(st, 'prixGroupe', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
-                              <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">pers.</span><input type="number" min="1" placeholder="10" value={(cfg.nbPersonnesGroupe as string) ?? ''} onChange={(e) => eSetCfg(st, 'nbPersonnesGroupe', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
-                            </div>
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Prix enfant <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-bold">DT</span><input type="number" min="0" placeholder="150" value={(cfg.prixEnfant as string) ?? ''} onChange={(e) => eSetCfg(st, 'prixEnfant', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
-                              <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">≤ âge</span><input type="number" min="0" max="18" placeholder="12" value={(cfg.ageMaxEnfant as string) ?? ''} onChange={(e) => eSetCfg(st, 'ageMaxEnfant', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-11 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
-                            </div>
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Supplément privatisation <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                            <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-bold">DT</span><input type="number" min="0" placeholder="500" value={(cfg.suppPrivatisation as string) ?? ''} onChange={(e) => eSetCfg(st, 'suppPrivatisation', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
-                          </div>
-                        </div>
-                      );
-                    };
-
-                    const renderEtapeNbUnites = (st: string) => {
-                      const nb = eGetNb(st);
-                      return (
-                        <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-200">
-                          <div>
-                            <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Nb d'unités</p>
-                            <p className="text-[9px] text-slate-400 font-medium mt-0.5">Chambres / suites / tentes disponibles à la vente</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button type="button"
-                              onClick={() => {
-                                if (nb <= 1) return;
-                                const removedKey = `${st}_unit_${nb - 1}`;
-                                setEtapeEntityImages((prev) => { const imgs = prev[removedKey] ?? []; imgs.forEach((img) => URL.revokeObjectURL(img.preview)); const next = { ...prev }; delete next[removedKey]; return next; });
-                                setEtapeEntityCoverIdx((prev) => { const next = { ...prev }; delete next[removedKey]; return next; });
-                                eSetUD(st, eGetUD(st).slice(0, -1));
-                                if (eGetTab(st) >= nb - 1) eSetTab(st, nb - 2);
-                                eSetNb(st, nb - 1);
-                              }}
-                              className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-black flex items-center justify-center text-sm transition-colors">−</button>
-                            <span className="text-base font-extrabold text-slate-800 w-6 text-center">{nb}</span>
-                            <button type="button"
-                              onClick={() => { eSetUD(st, [...eGetUD(st), {}]); eSetNb(st, nb + 1); }}
-                              className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-black flex items-center justify-center text-sm transition-colors">+</button>
-                          </div>
-                        </div>
-                      );
-                    };
-
-                    const renderEtapeUnitTabs = (st: string) => {
-                      const nb = eGetNb(st);
-                      const unitArr = eGetUD(st);
-                      const activeI = eGetTab(st);
-                      const config = OFFER_DETAIL_FIELDS[st];
-                      const nameKey = config?.sections[0]?.fields.find((f) => f.key.startsWith('nom_'))?.key ?? '';
-                      const uGet = (f: string) => unitArr[activeI]?.[f];
-                      const uSet = (f: string, v: any) => { const a = [...unitArr]; a[activeI] = { ...(a[activeI] ?? {}), [f]: v }; eSetUD(st, a); };
-                      const uMode = (uGet('availMode') as string) ?? 'specific';
-                      const uWeekdays: number[] = (uGet('availWeekdays') as number[]) ?? [];
-                      const uDates: string[] = (uGet('specificDates') as string[]) ?? [];
-                      const uSaisons: string[] = (uGet('saisons') as string[]) ?? [];
-                      return (
-                        <>
-                          <div className="flex flex-wrap gap-1.5 mb-3">
-                            {Array.from({ length: nb }, (_, i) => {
-                              const unitName = (unitArr[i]?.[nameKey] as string) || null;
-                              return (
-                                <button key={i} type="button" onClick={() => eSetTab(st, i)}
-                                  className={`px-3 py-1.5 rounded-full text-xs font-extrabold border-2 transition-all ${activeI === i ? 'bg-primary text-white border-primary' : 'bg-white border-slate-200 text-slate-500 hover:border-primary/30'}`}>
-                                  {unitName || `${st.replace(/_/g, ' ')} ${i + 1}`}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <div className="mb-3 pb-3 border-b border-slate-200 space-y-3">
-                            <div>
-                              <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Prix / nuit (TND)</label>
-                              <div className="relative"><span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px] font-bold">DT</span><input type="number" min="0" placeholder="Ex : 380" value={(unitArr[activeI]?.prix_unite as string) ?? ""} onChange={(e) => { const arr = [...unitArr]; arr[activeI] = { ...(arr[activeI] ?? {}), prix_unite: e.target.value }; eSetUD(st, arr); }} className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Max. personnes pour cette unité</label>
-                              <input type="number" min="1" placeholder="Ex : 2" value={(unitArr[activeI]?.max_pers_unite as string) ?? ""} onChange={(e) => { const arr = [...unitArr]; arr[activeI] = { ...(arr[activeI] ?? {}), max_pers_unite: e.target.value }; eSetUD(st, arr); }} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
-                            </div>
-                            <div>
-                              <button type="button"
-                                onClick={() => { const arr = [...unitArr]; arr[activeI] = { ...(arr[activeI] ?? {}), acompte_requis: !(arr[activeI]?.acompte_requis ?? false) }; eSetUD(st, arr); }}
-                                className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${unitArr[activeI]?.acompte_requis ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 bg-white text-slate-500 hover:border-primary/30'}`}>
-                                <div className={`w-3.5 h-3.5 rounded-sm border-2 flex items-center justify-center transition-all ${unitArr[activeI]?.acompte_requis ? 'border-primary bg-primary' : 'border-slate-300'}`}>
-                                  {unitArr[activeI]?.acompte_requis && <Check size={9} className="text-white" />}
-                                </div>
-                                Acompte requis pour cette unité
-                              </button>
-                              {unitArr[activeI]?.acompte_requis && (
-                                <div className="grid grid-cols-2 gap-2 mt-2">
-                                  <select value={(unitArr[activeI]?.type_acompte as string) ?? 'pourcentage'} onChange={(e) => { const arr = [...unitArr]; arr[activeI] = { ...(arr[activeI] ?? {}), type_acompte: e.target.value }; eSetUD(st, arr); }} className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                                    <option value="pourcentage">% du prix</option>
-                                    <option value="fixe">Montant fixe (DT)</option>
-                                  </select>
-                                  <div className="relative">
-                                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]">{(unitArr[activeI]?.type_acompte ?? 'pourcentage') === 'pourcentage' ? '%' : 'DT'}</span>
-                                    <input type="number" min="1" placeholder="30" value={(unitArr[activeI]?.valeur_acompte as string) ?? ""} onChange={(e) => { const arr = [...unitArr]; arr[activeI] = { ...(arr[activeI] ?? {}), valeur_acompte: e.target.value }; eSetUD(st, arr); }} className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          {renderEtapePhotoSection(`${st}_unit_${activeI}`, `Photos — ${(unitArr[activeI]?.[nameKey] as string) || `Unité ${activeI + 1}`}`)}
-                          {renderEtapeFields(
-                            st,
-                            (key) => unitArr[activeI]?.[key],
-                            (key, val) => { const arr = [...unitArr]; arr[activeI] = { ...(arr[activeI] ?? {}), [key]: val }; eSetUD(st, arr); },
-                          )}
-                        </>
-                      );
-                    };
-
-                    return (
-                      <div className="space-y-4">
-                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase block">Détails spécifiques</label>
-                        {etapeSubtypes.map((st) => (
-                          <div key={st} className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                            {etapeSubtypes.length > 1 && (
-                              <p className="text-[10px] font-black tracking-widest text-primary/70 uppercase mb-3">{st}</p>
-                            )}
-                            {isEtapeHeberg ? (
-                              <>
-                                {renderEtapePricingBloc(st)}
-                                {renderEtapeNbUnites(st)}
-                                {eGetNb(st) > 1
-                                  ? renderEtapeUnitTabs(st)
-                                  : (
-                                    <>
-                                      {renderEtapePhotoSection(`${st}_unit_0`, 'Photos de l\'offre')}
-                                      {renderEtapeFields(
-                                        st,
-                                        (key) => (eGetUD(st)[0] ?? {})[key],
-                                        (key, val) => { const arr = [...eGetUD(st)]; arr[0] = { ...(arr[0] ?? {}), [key]: val }; eSetUD(st, arr); },
-                                      )}
-                                    </>
-                                  )
-                                }
-                              </>
-                            ) : (
-                              <>
-                                {renderEtapePhotoSection(st, etapeSubtypes.length > 1 ? `Photos — ${st}` : 'Photos de l\'offre')}
-                                {renderEtapeFields(
-                                  st,
-                                  (key) => (etapeSubtypeDetails[st] ?? {})[key],
-                                  (key, val) => setEtapeSubtypeDetails((prev) => ({ ...prev, [st]: { ...(prev[st] ?? {}), [key]: val } })),
-                                )}
-                              </>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-
-                  {etapeFormError && <p className="text-xs font-semibold text-red-500">{etapeFormError}</p>}
-
-                  <div className="flex flex-col gap-2 pt-1">
-                    {!editingEtapeId && !isCircuitHebergSlot && (
-                      <button type="button" onClick={() => addEtape(true)} className="w-full py-2 text-xs font-extrabold text-primary border-2 border-primary/30 hover:bg-primary/5 rounded-xl cursor-pointer">
-                        + Ajouter et configurer une autre activité
-                      </button>
-                    )}
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => { setEtapeFormOpen(false); resetEtapeForm(); }} className="flex-1 py-2 text-xs font-bold text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer">Annuler</button>
-                      <button type="button" onClick={() => addEtape(false)} className="flex-1 py-2 text-xs font-extrabold text-white bg-primary hover:bg-primary/90 rounded-xl cursor-pointer">
-                        <Check size={12} className="inline mr-1" />{isCircuitHebergSlot ? (editingEtapeId ? "Mettre à jour" : "Enregistrer") : (editingEtapeId ? "Mettre à jour" : "Ajouter")}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-            {/* ── Circuit route map ── */}
-            {(() => {
-              const mappedPoints = circuitEtapes
-                .filter((e) => e.lat !== null && e.lng !== null)
-                .sort((a, b) => a.jour - b.jour)
-                .map((e) => ({ jour: e.jour, lat: e.lat as number, lng: e.lng as number, destination: e.destination }));
-              const hb = (circuitHebergInclus && circuitHebergType === 'same' && circuitHebergEtape?.lat && circuitHebergEtape?.lng)
-                ? { lat: circuitHebergEtape.lat as number, lng: circuitHebergEtape.lng as number, nom: circuitHebergEtape.titre || circuitHebergEtape.destination || 'Hébergement' }
-                : undefined;
-              if (mappedPoints.length === 0 && !hb) return null;
-              return (
-                <div className="space-y-2">
-                  <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
-                    Tracé du circuit
-                  </p>
-                  <CircuitRouteMap points={mappedPoints} hebergementPoint={hb} />
-                </div>
-              );
-            })()}
-
-            {circuitFormError && (
-              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
-                <span className="material-symbols-outlined text-red-500 text-base">error</span>
-                <p className="text-sm font-semibold text-red-600">{circuitFormError}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/80 flex items-center justify-end gap-3 shrink-0">
-            <button type="button" onClick={() => setCircuitModalOpen(false)} className="px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer">Annuler</button>
-            <button type="button" onClick={saveCircuit} disabled={circuitSaving} className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs shadow-sm transition-all active:scale-95 disabled:opacity-60 cursor-pointer">
-              {circuitSaving ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Sauvegarde…</> : <><Check size={14} />{editingCircuit ? "Enregistrer" : "Créer le circuit"}</>}
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
-
-    {/* ══ ORG ACTIVITY DETAIL MODAL ════════════════════════════════════════ */}
-    {viewOrgActivity && (() => {
-      const act = viewOrgActivity;
-      const meta = findProviderTypeMeta(act.category);
-      const cat = getCategoryByValue(act.category);
-      const isPrimary = act.level === "primary";
-      const sliderImgs = Object.values(act.photos ?? {}).flat().filter(Boolean);
-      const safeIdx = Math.min(orgActSliderIdx, Math.max(sliderImgs.length - 1, 0));
-      const fields = (act.fields ?? {}) as Record<string, any>;
-
-      function renderFieldValue(field: FieldConfig, val: any) {
-        const isDocUrl = field.type === "url" || (typeof val === "string" && (val.startsWith("http") || val.startsWith("data:")));
-        if (isDocUrl && typeof val === "string" && val.trim()) {
-          return (
-            <button onClick={() => openDoc(val)}
-              className="text-xs font-black text-primary bg-primary/10 px-3 py-1 rounded-full hover:bg-primary/20 inline-flex items-center gap-1">
-              <span className="material-symbols-outlined" style={{ fontSize: 12 }}>open_in_new</span> Voir
-            </button>
-          );
-        }
-        if (typeof val === "boolean") return <span className="text-xs font-semibold text-slate-700">{val ? "Oui" : "Non"}</span>;
-        if (Array.isArray(val)) return <span className="text-xs font-semibold text-slate-700">{val.join(", ")}</span>;
-        return <span className="text-xs font-semibold text-slate-700">{String(val)}</span>;
-      }
-
-      // Build subtype blocks — each subtype has its own photos + sections
-      const subtypeValues = act.subtypes ?? [];
-      const knownFieldKeys = new Set<string>();
-      const subtypeBlocks = subtypeValues.map((sv) => {
-        const config = SUBTYPE_FIELDS[sv];
-        if (!config) return null;
-        const subtypePhotos = (act.photos ?? {})[sv]?.filter(Boolean) ?? [];
-        const sections = config.sections.map((sec) => {
-          const visibleFields = sec.fields.filter((f) => {
-            if (fields[f.key] == null || fields[f.key] === "") return false;
-            if (f.dependsOn && fields[f.dependsOn.field] !== f.dependsOn.value) return false;
-            knownFieldKeys.add(f.key);
-            return true;
-          });
-          return { ...sec, visibleFields };
-        }).filter((s) => s.visibleFields.length > 0);
-        if (!sections.length && !subtypePhotos.length) return null;
-        return { sv, config, subtypePhotos, sections };
-      }).filter(Boolean);
-
-      // Orphan fields (not covered by any subtype config)
-      const orphanFields = Object.entries(fields).filter(([k]) => !knownFieldKeys.has(k));
-
-      return (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm" onClick={() => setViewOrgActivity(null)}>
-          <div className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-
-            {/* Cover */}
-            <div className="relative h-52 w-full overflow-hidden shrink-0">
-              <div className={`absolute inset-0 bg-gradient-to-br ${meta.gradient}`} />
-              {sliderImgs[0]
-                ? <img src={sliderImgs[0]} alt={meta.label} className="absolute inset-0 w-full h-full object-cover" />
-                : <div className="absolute inset-0 flex items-center justify-center opacity-20 select-none">
-                    <span className="material-symbols-outlined" style={{ fontSize: 100 }}>{meta.categoryIcon}</span>
-                  </div>
-              }
-              <button onClick={() => setViewOrgActivity(null)} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/60">
-                <X size={16} />
-              </button>
-              <div className={`absolute top-3 left-3 text-[10px] font-black tracking-widest uppercase px-3 py-1.5 rounded-xl shadow border ${isPrimary ? "bg-primary text-white border-white/20" : "bg-white/95 text-orange-500 border-orange-100"}`}>
-                {isPrimary ? "Principale" : "Secondaire"}
-              </div>
-              <div className="absolute bottom-3 right-3 bg-black/40 backdrop-blur-sm text-white text-[10px] font-bold px-2.5 py-1 rounded-xl">
-                <span className="material-symbols-outlined align-middle" style={{ fontSize: 13 }}>{meta.categoryIcon}</span> {meta.categoryLabel}
-              </div>
-            </div>
-
-            {/* Body */}
-            <div className="overflow-y-auto flex-1 p-5 space-y-6">
-
-              {/* Header */}
-              <div>
-                <h2 className="text-2xl font-extrabold text-slate-800 tracking-tight leading-tight">{meta.label}</h2>
-                {act.years_experience != null && (
-                  <p className="text-slate-400 text-sm mt-1">{act.years_experience} an{act.years_experience > 1 ? "s" : ""} d'expérience</p>
-                )}
-              </div>
-
-              {/* Bloc par sous-type */}
-              {subtypeBlocks.map((block) => {
-                if (!block) return null;
-                const stLabel = cat?.subtypes.find((s) => s.value === block.sv)?.label ?? block.config.label;
-                return (
-                  <div key={block.sv} className="rounded-2xl border border-slate-100 overflow-hidden">
-                    {/* Subtype header */}
-                    <div className="bg-primary/5 border-b border-primary/10 px-4 py-2.5 flex items-center gap-2">
-                      <span className="material-symbols-outlined text-primary" style={{ fontSize: 16 }}>{meta.categoryIcon}</span>
-                      <span className="text-sm font-extrabold text-primary">{stLabel}</span>
-                    </div>
-
-                    {/* Photos de ce sous-type */}
-                    {block.subtypePhotos.length > 0 && (
-                      <div className="p-4 border-b border-slate-50">
-                        <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-2">Photos</p>
-                        <div className="grid grid-cols-3 gap-2">
-                          {block.subtypePhotos.map((url, i) => (
-                            <div key={i} className="aspect-square rounded-xl overflow-hidden bg-slate-100 cursor-pointer group" onClick={() => openDoc(url)}>
-                              <img src={url} alt={stLabel} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Sections de champs */}
-                    {block.sections.map((sec) => (
-                      <div key={sec.section} className="p-4 border-b border-slate-50 last:border-0">
-                        <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-3">{sec.section}</p>
-                        <div className="space-y-2.5">
-                          {sec.visibleFields.map((field) => {
-                            const val = fields[field.key];
-                            return (
-                              <div key={field.key} className="flex items-start gap-3">
-                                <span className="text-[11px] font-bold text-slate-500 min-w-[120px] leading-tight mt-0.5 flex-shrink-0">{field.label}</span>
-                                <div className="flex-1">{renderFieldValue(field, val)}</div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-
-              {/* Champs orphelins (pas dans SUBTYPE_FIELDS) */}
-              {orphanFields.length > 0 && (
-                <div className="rounded-2xl border border-slate-100 overflow-hidden">
-                  <div className="bg-slate-50 border-b border-slate-100 px-4 py-2.5">
-                    <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase">Autres informations</p>
-                  </div>
-                  <div className="p-4 space-y-2.5">
-                    {orphanFields.map(([key, val]) => {
-                      const isUrl = typeof val === "string" && (val.startsWith("http") || val.startsWith("data:"));
-                      return (
-                        <div key={key} className="flex items-start gap-3">
-                          <span className="text-[11px] font-bold text-slate-500 min-w-[120px] leading-tight mt-0.5 flex-shrink-0">{key.replace(/_/g, " ")}</span>
-                          <div className="flex-1">
-                            {isUrl ? (
-                              <button onClick={() => openDoc(val)}
-                                className="text-xs font-black text-primary bg-primary/10 px-3 py-1 rounded-full hover:bg-primary/20 inline-flex items-center gap-1">
-                                <span className="material-symbols-outlined" style={{ fontSize: 12 }}>open_in_new</span> Voir
-                              </button>
-                            ) : (
-                              <span className="text-xs font-semibold text-slate-700">
-                                {Array.isArray(val) ? val.join(", ") : typeof val === "boolean" ? (val ? "Oui" : "Non") : String(val)}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Galerie complète (si pas de sous-types connus) */}
-              {subtypeBlocks.length === 0 && sliderImgs.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-2">Photos ({sliderImgs.length})</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {sliderImgs.map((url, i) => (
-                      <div key={i} className="aspect-square rounded-xl overflow-hidden bg-slate-100 cursor-pointer group" onClick={() => openDoc(url)}>
-                        <img src={url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Certifications de l'activité */}
-              {act.certifications?.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-2">Certifications</p>
-                  <div className="space-y-2">
-                    {act.certifications.map((cert, ci) => (
-                      <div key={ci} className="flex items-center gap-3 bg-primary/5 border border-primary/10 rounded-xl px-4 py-2.5">
-                        <span className="material-symbols-outlined text-primary shrink-0" style={{ fontSize: 16 }}>verified</span>
-                        <span className="text-sm font-bold text-slate-700 flex-1 min-w-0">{cert.name}</span>
-                        {cert.document_url && (
-                          <button onClick={() => openDoc(cert.document_url!)}
-                            className="text-xs font-black text-primary bg-primary/10 px-3 py-1 rounded-full hover:bg-primary/20 shrink-0 inline-flex items-center gap-1">
-                            <span className="material-symbols-outlined" style={{ fontSize: 12 }}>open_in_new</span> Voir
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    })()}
-
-    {/* ══ ACTIVITY DETAIL / EDIT MODAL ═════════════════════════════════════ */}
-    {actDetailOpen && viewActivity && (() => {
-      const td = PROVIDER_ACTIVITY_TYPES.find((t) => t.value === viewActivity.category) ?? { label: viewActivity.category, icon: "category", gradient: "from-slate-400 to-slate-500" };
-      const coverImg = actDetailMode === "edit"
-        ? (actEditImages[actEditCoverIdx]?.src ?? null)
-        : (viewActivity.photo ?? viewActivity.photos?.[0] ?? null);
-      return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
-            <button onClick={() => { setActDetailOpen(false); setActDetailMode("view"); }} className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center transition-colors"><X size={16} /></button>
-
-            {/* Cover */}
-            <div className="relative h-52 w-full overflow-hidden shrink-0">
-              {coverImg ? <img src={coverImg} alt={viewActivity.title} className="w-full h-full object-cover" />
-                : <><div className={`absolute inset-0 bg-gradient-to-br ${td.gradient} opacity-90`} /><span className="material-symbols-outlined text-white/25 absolute inset-0 flex items-center justify-center" style={{ fontSize: 110 }}>{td.icon}</span></>}
-              <div className={`absolute top-3 left-3 text-[10px] font-black tracking-widest uppercase px-3 py-1.5 rounded-xl shadow border ${viewActivity.level === "primary" ? "bg-primary text-white border-white/20" : "bg-white/95 text-slate-700 border-slate-100"}`}>
-                {viewActivity.level === "primary" ? "Principale" : "Secondaire"}
-              </div>
-            </div>
-
-            {actDetailMode === "view" ? (
-              <>
-                <div className="overflow-y-auto flex-1 px-8 py-6 space-y-5">
-                  <h2 className="text-2xl font-extrabold text-slate-800 tracking-tight leading-tight pr-8">{viewActivity.title}</h2>
-                  <div className="flex flex-wrap gap-2.5">
-                    <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl px-3 py-1.5 text-[11px] font-extrabold tracking-wider flex items-center gap-1.5 uppercase">
-                      <span className="material-symbols-outlined text-sm leading-none">{td.icon}</span>{td.label}
-                    </span>
-                  </div>
-                  {viewActivity.description && <div><p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Description</p><p className="text-slate-600 text-sm leading-relaxed whitespace-pre-line">{viewActivity.description}</p></div>}
-                  {viewActivity.region && <div className="flex items-center gap-2 text-sm text-slate-600 font-semibold"><MapPin size={14} className="text-primary" />{viewActivity.region}</div>}
-                  {viewActivity.phone && <div className="flex items-center gap-2 text-sm text-slate-600 font-semibold"><Phone size={14} className="text-amber-500" /><a href={`tel:${viewActivity.phone}`} className="hover:text-primary">{viewActivity.phone}</a></div>}
-                  {viewActivity.website && <div className="flex items-center gap-2 text-sm font-semibold"><Globe size={14} className="text-teal-500" /><a href={viewActivity.website} target="_blank" rel="noreferrer" className="text-primary hover:underline truncate">{viewActivity.website}</a></div>}
-                  <p className="text-[11px] font-bold text-slate-400">Créée le {new Date(viewActivity.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}</p>
-                </div>
-                <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/80 flex items-center justify-end gap-3 shrink-0">
-                  <button onClick={() => { setActDetailOpen(false); setActDetailMode("view"); }} className="px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer">Fermer</button>
-                  <button onClick={() => setActDetailMode("edit")} className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs shadow-sm transition-all active:scale-95 cursor-pointer"><Edit3 size={14} />Gérer</button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="px-8 pt-6 pb-4 border-b border-slate-100 shrink-0">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-2xl bg-primary/10 flex items-center justify-center"><Edit3 size={16} className="text-primary" /></div>
-                    <div><h3 className="text-lg font-extrabold text-slate-800">Modifier l'activité</h3><p className="text-xs text-slate-400 line-clamp-1">{viewActivity.title}</p></div>
-                  </div>
-                </div>
-                <div className="overflow-y-auto flex-1">
-                  <form onSubmit={handleSaveActivity} className="px-8 py-6 space-y-4">
-                    <div>
-                      <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Titre *</label>
-                      <input type="text" value={actEditForm.title} onChange={(e) => setActEditForm((f) => ({ ...f, title: e.target.value }))}
-                        className={`w-full px-4 py-3 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 ${actEditError && !actEditForm.title ? "bg-red-50 border border-red-300 focus:ring-red-200" : "bg-slate-50 border border-slate-200 focus:ring-primary focus:bg-white"}`}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Type d'activité</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {PROVIDER_ACTIVITY_TYPES.map((t) => {
-                          const active = actEditForm.category === t.value;
-                          return (
-                            <button key={t.value} type="button" onClick={() => setActEditForm((f) => ({ ...f, category: active ? "" : t.value }))}
-                              className={`flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl border-2 text-center transition-all cursor-pointer ${active ? "bg-primary/10 border-primary text-slate-900 shadow-sm" : "bg-slate-50 border-slate-200 text-slate-500 hover:border-primary/40 hover:bg-white"}`}>
-                              <span className={`material-symbols-outlined text-lg ${active ? "text-primary" : "text-slate-400"}`}>{t.icon}</span>
-                              <span className="text-[9px] font-extrabold leading-tight">{t.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      {([["primary", "Principale"], ["secondary", "Secondaire"]] as const).map(([val, lbl]) => (
-                        <button key={val} type="button" onClick={() => setActEditForm((f) => ({ ...f, level: val }))}
-                          className={`py-2.5 px-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${actEditForm.level === val ? "bg-primary/10 border-primary" : "bg-slate-50 border-slate-200 hover:border-primary/40"}`}>
-                          <p className={`text-xs font-extrabold ${actEditForm.level === val ? "text-primary" : "text-slate-700"}`}>{lbl}</p>
-                        </button>
-                      ))}
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Description</label>
-                      <textarea rows={3} value={actEditForm.description} onChange={(e) => setActEditForm((f) => ({ ...f, description: e.target.value }))}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Région</label>
-                        <input type="text" value={actEditForm.region} onChange={(e) => setActEditForm((f) => ({ ...f, region: e.target.value }))} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Téléphone</label>
-                        <input type="tel" value={actEditForm.phone} onChange={(e) => setActEditForm((f) => ({ ...f, phone: e.target.value }))} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Photos</label>
-                      {actEditImages.length > 0 && (
-                        <div className="grid grid-cols-4 gap-2 mb-3">
-                          {actEditImages.map((img, i) => (
-                            <div key={i} onClick={() => setActEditCoverIdx(i)} className={`relative group aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${i === actEditCoverIdx ? "border-primary shadow-md" : "border-transparent hover:border-slate-300"}`}>
-                              <img src={img.src} alt="" className="w-full h-full object-cover" />
-                              {i === actEditCoverIdx && <div className="absolute top-1 left-1 bg-primary text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Cover</div>}
-                              <button type="button" onClick={(e) => { e.stopPropagation(); setActEditImages((prev) => prev.filter((_, idx) => idx !== i)); setActEditCoverIdx((c) => c >= i && c > 0 ? c - 1 : c); }} className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <label htmlFor="act-edit-images" className="flex flex-col items-center justify-center gap-1.5 w-full h-16 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
-                        <span className="material-symbols-outlined text-slate-300 text-xl">add_photo_alternate</span>
-                        <p className="text-xs font-semibold text-slate-400">Ajouter des photos</p>
-                        <input id="act-edit-images" type="file" accept="image/*" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files ?? []); if (!files.length) return; setActEditImages((prev) => [...prev, ...files.map((f) => ({ src: URL.createObjectURL(f), file: f }))]); e.target.value = ""; }} />
-                      </label>
-                    </div>
-                    {actEditError && <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl"><span className="material-symbols-outlined text-red-500 text-base">error</span><p className="text-sm font-semibold text-red-600">{actEditError}</p></div>}
-                    <div className="flex items-center justify-between gap-3 pt-2">
-                      <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => setActDetailMode("view")} className="flex items-center gap-1.5 px-4 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer"><ChevronLeft size={14} />Retour</button>
-                        <button type="button" onClick={handleDeleteActivity} disabled={actDeleting} className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-red-500 hover:bg-red-50 font-bold text-xs transition-colors disabled:opacity-50"><span className="material-symbols-outlined text-base">delete</span>{actDeleting ? "Suppression…" : "Supprimer"}</button>
-                      </div>
-                      <button type="submit" disabled={actEditSaving} className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs shadow-sm transition-all active:scale-95 disabled:opacity-60 cursor-pointer">
-                        {actEditSaving ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Sauvegarde…</> : <><Send size={14} />Enregistrer</>}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      );
-    })()}
-
-    {/* ══ ACTIVITY SUSTAINABILITY QUESTIONNAIRE ════════════════════════════ */}
-    {aqOpen && (() => {
-      const aqScore = Object.values(aqAnswers).reduce((s, v) => s + v, 0);
-      const aqCurrentStep = ACTIVITY_SUSTAINABILITY_STEPS[aqStep];
-      const aqStepAnswered = aqCurrentStep ? aqCurrentStep.questions.every((q) => q.id in aqAnswers) : false;
-      return (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-7 pt-7 pb-5 border-b border-slate-100 shrink-0">
-              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1">Évaluation de durabilité — Activité</p>
-              <h2 className="text-xl font-extrabold text-slate-800 flex items-center gap-2">
-                {aqStep < ACTIVITY_SUSTAINABILITY_STEPS.length ? <>{ACTIVITY_SUSTAINABILITY_STEPS[aqStep].emoji} {ACTIVITY_SUSTAINABILITY_STEPS[aqStep].category}</> : "🎯 Résultat"}
-              </h2>
-              {aqStep < ACTIVITY_SUSTAINABILITY_STEPS.length && <p className="text-sm text-slate-500 mt-1">{ACTIVITY_SUSTAINABILITY_STEPS[aqStep].description}</p>}
-              <div className="flex gap-1.5 mt-4">
-                {ACTIVITY_SUSTAINABILITY_STEPS.map((_, i) => (
-                  <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i < aqStep ? "bg-primary" : i === aqStep ? "bg-primary/60" : "bg-slate-100"}`} />
-                ))}
-              </div>
-              <p className="text-[10px] font-bold text-slate-400 mt-1.5">{aqStep < ACTIVITY_SUSTAINABILITY_STEPS.length ? `Étape ${aqStep + 1} / ${ACTIVITY_SUSTAINABILITY_STEPS.length}` : "Toutes les étapes complétées"}</p>
-            </div>
-            <div className="overflow-y-auto flex-1 px-7 py-5">
-              {aqStep < ACTIVITY_SUSTAINABILITY_STEPS.length ? (
-                <div className="space-y-5">
-                  {ACTIVITY_SUSTAINABILITY_STEPS[aqStep].questions.map((q) => (
-                    <div key={q.id}>
-                      <p className="text-sm font-bold text-slate-700 mb-2">{q.text}</p>
-                      <div className="space-y-2">
-                        {q.options.map((opt) => (
-                          <button key={opt.label} onClick={() => setAqAnswers((a) => ({ ...a, [q.id]: opt.value }))}
-                            className={`w-full text-left px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all ${aqAnswers[q.id] === opt.value ? "border-primary bg-primary/10 text-primary" : "border-slate-200 text-slate-600 hover:border-primary/40"}`}>
-                            {opt.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                  <div className="flex gap-3 pt-2">
-                    {aqStep > 0 && <button onClick={() => setAqStep((s) => s - 1)} className="flex-1 py-3 border-2 border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"><ChevronLeft size={16} />Précédent</button>}
-                    <button onClick={() => { if (aqStep === ACTIVITY_SUSTAINABILITY_STEPS.length - 1) { setAqStep((s) => s + 1); submitActivityQuestionnaire(); } else { setAqStep((s) => s + 1); } }} disabled={!aqStepAnswered}
-                      className={`flex-1 py-3 font-extrabold rounded-xl flex items-center justify-center gap-2 transition-all ${aqStepAnswered ? "bg-primary text-slate-900 hover:bg-primary/90" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}>
-                      {aqStep === ACTIVITY_SUSTAINABILITY_STEPS.length - 1 ? "Voir mon score" : "Suivant"}<ChevronRight size={16} />
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center">
-                  {(() => {
-                    const level = getActivitySustainabilityLevel(aqScore);
-                    return (
-                      <>
-                        <div className="relative w-32 h-32 mx-auto mb-5">
-                          <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-                            <circle cx="60" cy="60" r="50" fill="none" stroke="#f1f5f9" strokeWidth="12" />
-                            <circle cx="60" cy="60" r="50" fill="none" stroke="currentColor" strokeWidth="12" strokeLinecap="round" strokeDasharray={`${2 * Math.PI * 50}`} strokeDashoffset={`${2 * Math.PI * 50 * (1 - aqScore / 100)}`} className="text-primary transition-all duration-1000" />
-                          </svg>
-                          <div className="absolute inset-0 flex flex-col items-center justify-center"><span className="text-3xl font-black text-slate-900">{aqScore}</span><span className="text-xs font-bold text-slate-400">/100</span></div>
-                        </div>
-                        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${level.bg} mb-3`}>
-                          <span className="text-base">{level.emoji}</span>
-                          <span className={`font-extrabold text-sm ${level.color}`}>{level.label}</span>
-                        </div>
-                        <p className="text-slate-500 text-sm mb-6 leading-relaxed">{aqScore >= 71 ? "Excellente activité éco-responsable !" : aqScore >= 51 ? "Votre activité est sur la bonne voie !" : "Identifiez les axes d'amélioration."}</p>
-                        <button onClick={() => setAqOpen(false)} disabled={aqSaving} className="w-full py-3 bg-primary text-slate-900 font-extrabold rounded-xl hover:bg-primary/90 transition-colors">{aqSaving ? "Enregistrement…" : "Fermer"}</button>
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    })()}
-
     {netReport && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-        <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl p-6">
+        <div className="modal-content bg-white rounded-3xl w-full max-w-sm shadow-2xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center shrink-0"><Flag size={16} className="text-red-500" /></div>
             <div><p className="font-extrabold text-slate-800 text-sm">Signaler {netReport.name}</p><p className="text-xs text-slate-400">Choisissez un motif</p></div>
@@ -4006,7 +1271,7 @@ export default function ProviderProfilePage() {
       <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-3">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <button
-            onClick={() => router.push("/dashboard/provider")}
+            onClick={() => router.push("/dashboard")}
             className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-all"
           >
             <ArrowLeft size={16} />
@@ -4022,12 +1287,13 @@ export default function ProviderProfilePage() {
       {/* ══ EDIT PROFILE MODAL ═══════════════════════════════════════════════ */}
       {editProfileOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl relative overflow-hidden flex flex-col max-h-[92vh]">
+          <div className="modal-content bg-white rounded-3xl w-full max-w-lg shadow-2xl relative overflow-hidden flex flex-col max-h-[92vh]">
             <button onClick={closeEditProfile}
               className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors">
               <X size={16} />
             </button>
 
+            {/* Header */}
             <div className="px-8 pt-8 pb-5 border-b border-slate-100 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
@@ -4123,7 +1389,7 @@ export default function ProviderProfilePage() {
                   <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Nom complet *</label>
                   <div className="relative">
                     <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xl">person</span>
-                    <input type="text" placeholder="Ahmed Ben Ali"
+                    <input type="text" placeholder="Leila Trabelsi"
                       value={editProfileForm.full_name}
                       onChange={(e) => setEditProfileForm((f) => ({ ...f, full_name: e.target.value }))}
                       className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
@@ -4134,7 +1400,7 @@ export default function ProviderProfilePage() {
                 {/* Bio */}
                 <div>
                   <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Présentation <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                  <textarea rows={3} placeholder="Prestataire spécialisé dans l'écotourisme en Tunisie…"
+                  <textarea rows={3} placeholder="Passionnée par le développement durable et l'écotourisme en Tunisie…"
                     value={editProfileForm.bio}
                     onChange={(e) => setEditProfileForm((f) => ({ ...f, bio: e.target.value }))}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
@@ -4215,105 +1481,6 @@ export default function ProviderProfilePage() {
                   </div>
                 </div>
 
-                {/* Provider type */}
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Type de prestataire <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {PROVIDER_TYPES.map((t) => {
-                      const active = editProfileForm.provider_type === t.value;
-                      return (
-                        <button key={t.value} type="button"
-                          onClick={() => setEditProfileForm((f) => ({ ...f, provider_type: active ? "" : t.value }))}
-                          className={`flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl border-2 text-center transition-all cursor-pointer ${active ? "bg-primary/10 border-primary text-slate-900 shadow-sm" : "bg-slate-50 border-slate-200 text-slate-500 hover:border-primary/40 hover:bg-white"}`}>
-                          <span className={`material-symbols-outlined text-xl ${active ? "text-primary" : "text-slate-400"}`}>{t.icon}</span>
-                          <span className="text-[10px] font-extrabold leading-tight">{t.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Region + Website */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Région <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                    <div className="relative">
-                      <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xl">location_on</span>
-                      <input type="text" placeholder="Tunis, Sfax, Djerba…"
-                        value={editProfileForm.region}
-                        onChange={(e) => setEditProfileForm((f) => ({ ...f, region: e.target.value }))}
-                        className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Années d'exp. <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                    <div className="relative">
-                      <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xl">workspace_premium</span>
-                      <input type="number" min="0" max="50" placeholder="Ex : 5"
-                        value={editProfileForm.years_experience}
-                        onChange={(e) => setEditProfileForm((f) => ({ ...f, years_experience: e.target.value }))}
-                        className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white font-mono"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Website */}
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Site web <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                  <div className="relative">
-                    <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xl">public</span>
-                    <input type="url" placeholder="https://mon-ecolodge.tn"
-                      value={editProfileForm.website}
-                      onChange={(e) => setEditProfileForm((f) => ({ ...f, website: e.target.value }))}
-                      className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
-                    />
-                  </div>
-                </div>
-
-                {/* Primary activities */}
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Activités principales <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {PROVIDER_ACTIVITY_TYPES.map((t) => {
-                      const active = editProfileActivities.includes(t.value);
-                      return (
-                        <button key={t.value} type="button"
-                          onClick={() => setEditProfileActivities((prev) =>
-                            active ? prev.filter((v) => v !== t.value) : [...prev, t.value]
-                          )}
-                          className={`flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl border-2 text-center transition-all cursor-pointer ${active ? "bg-primary/10 border-primary text-slate-900 shadow-sm" : "bg-slate-50 border-slate-200 text-slate-500 hover:border-primary/40 hover:bg-white"}`}>
-                          <span className={`material-symbols-outlined text-xl ${active ? "text-primary" : "text-slate-400"}`}>{t.icon}</span>
-                          <span className="text-[10px] font-extrabold leading-tight">{t.label}</span>
-                          {active && <span className="text-[9px] text-primary font-black">✓</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Secondary activities */}
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Activités secondaires <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {PROVIDER_ACTIVITY_TYPES.map((t) => {
-                      const active = editProfileSecActivities.includes(t.value);
-                      return (
-                        <button key={t.value} type="button"
-                          onClick={() => setEditProfileSecActivities((prev) =>
-                            active ? prev.filter((v) => v !== t.value) : [...prev, t.value]
-                          )}
-                          className={`flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl border-2 text-center transition-all cursor-pointer ${active ? "bg-slate-700/10 border-slate-500 text-slate-800 shadow-sm" : "bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-400 hover:bg-white"}`}>
-                          <span className={`material-symbols-outlined text-xl ${active ? "text-slate-600" : "text-slate-400"}`}>{t.icon}</span>
-                          <span className="text-[10px] font-extrabold leading-tight">{t.label}</span>
-                          {active && <span className="text-[9px] text-slate-600 font-black">✓</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
                 {editProfileError && (
                   <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
                     <span className="material-symbols-outlined text-red-500 text-base">error</span>
@@ -4323,6 +1490,7 @@ export default function ProviderProfilePage() {
               </form>
             </div>
 
+            {/* Footer */}
             <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/80 flex items-center justify-end gap-3 shrink-0">
               <button type="button" onClick={closeEditProfile}
                 className="px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors">
@@ -4343,7 +1511,7 @@ export default function ProviderProfilePage() {
       {/* ══ PUBLISH OFFER MODAL ══════════════════════════════════════════════ */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="modal-content bg-white rounded-3xl w-full max-w-xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
             <button onClick={closeModal}
               className="absolute top-5 right-5 z-10 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center transition-colors">
               <X size={16} />
@@ -4354,108 +1522,13 @@ export default function ProviderProfilePage() {
                   <Sparkles size={20} className="text-primary" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">
-                    {offerEditMode ? "Modifier l'offre" : "Publier une offre éco"}
-                  </h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
-                    {offerEditMode ? "Modifiez les informations et enregistrez." : "Proposez une expérience éco-touristique à la communauté"}
-                  </p>
+                  <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">Publier une offre éco</h3>
+                  <p className="text-slate-400 text-xs mt-0.5">Proposez une expérience éco-touristique à la communauté</p>
                 </div>
               </div>
             </div>
             <div className="overflow-y-auto flex-1">
               <form id="publish-offer-form" onSubmit={handlePublish} className="px-8 py-6 space-y-5">
-
-                {/* ── SECTION : ACTIVITÉ ─────────────────────────────────── */}
-                {orgActivities.length > 0 && (
-                  <div>
-                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Lier à une activité</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {orgActivities.map((act) => {
-                        const selected = offerActivity?.id === act.id;
-                        const meta = findProviderTypeMeta(act.category);
-                        return (
-                          <button key={act.id} type="button"
-                            onClick={() => {
-                              const resetUnits = () => {
-                                setEntityImages((prev) => { Object.values(prev).flat().forEach((img) => URL.revokeObjectURL(img.preview)); return {}; });
-                                setEntityCoverIdx({});
-                                setOfferNbUnites(1); setUnitDetailsArray([{}]); setActiveUnitTab(0);
-                                setSubtypeNbUnites({}); setSubtypeUnitDetails({}); setActiveSubtypeTab({});
-                              };
-                              if (selected) {
-                                setOfferActivity(null); setOfferSubtypes([]); setOfferMode("single"); setConstraintError("");
-                                resetUnits();
-                              } else {
-                                setOfferActivity(act); setOfferSubtypes([]); setOfferMode("single"); setConstraintError("");
-                                resetUnits();
-                              }
-                            }}
-                            className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-left transition-all text-xs font-bold ${selected ? "border-primary bg-primary/10 text-slate-900" : "border-slate-200 bg-slate-50 text-slate-600 hover:border-primary/30 hover:bg-white"}`}>
-                            <span className={`material-symbols-outlined text-base ${selected ? "text-primary" : "text-slate-400"}`}>{meta.categoryIcon}</span>
-                            <span className="truncate">{meta.label}</span>
-                            {selected && <Check size={12} className="ml-auto text-primary shrink-0" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* ── SECTION : SOUS-TYPES ───────────────────────────────── */}
-                {offerActivity && offerActivity.subtypes && offerActivity.subtypes.length > 0 && (
-                  <div>
-                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Sous-type d'offre</label>
-                    <div className="flex flex-wrap gap-2">
-                      {offerActivity.subtypes.map((st) => {
-                        const active = offerSubtypes.includes(st);
-                        return (
-                          <button key={st} type="button"
-                            onClick={() => {
-                              if (active) {
-                                // Désélection — nettoyer les photos de ce sous-type
-                                setEntityImages((prev) => {
-                                  const imgs = prev[st] ?? [];
-                                  imgs.forEach((img) => URL.revokeObjectURL(img.preview));
-                                  const next = { ...prev };
-                                  delete next[st];
-                                  return next;
-                                });
-                                setEntityCoverIdx((prev) => { const next = { ...prev }; delete next[st]; return next; });
-                              }
-                              setOfferSubtypes((prev) => {
-                                const next = active ? prev.filter((s) => s !== st) : [...prev, st];
-                                if (next.length > 1) setOfferMode("variant");
-                                else setOfferMode("single");
-                                return next;
-                              });
-                            }}
-                            className={`px-3 py-1.5 rounded-full text-xs font-bold border-2 transition-all ${active ? "bg-primary text-white border-primary" : "bg-slate-100 border-slate-200 text-slate-600 hover:border-primary/40"}`}>
-                            {st}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {offerSubtypes.length > 1 && (
-                      <div className="mt-3 grid grid-cols-2 gap-2">
-                        {[
-                          { value: "variant", label: "Variante", desc: "Le voyageur choisit son sous-type" },
-                          { value: "package", label: "Package",  desc: "Tous les sous-types inclus" },
-                        ].map((m) => (
-                          <button key={m.value} type="button" onClick={() => setOfferMode(m.value as "variant" | "package")}
-                            className={`flex flex-col items-start px-3 py-2.5 rounded-xl border-2 text-xs transition-all ${offerMode === m.value ? "border-primary bg-primary/10 text-slate-900" : "border-slate-200 bg-slate-50 text-slate-500 hover:border-primary/30"}`}>
-                            <span className="font-extrabold">{m.label}</span>
-                            <span className="text-[10px] font-medium text-slate-400 mt-0.5">{m.desc}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Nb d'unités : maintenant intégré dans chaque carte de sous-type */}
-
-                {/* ── BLOC 1 : INFORMATIONS DE BASE ──────────────────── */}
                 <div>
                   <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Titre de l'offre *</label>
                   <input type="text" placeholder="Ex : Séjour éco en forêt de Mogods"
@@ -4466,16 +1539,6 @@ export default function ProviderProfilePage() {
                   {titleError && <p className="text-xs font-semibold text-red-500 mt-1">{titleError}</p>}
                 </div>
                 <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">
-                    Description courte * <span className="normal-case font-medium text-slate-300">({offerDescCourte.length}/160)</span>
-                  </label>
-                  <textarea rows={2} placeholder="Accroche courte visible dans les résultats de recherche…"
-                    value={offerDescCourte} maxLength={160}
-                    onChange={(e) => setOfferDescCourte(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
-                  />
-                </div>
-                <div>
                   <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Description détaillée</label>
                   <textarea rows={4} placeholder="Décrivez le concept écologique, les activités durables et l'expérience proposée…"
                     value={form.description}
@@ -4483,104 +1546,20 @@ export default function ProviderProfilePage() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
                   />
                 </div>
-
-                {/* Photo de couverture — toujours visible */}
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Photo de couverture</label>
-                  {publishExistingImages.length === 0 && publishImages.length === 0 ? (
-                    <label htmlFor="publish-cover-input"
-                      className="flex flex-col items-center justify-center gap-2 w-full h-24 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
-                      <span className="material-symbols-outlined text-slate-300 text-3xl">add_photo_alternate</span>
-                      <p className="text-xs font-semibold text-slate-400">Cliquez pour ajouter une photo de couverture</p>
-                      <input id="publish-cover-input" type="file" accept="image/*" multiple className="hidden"
-                        onChange={(e) => {
-                          const files = Array.from(e.target.files ?? []);
-                          setPublishImages((prev) => [...prev, ...files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))]);
-                          e.target.value = "";
-                        }}
-                      />
-                    </label>
-                  ) : (
-                    <>
-                      <div className="flex gap-2 flex-wrap mt-1">
-                        {/* Images déjà uploadées (existantes) */}
-                        {publishExistingImages.map((url, i) => (
-                          <div key={`ex-${i}`}
-                            className={`relative group w-20 h-20 rounded-xl overflow-hidden border-2 transition-all ${i === 0 && publishImages.length === 0 ? "border-primary shadow-md" : "border-slate-200"}`}>
-                            <img src={url} alt="" className="w-full h-full object-cover" />
-                            {i === 0 && publishImages.length === 0 && (
-                              <div className="absolute top-1 left-1 bg-primary text-white text-[9px] font-black px-1.5 py-0.5 rounded-md leading-none">Cover</div>
-                            )}
-                            <button type="button"
-                              onClick={() => setPublishExistingImages((prev) => prev.filter((_, idx) => idx !== i))}
-                              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              <X size={10} />
-                            </button>
-                          </div>
-                        ))}
-                        {/* Nouvelles images ajoutées */}
-                        {publishImages.map((img, i) => {
-                          const isCover = publishExistingImages.length === 0 && i === publishCoverIdx;
-                          return (
-                            <div key={`new-${i}`} onClick={() => { if (publishExistingImages.length === 0) setPublishCoverIdx(i); }}
-                              className={`relative group w-20 h-20 rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${isCover ? "border-primary shadow-md" : "border-transparent hover:border-slate-300"}`}>
-                              <img src={img.preview} alt="" className="w-full h-full object-cover" />
-                              {isCover && (
-                                <div className="absolute top-1 left-1 bg-primary text-white text-[9px] font-black px-1.5 py-0.5 rounded-md leading-none">Cover</div>
-                              )}
-                              <button type="button"
-                                onClick={(ev) => {
-                                  ev.stopPropagation();
-                                  URL.revokeObjectURL(img.preview);
-                                  setPublishImages((prev) => prev.filter((_, idx) => idx !== i));
-                                  setPublishCoverIdx((c) => (c >= i && c > 0 ? c - 1 : c));
-                                }}
-                                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <X size={10} />
-                              </button>
-                            </div>
-                          );
-                        })}
-                        <label htmlFor="publish-cover-input"
-                          className="flex flex-col items-center justify-center w-20 h-20 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
-                          <span className="material-symbols-outlined text-slate-300 text-2xl">add</span>
-                          <input id="publish-cover-input" type="file" accept="image/*" multiple className="hidden"
-                            onChange={(e) => {
-                              const files = Array.from(e.target.files ?? []);
-                              setPublishImages((prev) => [...prev, ...files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))]);
-                              e.target.value = "";
-                            }}
-                          />
-                        </label>
-                      </div>
-                      {(publishExistingImages.length + publishImages.length) > 1 && publishExistingImages.length === 0 && (
-                        <p className="text-[10px] text-slate-400 font-medium mt-2">Cliquez sur une nouvelle photo pour la définir comme couverture.</p>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {offerActivity && (() => {
-                  const flat = Object.values(offerActivity.fields ?? {}).reduce<Record<string, any>>((a, s) => ({ ...a, ...s }), {});
-                  const langs: string[] = flat.langues_guides ?? flat.langues ?? flat.langues_accueil ?? [];
-                  if (!langs.length) return null;
-                  return (
-                    <div>
-                      <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Langue de l'offre *</label>
-                      <select value={offerLangue} onChange={(e) => setOfferLangue(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white">
-                        <option value="">— Sélectionner —</option>
-                        {langs.map((l) => <option key={l} value={l}>{l}</option>)}
-                      </select>
-                    </div>
-                  );
-                })()}
                 <div>
                   <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Région / Emplacement</label>
                   <input type="text" placeholder="Tunis, Djerba, Sfax…"
                     value={form.region}
                     onChange={(e) => setForm((f) => ({ ...f, region: e.target.value }))}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white placeholder:text-slate-400"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Inclusions</label>
+                  <textarea rows={3} placeholder={"Ex :\n• Transport inclus\n• Repas traditionnels\n• Guide bilingue"}
+                    value={form.inclusions}
+                    onChange={(e) => setForm((f) => ({ ...f, inclusions: e.target.value }))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
                   />
                 </div>
                 <div>
@@ -4598,47 +1577,25 @@ export default function ProviderProfilePage() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white placeholder:text-slate-400 mb-2"
                   />
                   {showPublishMap && (
-                    <MapPicker
-                      lat={publishMapLat} lng={publishMapLng}
-                      onPick={(lat, lng, address) => {
-                        setPublishMapLat(lat); setPublishMapLng(lng);
-                        setForm((f) => ({ ...f, meeting_point: address }));
-                      }}
-                    />
+                    <div className="overflow-hidden rounded-xl">
+                      <MapPicker
+                        lat={publishMapLat} lng={publishMapLng}
+                        onPick={(lat, lng, address) => {
+                          setPublishMapLat(lat); setPublishMapLng(lng);
+                          setForm((f) => ({ ...f, meeting_point: address }));
+                        }}
+                      />
+                    </div>
                   )}
                 </div>
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Inclusions</label>
-                  <textarea rows={3} placeholder={"Ex :\n• Transport inclus\n• Repas traditionnels\n• Guide bilingue"}
-                    value={form.inclusions}
-                    onChange={(e) => setForm((f) => ({ ...f, inclusions: e.target.value }))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
-                  />
-                </div>
-                {/* Max. pers. + Âge min. — masqués pour hébergement (capacité par unité dans l'onglet) */}
-                {offerActivity?.category !== 'hebergement' && <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Max. pers.</label>
                     <input type="number" min="1" placeholder="20"
                       value={form.max_group_size}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setForm((f) => ({ ...f, max_group_size: v }));
-                        if (offerActivity && v) {
-                          const flat = Object.values(offerActivity.fields ?? {}).reduce<Record<string, any>>((acc, sec) => ({ ...acc, ...sec }), {});
-                          const maxCap = getCapacityLimit(flat);
-                          if (maxCap !== null && Number(v) > maxCap) {
-                            setConstraintError(`Capacité dépassée — votre activité déclare max ${maxCap} pers. Modifiez votre profil si cela a changé.`);
-                          } else {
-                            setConstraintError("");
-                          }
-                        } else {
-                          setConstraintError("");
-                        }
-                      }}
-                      className={`w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:bg-white font-mono ${constraintError ? "bg-red-50 border border-red-300 focus:ring-red-200" : "bg-slate-50 border border-slate-200 focus:ring-primary"}`}
+                      onChange={(e) => setForm((f) => ({ ...f, max_group_size: e.target.value }))}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white font-mono"
                     />
-                    {constraintError && <p className="text-xs font-semibold text-red-500 mt-1">{constraintError}</p>}
                   </div>
                   <div>
                     <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Âge min. <span className="normal-case font-medium text-slate-300">(facultatif)</span></label>
@@ -4648,1011 +1605,115 @@ export default function ProviderProfilePage() {
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white font-mono"
                     />
                   </div>
-                </div>}
-                {/* Type d'offre — uniquement si le provider n'a aucune activité (fallback) */}
-                {orgActivities.length === 0 && (
-                  <div>
-                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Type d'offre</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {OFFER_TYPES.map((t) => {
-                        const active = form.offer_type === t.value;
-                        return (
-                          <button key={t.value} type="button"
-                            onClick={() => setForm((f) => ({ ...f, offer_type: active ? "" : t.value }))}
-                            className={`flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl border-2 text-center transition-all cursor-pointer ${active ? "bg-primary/10 border-primary text-slate-900 shadow-sm" : "bg-slate-50 border-slate-200 text-slate-500 hover:border-primary/40 hover:bg-white"}`}>
-                            <span className={`material-symbols-outlined text-xl ${active ? "text-primary" : "text-slate-400"}`}>{t.icon}</span>
-                            <span className="text-[10px] font-extrabold">{t.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-                {/* Tarif/Durée génériques — masqués pour hébergement (prix par unité + nuits_min dans les détails) */}
-                {offerActivity?.category !== 'hebergement' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Tarif (TND)</label>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px] font-bold">DT</span>
-                        <input type="number" min="0" step="1" placeholder="Ex : 350"
-                          value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white font-mono placeholder:text-slate-400 placeholder:font-sans"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Durée (jours)</label>
-                      <div className="relative">
-                        <Clock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input type="number" min="1" step="1" placeholder="Ex : 3"
-                          value={form.duration} onChange={(e) => setForm((f) => ({ ...f, duration: e.target.value }))}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white font-mono placeholder:text-slate-400 placeholder:font-sans"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {/* ── SECTION : DÉTAILS SPÉCIFIQUES PAR SOUS-TYPE ─────── */}
-                {offerSubtypes.length > 0 && (() => {
-                  const isMultiUnit = offerNbUnites > 1 && offerActivity?.category === 'hebergement';
-
-                  // ── Résout les options dynamiques depuis les champs d'onboarding ──
-                  const flatOnboarding = Object.values(offerActivity?.fields ?? {})
-                    .reduce<Record<string, any>>((acc, sec) => ({ ...acc, ...sec }), {});
-
-                  const resolveOptions = (field: { options?: string[]; dynamicOptions?: string }): string[] => {
-                    if (!field.dynamicOptions || !offerActivity) return field.options ?? [];
-                    const key = field.dynamicOptions.replace('onboarding.', '');
-                    const val = flatOnboarding[key];
-                    if (Array.isArray(val)) return val as string[];
-                    if (typeof val === 'string') return [val];
-                    return field.options ?? [];
-                  };
-
-                  // ── Vérifie une règle de cross-validation ──
-                  const checkRule = (rule: CrossValidationRule, getData: (k: string) => any): string | null => {
-                    const fieldVal = getData(rule.field);
-                    if (fieldVal === undefined || fieldVal === null || fieldVal === '' || (Array.isArray(fieldVal) && fieldVal.length === 0)) return null;
-                    const onbVal = flatOnboarding[rule.onboardingKey];
-                    if (onbVal === undefined || onbVal === null) return null;
-                    let hasError = false;
-                    switch (rule.rule) {
-                      case 'lte': hasError = Number(fieldVal) > Number(onbVal); break;
-                      case 'gte': hasError = Number(fieldVal) < Number(onbVal); break;
-                      case 'in': {
-                        const opts = Array.isArray(onbVal) ? onbVal : [onbVal];
-                        hasError = Boolean(fieldVal) && !opts.includes(fieldVal);
-                        break;
-                      }
-                      case 'subset': {
-                        const opts = Array.isArray(onbVal) ? onbVal : [onbVal];
-                        hasError = Array.isArray(fieldVal) && fieldVal.some((v: string) => !opts.includes(v));
-                        break;
-                      }
-                      case 'requiredIfFalse': hasError = !onbVal && fieldVal === true; break;
-                      case 'requiredIfTrue':  hasError = Boolean(onbVal) && !fieldVal; break;
-                    }
-                    return hasError ? rule.message.replace('{value}', String(onbVal)) : null;
-                  };
-
-                  // ── Rendu des champs (data source abstrait) ──
-                  const renderFields = (
-                    st: string,
-                    getData: (key: string) => any,
-                    setData: (key: string, val: any) => void,
-                  ) => {
-                    const config = OFFER_DETAIL_FIELDS[st];
-                    if (!config) return null;
-                    return config.sections.map((section) => {
-                      // Cas 2 — Section conditionnelle selon l'onboarding
-                      if (section.conditionalOn?.onboardingKey) {
-                        const onbVal = flatOnboarding[section.conditionalOn.onboardingKey];
-                        if (onbVal !== section.conditionalOn.value) return null;
-                      }
-
-                      // Validations inline de la section (Cas 4)
-                      const sectionErrors = (section.validations ?? [])
-                        .map((rule) => checkRule(rule, getData))
-                        .filter(Boolean) as string[];
-
-                      return (
-                        <div key={section.label} className="mb-4 last:mb-0">
-                          <p className="text-xs font-bold text-slate-500 mb-2">{section.label}</p>
-
-                          {/* Cas 4 — Alertes cross-validation */}
-                          {sectionErrors.map((msg, i) => (
-                            <div key={i} className="flex items-start gap-2 px-3 py-2 mb-2 bg-amber-50 border border-amber-200 rounded-xl text-xs font-semibold text-amber-700">
-                              <span className="shrink-0 mt-0.5">⚠</span>{msg}
-                            </div>
-                          ))}
-
-                          <div className="space-y-2.5">
-                            {section.fields.map((field) => {
-                              // Cas champ conditionnel (champ.conditionalOn.field)
-                              if (field.conditionalOn?.field) {
-                                const condVal = getData(field.conditionalOn.field);
-                                if (field.conditionalOn.value !== undefined && condVal !== field.conditionalOn.value) return null;
-                                if (field.conditionalOn.notValue !== undefined && condVal === field.conditionalOn.notValue) return null;
-                              }
-
-                              // Cas 1 — Résolution des options dynamiques
-                              const opts = resolveOptions(field);
-
-                              return (
-                                <div key={field.key}>
-                                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">
-                                    {field.label}{field.required && ' *'}
-                                  </label>
-
-                                  {field.type === "boolean" ? (
-                                    <button type="button"
-                                      onClick={() => setData(field.key, !getData(field.key))}
-                                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${getData(field.key) ? "border-primary bg-primary/10 text-primary" : "border-slate-200 bg-white text-slate-500 hover:border-primary/30"}`}>
-                                      <div className={`w-3.5 h-3.5 rounded-sm border-2 flex items-center justify-center transition-all ${getData(field.key) ? "border-primary bg-primary" : "border-slate-300"}`}>
-                                        {getData(field.key) && <Check size={9} className="text-white" />}
-                                      </div>
-                                      Oui
-                                    </button>
-
-                                  ) : field.type === "textarea" ? (
-                                    <textarea rows={2} placeholder={field.placeholder}
-                                      value={(getData(field.key) as string) ?? ""}
-                                      onChange={(e) => setData(field.key, e.target.value)}
-                                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none placeholder:text-slate-400" />
-
-                                  ) : field.type === "select" ? (
-                                    <select value={(getData(field.key) as string) ?? ""}
-                                      onChange={(e) => setData(field.key, e.target.value)}
-                                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                                      <option value="">— Sélectionner —</option>
-                                      {opts.map((o) => <option key={o} value={o}>{o}</option>)}
-                                    </select>
-
-                                  ) : field.type === "multiselect" ? (
-                                    opts.length > 0 ? (
-                                      <div className="flex flex-wrap gap-1.5">
-                                        {opts.map((o) => {
-                                          const sel = ((getData(field.key) as string[]) ?? []).includes(o);
-                                          return (
-                                            <button key={o} type="button"
-                                              onClick={() => {
-                                                const cur = (getData(field.key) as string[]) ?? [];
-                                                setData(field.key, sel ? cur.filter((x) => x !== o) : [...cur, o]);
-                                              }}
-                                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all ${sel ? "bg-primary text-white border-primary" : "bg-white border-slate-200 text-slate-600 hover:border-primary/40"}`}>
-                                              {o}
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    ) : (
-                                      <p className="text-[10px] text-slate-400 italic">Options disponibles après sélection d'une activité avec ce champ déclaré.</p>
-                                    )
-
-                                  ) : field.type === "time" ? (
-                                    <input type="time" value={(getData(field.key) as string) ?? ""}
-                                      onChange={(e) => setData(field.key, e.target.value)}
-                                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-
-                                  ) : field.type === "file" ? (
-                                    <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-400 font-medium">
-                                      <span className="material-symbols-outlined text-base text-slate-300">upload_file</span>
-                                      <span>Upload disponible après publication — envoyez par message</span>
-                                    </div>
-
-                                  ) : field.type === "repeater" ? (
-                                    // Cas 3 — Repeater (programme jour par jour, etc.)
-                                    <div className="space-y-2">
-                                      {((getData(field.key) as any[]) ?? []).map((row: any, idx: number) => (
-                                        <div key={idx} className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
-                                          <div className="flex items-center justify-between">
-                                            <span className="text-[10px] font-extrabold text-primary/70 uppercase">
-                                              {field.label} {idx + 1}
-                                            </span>
-                                            <button type="button"
-                                              onClick={() => {
-                                                const rows = [...((getData(field.key) as any[]) ?? [])];
-                                                rows.splice(idx, 1);
-                                                setData(field.key, rows);
-                                              }}
-                                              className="w-5 h-5 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 flex items-center justify-center transition-colors">
-                                              <X size={9} />
-                                            </button>
-                                          </div>
-                                          {field.subfields?.map((sf) => (
-                                            <div key={sf.key}>
-                                              <label className="text-[9px] font-black tracking-widest text-slate-400 uppercase mb-0.5 block">{sf.label}</label>
-                                              {sf.type === 'textarea' ? (
-                                                <textarea rows={2} placeholder={sf.placeholder}
-                                                  value={(row[sf.key] as string) ?? ""}
-                                                  onChange={(e) => {
-                                                    const rows = [...((getData(field.key) as any[]) ?? [])];
-                                                    rows[idx] = { ...rows[idx], [sf.key]: e.target.value };
-                                                    setData(field.key, rows);
-                                                  }}
-                                                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
-                                              ) : (
-                                                <input type="text" placeholder={sf.placeholder}
-                                                  value={(row[sf.key] as string) ?? ""}
-                                                  onChange={(e) => {
-                                                    const rows = [...((getData(field.key) as any[]) ?? [])];
-                                                    rows[idx] = { ...rows[idx], [sf.key]: e.target.value };
-                                                    setData(field.key, rows);
-                                                  }}
-                                                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                                              )}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      ))}
-                                      <button type="button"
-                                        onClick={() => {
-                                          const rows = [...((getData(field.key) as any[]) ?? [])];
-                                          setData(field.key, [...rows, {}]);
-                                        }}
-                                        className="w-full py-2 rounded-xl border-2 border-dashed border-slate-200 text-[10px] font-extrabold text-slate-400 hover:border-primary/40 hover:text-primary transition-all">
-                                        + Ajouter {field.label}
-                                      </button>
-                                    </div>
-
-                                  ) : (
-                                    <input type={field.type === "number" ? "number" : "text"} placeholder={field.placeholder}
-                                      value={(getData(field.key) as string) ?? ""}
-                                      onChange={(e) => setData(field.key, field.type === "number" ? Number(e.target.value) : e.target.value)}
-                                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-slate-400" />
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    });
-                  };
-
-                  // ── Upload photos par entité (sous-type ou unité) ──
-                  const renderPhotoSection = (entityKey: string, label: string) => {
-                    const existingUrls = entityExistingImages[entityKey] ?? [];
-                    const newImgs = entityImages[entityKey] ?? [];
-                    const coverI = entityCoverIdx[entityKey] ?? 0;
-                    const hasAny = existingUrls.length > 0 || newImgs.length > 0;
-                    const inputId = `entity-photos-${entityKey.replace(/[^a-z0-9]/gi, '-')}`;
-                    return (
-                      <div className="mb-4 pb-4 border-b border-slate-200 last:border-0">
-                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">
-                          📷 {label}
-                        </label>
-                        {!hasAny && (
-                          <label htmlFor={inputId}
-                            className="flex flex-col items-center justify-center gap-1.5 w-full h-20 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
-                            <span className="material-symbols-outlined text-slate-300 text-2xl">add_photo_alternate</span>
-                            <p className="text-[10px] font-semibold text-slate-400">Cliquez pour ajouter des photos</p>
-                            <input id={inputId} type="file" accept="image/*" multiple className="hidden"
-                              onChange={(e) => {
-                                const files = Array.from(e.target.files ?? []);
-                                setEntityImages((prev) => ({ ...prev, [entityKey]: [...(prev[entityKey] ?? []), ...files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))] }));
-                                e.target.value = "";
-                              }}
-                            />
-                          </label>
-                        )}
-                        {hasAny && (
-                          <>
-                            <div className="mt-1 grid grid-cols-4 gap-1.5">
-                              {/* Photos déjà sauvegardées */}
-                              {existingUrls.map((url, i) => (
-                                <div key={`ex-${i}`}
-                                  className={`relative group aspect-square rounded-xl overflow-hidden border-2 transition-all ${i === 0 && newImgs.length === 0 ? "border-primary shadow-md" : "border-slate-200"}`}>
-                                  <img src={url} alt="" className="w-full h-full object-cover" />
-                                  {i === 0 && newImgs.length === 0 && <div className="absolute top-1 left-1 bg-primary text-white text-[8px] font-black px-1.5 py-0.5 rounded-md leading-none">Cover</div>}
-                                  <button type="button"
-                                    onClick={() => setEntityExistingImages((prev) => ({ ...prev, [entityKey]: (prev[entityKey] ?? []).filter((_, idx) => idx !== i) }))}
-                                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <X size={10} />
-                                  </button>
-                                </div>
-                              ))}
-                              {/* Nouvelles photos à uploader */}
-                              {newImgs.map((img, i) => {
-                                const isCover = existingUrls.length === 0 && i === coverI;
-                                return (
-                                  <div key={`new-${i}`}
-                                    onClick={() => { if (existingUrls.length === 0) setEntityCoverIdx((prev) => ({ ...prev, [entityKey]: i })); }}
-                                    className={`relative group aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${isCover ? "border-primary shadow-md" : "border-transparent hover:border-slate-300"}`}>
-                                    <img src={img.preview} alt="" className="w-full h-full object-cover" />
-                                    {isCover && <div className="absolute top-1 left-1 bg-primary text-white text-[8px] font-black px-1.5 py-0.5 rounded-md leading-none">Cover</div>}
-                                    <button type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        URL.revokeObjectURL(img.preview);
-                                        setEntityImages((prev) => { const cur = prev[entityKey] ?? []; return { ...prev, [entityKey]: cur.filter((_, idx) => idx !== i) }; });
-                                        setEntityCoverIdx((prev) => { const cur = prev[entityKey] ?? 0; return { ...prev, [entityKey]: cur >= i && cur > 0 ? cur - 1 : cur }; });
-                                      }}
-                                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <X size={10} />
-                                    </button>
-                                  </div>
-                                );
-                              })}
-                              {/* Bouton ajouter */}
-                              <label htmlFor={inputId}
-                                className="flex flex-col items-center justify-center aspect-square border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
-                                <span className="material-symbols-outlined text-slate-300 text-xl">add</span>
-                                <input id={inputId} type="file" accept="image/*" multiple className="hidden"
-                                  onChange={(e) => {
-                                    const files = Array.from(e.target.files ?? []);
-                                    setEntityImages((prev) => ({ ...prev, [entityKey]: [...(prev[entityKey] ?? []), ...files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))] }));
-                                    e.target.value = "";
-                                  }}
-                                />
-                              </label>
-                            </div>
-                            {(existingUrls.length + newImgs.length) > 1 && existingUrls.length === 0 && (
-                              <p className="text-[9px] text-slate-400 font-medium mt-1">Cliquez sur une photo pour la définir comme image principale.</p>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    );
-                  };
-
-                  // ── Helpers pour nb_unites par sous-type ──
-                  const getNbUnites = (st: string) => subtypeNbUnites[st] ?? 1;
-                  const getUnitData = (st: string) => subtypeUnitDetails[st] ?? [{}];
-                  const getActiveTab = (st: string) => activeSubtypeTab[st] ?? 0;
-
-                  const setNbUnites = (st: string, n: number) =>
-                    setSubtypeNbUnites((prev) => ({ ...prev, [st]: n }));
-                  const setUnitData = (st: string, arr: Array<Record<string, any>>) =>
-                    setSubtypeUnitDetails((prev) => ({ ...prev, [st]: arr }));
-                  const setActiveTab = (st: string, i: number) =>
-                    setActiveSubtypeTab((prev) => ({ ...prev, [st]: i }));
-
-                  const isHebergement = offerActivity?.category === 'hebergement';
-
-                  // ── Getter/setter config par sous-type (dispo + tarif) ──
-                  const getStCfg = (st: string): Record<string, any> => subtypeFormConfig[st] ?? {};
-                  const setStCfg = (st: string, field: string, val: any) =>
-                    setSubtypeFormConfig((prev) => ({ ...prev, [st]: { ...(prev[st] ?? {}), [field]: val } }));
-
-                  // ── Disponibilité par sous-type ──
-                  const renderSubtypeAvailBloc = (st: string) => {
-                    const cfg = getStCfg(st);
-                    const mode = (cfg.availMode as string) ?? 'specific';
-                    const weekdays: number[] = (cfg.availWeekdays as number[]) ?? [];
-                    const specificDates: string[] = (cfg.specificDates as string[]) ?? [];
-                    const saisons: string[] = (cfg.saisons as string[]) ?? [];
-                    return (
-                      <div className="mb-4 pb-4 border-b border-slate-200">
-                        <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Disponibilité</p>
-                        <div className="grid grid-cols-2 gap-2 mb-2">
-                          {AVAILABILITY_TYPES.map((m) => (
-                            <button key={m.value} type="button" onClick={() => setStCfg(st, 'availMode', m.value)}
-                              className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border-2 text-[10px] font-bold transition-all ${mode === m.value ? 'border-primary bg-primary/10 text-slate-900' : 'border-slate-200 bg-white text-slate-500 hover:border-primary/30'}`}>
-                              <span className={`material-symbols-outlined text-sm ${mode === m.value ? 'text-primary' : 'text-slate-400'}`}>{m.icon}</span>
-                              {m.label}
-                            </button>
-                          ))}
-                        </div>
-                        {mode === 'specific' && (
-                          <div className="space-y-1.5">
-                            <div className="flex gap-2">
-                              <input type="date" value={(cfg.newSpecificDate as string) ?? ''} onChange={(e) => setStCfg(st, 'newSpecificDate', e.target.value)}
-                                className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                              <button type="button" onClick={() => {
-                                const d = (cfg.newSpecificDate as string) ?? '';
-                                if (d && !specificDates.includes(d)) { setStCfg(st, 'specificDates', [...specificDates, d].sort()); setStCfg(st, 'newSpecificDate', ''); }
-                              }} className="px-3 py-2 bg-primary text-white rounded-xl text-xs font-extrabold hover:bg-primary/90">Ajouter</button>
-                            </div>
-                            {specificDates.length > 0 && <div className="flex flex-wrap gap-1">{specificDates.map((d) => <span key={d} className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded-full text-[10px] font-bold border border-primary/20">{d}<button type="button" onClick={() => setStCfg(st, 'specificDates', specificDates.filter((x) => x !== d))}><X size={8} /></button></span>)}</div>}
-                          </div>
-                        )}
-                        {mode === 'weekly' && (
-                          <div className="space-y-1.5">
-                            <div className="flex gap-1">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map((day, i) => <button key={i} type="button" onClick={() => setStCfg(st, 'availWeekdays', weekdays.includes(i) ? weekdays.filter((d) => d !== i) : [...weekdays, i])} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black border-2 transition-all ${weekdays.includes(i) ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{day}</button>)}</div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début</label><input type="date" value={(cfg.availStart as string) ?? ''} onChange={(e) => setStCfg(st, 'availStart', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                              <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin</label><input type="date" value={(cfg.availEnd as string) ?? ''} onChange={(e) => setStCfg(st, 'availEnd', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                            </div>
-                          </div>
-                        )}
-                        {mode === 'period' && (
-                          <div className="grid grid-cols-2 gap-2">
-                            <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début *</label><input type="date" value={(cfg.availStart as string) ?? ''} onChange={(e) => setStCfg(st, 'availStart', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                            <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin *</label><input type="date" value={(cfg.availEnd as string) ?? ''} onChange={(e) => setStCfg(st, 'availEnd', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                          </div>
-                        )}
-                        {mode === 'on_demand' && (
-                          <div className="space-y-1.5">
-                            <div className="flex gap-2">{['24h','48h','72h'].map((d) => <button key={d} type="button" onClick={() => setStCfg(st, 'delaiReponse', d)} className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border-2 transition-all ${(cfg.delaiReponse ?? '24h') === d ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 bg-white text-slate-500'}`}>{d}</button>)}</div>
-                          </div>
-                        )}
-                        {mode === 'season' && (
-                          <div className="flex gap-1.5">{SAISONS.map((s) => <button key={s} type="button" onClick={() => setStCfg(st, 'saisons', saisons.includes(s) ? saisons.filter((x) => x !== s) : [...saisons, s])} className={`flex-1 py-1.5 rounded-xl text-[9px] font-black border-2 transition-all ${saisons.includes(s) ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{s}</button>)}</div>
-                        )}
-                        {mode !== 'on_demand' && (
-                          <div className="grid grid-cols-2 gap-2 mt-2">
-                            <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Heure début</label><input type="time" value={(cfg.heureDebut as string) ?? ''} onChange={(e) => setStCfg(st, 'heureDebut', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                            <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Heure fin</label><input type="time" value={(cfg.heureFin as string) ?? ''} onChange={(e) => setStCfg(st, 'heureFin', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  };
-
-                  // ── Tarification par sous-type (hébergement) ──
-                  const renderSubtypePricingBloc = (st: string) => {
-                    const cfg = getStCfg(st);
-                    return (
-                      <div className="mb-4 pb-4 border-b border-slate-200 space-y-2.5">
-                        <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Tarification</p>
-                        <div>
-                          <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Prix groupe <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-bold">DT</span><input type="number" min="0" placeholder="1200" value={(cfg.prixGroupe as string) ?? ''} onChange={(e) => setStCfg(st, 'prixGroupe', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
-                            <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">pers.</span><input type="number" min="1" placeholder="10" value={(cfg.nbPersonnesGroupe as string) ?? ''} onChange={(e) => setStCfg(st, 'nbPersonnesGroupe', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Prix enfant <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-bold">DT</span><input type="number" min="0" placeholder="150" value={(cfg.prixEnfant as string) ?? ''} onChange={(e) => setStCfg(st, 'prixEnfant', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
-                            <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">≤ âge</span><input type="number" min="0" max="18" placeholder="12" value={(cfg.ageMaxEnfant as string) ?? ''} onChange={(e) => setStCfg(st, 'ageMaxEnfant', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-11 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Supplément privatisation <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                          <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-bold">DT</span><input type="number" min="0" placeholder="500" value={(cfg.suppPrivatisation as string) ?? ''} onChange={(e) => setStCfg(st, 'suppPrivatisation', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" /></div>
-                        </div>
-                      </div>
-                    );
-                  };
-
-                  // ── Contrôle nb_unites inline dans la carte ──
-                  const renderNbUnitesControl = (st: string) => {
-                    const nb = getNbUnites(st);
-                    return (
-                      <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-200">
-                        <div>
-                          <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Nb d'unités</p>
-                          <p className="text-[9px] text-slate-400 font-medium mt-0.5">Chambres / suites / tentes disponibles à la vente</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button type="button"
-                            onClick={() => {
-                              if (nb <= 1) return;
-                              const removedKey = `${st}_unit_${nb - 1}`;
-                              setEntityImages((prev) => {
-                                const imgs = prev[removedKey] ?? [];
-                                imgs.forEach((img) => URL.revokeObjectURL(img.preview));
-                                const next = { ...prev }; delete next[removedKey]; return next;
-                              });
-                              setEntityCoverIdx((prev) => { const next = { ...prev }; delete next[removedKey]; return next; });
-                              setUnitData(st, getUnitData(st).slice(0, -1));
-                              if (getActiveTab(st) >= nb - 1) setActiveTab(st, nb - 2);
-                              setNbUnites(st, nb - 1);
-                            }}
-                            className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-black flex items-center justify-center text-sm transition-colors">−</button>
-                          <span className="text-base font-extrabold text-slate-800 w-6 text-center">{nb}</span>
-                          <button type="button"
-                            onClick={() => { setUnitData(st, [...getUnitData(st), {}]); setNbUnites(st, nb + 1); }}
-                            className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-black flex items-center justify-center text-sm transition-colors">+</button>
-                        </div>
-                      </div>
-                    );
-                  };
-
-                  // ── Onglets unités pour un sous-type ──
-                  const renderUnitTabs = (st: string) => {
-                    const nb = getNbUnites(st);
-                    const unitArr = getUnitData(st);
-                    const activeI = getActiveTab(st);
-                    const config = OFFER_DETAIL_FIELDS[st];
-                    const nameKey = config?.sections[0]?.fields.find((f) => f.key.startsWith('nom_'))?.key ?? '';
-
-                    return (
-                      <>
-                        {/* Tabs */}
-                        <div className="flex flex-wrap gap-1.5 mb-3">
-                          {Array.from({ length: nb }, (_, i) => {
-                            const unitName = (unitArr[i]?.[nameKey] as string) || null;
-                            return (
-                              <button key={i} type="button" onClick={() => setActiveTab(st, i)}
-                                className={`px-3 py-1.5 rounded-full text-xs font-extrabold border-2 transition-all ${activeI === i ? 'bg-primary text-white border-primary' : 'bg-white border-slate-200 text-slate-500 hover:border-primary/30'}`}>
-                                {unitName || `${st.replace(/_/g, ' ')} ${i + 1}`}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {/* ── Disponibilité par unité ── */}
-                        <div className="mb-3 pb-3 border-b border-slate-200">
-                          <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Disponibilité de cette unité</p>
-                          {(() => {
-                            const uArr = getUnitData(st);
-                            const uI = getActiveTab(st);
-                            const getU = (f: string) => uArr[uI]?.[f];
-                            const setU = (f: string, v: any) => { const a = [...uArr]; a[uI] = { ...(a[uI] ?? {}), [f]: v }; setUnitData(st, a); };
-                            const uMode = (getU('availMode') as string) ?? 'specific';
-                            const uWeekdays: number[] = (getU('availWeekdays') as number[]) ?? [];
-                            const uDates: string[] = (getU('specificDates') as string[]) ?? [];
-                            const uSaisons: string[] = (getU('saisons') as string[]) ?? [];
-                            return (
-                              <>
-                                <div className="grid grid-cols-2 gap-1.5 mb-2">
-                                  {AVAILABILITY_TYPES.map((m) => (
-                                    <button key={m.value} type="button" onClick={() => setU('availMode', m.value)}
-                                      className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border-2 text-[10px] font-bold transition-all ${uMode === m.value ? 'border-primary bg-primary/10 text-slate-900' : 'border-slate-200 bg-white text-slate-500 hover:border-primary/30'}`}>
-                                      <span className={`material-symbols-outlined text-sm ${uMode === m.value ? 'text-primary' : 'text-slate-400'}`}>{m.icon}</span>{m.label}
-                                    </button>
-                                  ))}
-                                </div>
-                                {uMode === 'specific' && (
-                                  <div className="space-y-1.5">
-                                    <div className="flex gap-2">
-                                      <input type="date" value={(getU('newSpecificDate') as string) ?? ''} onChange={(e) => setU('newSpecificDate', e.target.value)}
-                                        className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                                      <button type="button" onClick={() => {
-                                        const d = (getU('newSpecificDate') as string) ?? '';
-                                        if (d && !uDates.includes(d)) { setU('specificDates', [...uDates, d].sort()); setU('newSpecificDate', ''); }
-                                      }} className="px-3 py-2 bg-primary text-white rounded-xl text-xs font-extrabold">Ajouter</button>
-                                    </div>
-                                    {uDates.length > 0 && <div className="flex flex-wrap gap-1">{uDates.map((d) => <span key={d} className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded-full text-[10px] font-bold border border-primary/20">{d}<button type="button" onClick={() => setU('specificDates', uDates.filter((x) => x !== d))}><X size={8} /></button></span>)}</div>}
-                                  </div>
-                                )}
-                                {uMode === 'weekly' && (
-                                  <div className="space-y-1.5">
-                                    <div className="flex gap-1">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map((day, i) => <button key={i} type="button" onClick={() => setU('availWeekdays', uWeekdays.includes(i) ? uWeekdays.filter((d) => d !== i) : [...uWeekdays, i])} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black border-2 transition-all ${uWeekdays.includes(i) ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{day}</button>)}</div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début</label><input type="date" value={(getU('availStart') as string) ?? ''} onChange={(e) => setU('availStart', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                                      <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin</label><input type="date" value={(getU('availEnd') as string) ?? ''} onChange={(e) => setU('availEnd', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                                    </div>
-                                  </div>
-                                )}
-                                {uMode === 'period' && (
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début *</label><input type="date" value={(getU('availStart') as string) ?? ''} onChange={(e) => setU('availStart', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                                    <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin *</label><input type="date" value={(getU('availEnd') as string) ?? ''} onChange={(e) => setU('availEnd', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                                  </div>
-                                )}
-                                {uMode === 'on_demand' && (
-                                  <div className="flex gap-2">{['24h','48h','72h'].map((d) => <button key={d} type="button" onClick={() => setU('delaiReponse', d)} className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border-2 transition-all ${(getU('delaiReponse') ?? '24h') === d ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 bg-white text-slate-500'}`}>{d}</button>)}</div>
-                                )}
-                                {uMode === 'season' && (
-                                  <div className="flex gap-1.5">{SAISONS.map((s) => <button key={s} type="button" onClick={() => setU('saisons', uSaisons.includes(s) ? uSaisons.filter((x) => x !== s) : [...uSaisons, s])} className={`flex-1 py-1.5 rounded-xl text-[9px] font-black border-2 transition-all ${uSaisons.includes(s) ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{s}</button>)}</div>
-                                )}
-                                {uMode !== 'on_demand' && (
-                                  <div className="grid grid-cols-2 gap-2 mt-2">
-                                    <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Heure début</label><input type="time" value={(getU('heureDebut') as string) ?? ''} onChange={(e) => setU('heureDebut', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                                    <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Heure fin</label><input type="time" value={(getU('heureFin') as string) ?? ''} onChange={(e) => setU('heureFin', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                                  </div>
-                                )}
-                              </>
-                            );
-                          })()}
-                        </div>
-
-                        {/* ── Champs par unité : prix, max pers, acompte ── */}
-                        <div className="mb-3 pb-3 border-b border-slate-200 space-y-3">
-                          {/* Prix / nuit */}
-                          <div>
-                            <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">
-                              Prix / nuit (TND)
-                            </label>
-                            <div className="relative">
-                              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px] font-bold">DT</span>
-                              <input type="number" min="0" placeholder="Ex : 380"
-                                value={(unitArr[activeI]?.prix_unite as string) ?? ""}
-                                onChange={(e) => {
-                                  const arr = [...unitArr]; arr[activeI] = { ...(arr[activeI] ?? {}), prix_unite: e.target.value }; setUnitData(st, arr);
-                                }}
-                                className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
-                            </div>
-                          </div>
-                          {/* Max. pers. par unité */}
-                          <div>
-                            <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">
-                              Max. personnes pour cette unité
-                            </label>
-                            <input type="number" min="1" placeholder="Ex : 2"
-                              value={(unitArr[activeI]?.max_pers_unite as string) ?? ""}
-                              onChange={(e) => {
-                                const arr = [...unitArr]; arr[activeI] = { ...(arr[activeI] ?? {}), max_pers_unite: e.target.value }; setUnitData(st, arr);
-                              }}
-                              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
-                          </div>
-                          {/* Acompte par unité */}
-                          <div>
-                            <button type="button"
-                              onClick={() => {
-                                const arr = [...unitArr];
-                                arr[activeI] = { ...(arr[activeI] ?? {}), acompte_requis: !(arr[activeI]?.acompte_requis ?? false) };
-                                setUnitData(st, arr);
-                              }}
-                              className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${unitArr[activeI]?.acompte_requis ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 bg-white text-slate-500 hover:border-primary/30'}`}>
-                              <div className={`w-3.5 h-3.5 rounded-sm border-2 flex items-center justify-center transition-all ${unitArr[activeI]?.acompte_requis ? 'border-primary bg-primary' : 'border-slate-300'}`}>
-                                {unitArr[activeI]?.acompte_requis && <Check size={9} className="text-white" />}
-                              </div>
-                              Acompte requis pour cette unité
-                            </button>
-                            {unitArr[activeI]?.acompte_requis && (
-                              <div className="grid grid-cols-2 gap-2 mt-2">
-                                <select
-                                  value={(unitArr[activeI]?.type_acompte as string) ?? 'pourcentage'}
-                                  onChange={(e) => { const arr = [...unitArr]; arr[activeI] = { ...(arr[activeI] ?? {}), type_acompte: e.target.value }; setUnitData(st, arr); }}
-                                  className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                                  <option value="pourcentage">% du prix</option>
-                                  <option value="fixe">Montant fixe (DT)</option>
-                                </select>
-                                <div className="relative">
-                                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]">{(unitArr[activeI]?.type_acompte ?? 'pourcentage') === 'pourcentage' ? '%' : 'DT'}</span>
-                                  <input type="number" min="1" placeholder="30"
-                                    value={(unitArr[activeI]?.valeur_acompte as string) ?? ""}
-                                    onChange={(e) => { const arr = [...unitArr]; arr[activeI] = { ...(arr[activeI] ?? {}), valeur_acompte: e.target.value }; setUnitData(st, arr); }}
-                                    className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        {/* Photos + champs de l'unité active */}
-                        {renderPhotoSection(`${st}_unit_${activeI}`, `Photos — ${(unitArr[activeI]?.[nameKey] as string) || `Unité ${activeI + 1}`}`)}
-                        {renderFields(
-                          st,
-                          (key) => unitArr[activeI]?.[key],
-                          (key, val) => { const arr = [...unitArr]; arr[activeI] = { ...(arr[activeI] ?? {}), [key]: val }; setUnitData(st, arr); },
-                        )}
-                      </>
-                    );
-                  };
-
-                  return (
-                    <div className="space-y-4">
-                      <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase block">Détails spécifiques</label>
-
-                      {offerSubtypes.map((st) => (
-                        <div key={st} className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                          {/* Libellé sous-type en multi-sélection */}
-                          {offerSubtypes.length > 1 && (
-                            <p className="text-[10px] font-black tracking-widest text-primary/70 uppercase mb-3">{st}</p>
-                          )}
-
-                          {/* Contrôle nb_unites + onglets — hébergement seulement */}
-                          {isHebergement ? (
-                            <>
-                              {/* Dispo + Tarif au niveau sous-type seulement si 1 seule unité */}
-                              {getNbUnites(st) === 1 && renderSubtypeAvailBloc(st)}
-                              {renderSubtypePricingBloc(st)}
-                              {renderNbUnitesControl(st)}
-                              {getNbUnites(st) > 1
-                                ? renderUnitTabs(st)
-                                : (
-                                  <>
-                                    {renderPhotoSection(`${st}_unit_0`, 'Photos de l\'offre')}
-                                    {renderFields(
-                                      st,
-                                      (key) => (getUnitData(st)[0] ?? {})[key],
-                                      (key, val) => { const arr = [...getUnitData(st)]; arr[0] = { ...(arr[0] ?? {}), [key]: val }; setUnitData(st, arr); },
-                                    )}
-                                  </>
-                                )
-                              }
-                            </>
-                          ) : (
-                            /* Non-hébergement : champs directs */
-                            <>
-                              {renderPhotoSection(st, offerSubtypes.length > 1 ? `Photos — ${st}` : 'Photos de l\'offre')}
-                              {renderFields(
-                                st,
-                                (key) => subtypeDetails[st]?.[key],
-                                (key, val) => setSubtypeDetails((prev) => ({ ...prev, [st]: { ...(prev[st] ?? {}), [key]: val } })),
+                </div>
+                <div>
+                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Politique d'annulation</label>
+                  <textarea rows={2} placeholder="Ex : Remboursement intégral si annulation 48h avant. Aucun remboursement après ce délai."
+                    value={form.cancellation_policy}
+                    onChange={(e) => setForm((f) => ({ ...f, cancellation_policy: e.target.value }))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Photos de l'offre</label>
+                  <label htmlFor="publish-images-input"
+                    className="flex flex-col items-center justify-center gap-2 w-full h-24 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
+                    <span className="material-symbols-outlined text-slate-300 text-3xl">add_photo_alternate</span>
+                    <p className="text-xs font-semibold text-slate-400">Cliquez pour ajouter des photos</p>
+                    <input id="publish-images-input" type="file" accept="image/*" multiple className="hidden"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files ?? []);
+                        const newImgs = files.map((file) => ({ file, preview: URL.createObjectURL(file) }));
+                        setPublishImages((prev) => [...prev, ...newImgs]);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  {publishImages.length > 0 && (
+                    <>
+                      <div className="mt-3 grid grid-cols-4 gap-2">
+                        {publishImages.map((img, i) => {
+                          const isCover = i === publishCoverIdx;
+                          return (
+                            <div key={i} onClick={() => setPublishCoverIdx(i)}
+                              className={`relative group aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${isCover ? "border-primary shadow-md" : "border-transparent hover:border-slate-300"}`}>
+                              <img src={img.preview} alt="" className="w-full h-full object-cover" />
+                              {isCover && (
+                                <div className="absolute top-1 left-1 bg-primary text-white text-[9px] font-black px-1.5 py-0.5 rounded-md leading-none">Cover</div>
                               )}
-                            </>
-                          )}
-                        </div>
-                      ))}
+                              <button type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  URL.revokeObjectURL(img.preview);
+                                  setPublishImages((prev) => prev.filter((_, idx) => idx !== i));
+                                  setPublishCoverIdx((c) => (c >= i && c > 0 ? c - 1 : c));
+                                }}
+                                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <X size={10} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-medium mt-2">Cliquez sur une photo pour la définir comme image principale (cover).</p>
+                    </>
+                  )}
+                </div>
+                <div>
+                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Type d'offre</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {OFFER_TYPES.map((t) => {
+                      const active = form.offer_type === t.value;
+                      return (
+                        <button key={t.value} type="button"
+                          onClick={() => setForm((f) => ({ ...f, offer_type: active ? "" : t.value }))}
+                          className={`flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl border-2 text-center transition-all cursor-pointer ${active ? "bg-primary/10 border-primary text-slate-900 shadow-sm" : "bg-slate-50 border-slate-200 text-slate-500 hover:border-primary/40 hover:bg-white"}`}>
+                          <span className={`material-symbols-outlined text-xl ${active ? "text-primary" : "text-slate-400"}`}>{t.icon}</span>
+                          <span className="text-[10px] font-extrabold">{t.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Tarif (TND)</label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px] font-bold">DT</span>
+                      <input type="number" min="0" step="1" placeholder="Ex : 350"
+                        value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white font-mono placeholder:text-slate-400 placeholder:font-sans"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Durée (jours)</label>
+                    <div className="relative">
+                      <Clock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input type="number" min="1" step="1" placeholder="Ex : 3"
+                        value={form.duration} onChange={(e) => setForm((f) => ({ ...f, duration: e.target.value }))}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white font-mono placeholder:text-slate-400 placeholder:font-sans"
+                      />
+                    </div>
+                  </div>
+                </div>
+                {(() => {
+                  const activeProjects = profile.venues.filter((p) => p.status === "active");
+                  return (
+                    <div>
+                      <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Établissement associé (optionnel)</label>
+                      {activeProjects.length === 0 ? (
+                        <p className="text-xs font-medium text-amber-600 bg-amber-50 px-3 py-2 rounded-xl">Aucun établissement validé disponible.</p>
+                      ) : (
+                        <select value={form.venue_id} onChange={(e) => setForm((f) => ({ ...f, venue_id: e.target.value }))}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white">
+                          <option value="">— Aucun établissement lié —</option>
+                          {activeProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                      )}
                     </div>
                   );
                 })()}
-
-                {/* ── BLOC 3 : DISPONIBILITÉ — global pour non-hébergement seulement ── */}
-                {offerActivity?.category !== 'hebergement' && <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Disponibilité</label>
-                  <div className="grid grid-cols-2 gap-2 mb-3">
-                    {AVAILABILITY_TYPES.map((m) => (
-                      <button key={m.value} type="button" onClick={() => setAvailabilityMode(m.value)}
-                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-xs font-bold transition-all ${availabilityMode === m.value ? "border-primary bg-primary/10 text-slate-900" : "border-slate-200 bg-slate-50 text-slate-500 hover:border-primary/30"}`}>
-                        <span className={`material-symbols-outlined text-base ${availabilityMode === m.value ? "text-primary" : "text-slate-400"}`}>{m.icon}</span>
-                        {m.label}
-                      </button>
-                    ))}
-                  </div>
-                  {availabilityMode === "specific" && (
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <input type="date" value={newSpecificDate} onChange={(e) => setNewSpecificDate(e.target.value)}
-                          className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                        <button type="button"
-                          onClick={() => { if (newSpecificDate && !specificDates.includes(newSpecificDate)) { setSpecificDates((prev) => [...prev, newSpecificDate].sort()); setNewSpecificDate(""); } }}
-                          className="px-4 py-2.5 bg-primary text-white rounded-xl text-xs font-extrabold hover:bg-primary/90 transition-colors">
-                          Ajouter
-                        </button>
-                      </div>
-                      {specificDates.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5">
-                          {specificDates.map((d) => (
-                            <span key={d} className="flex items-center gap-1 px-2.5 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold border border-primary/20">
-                              {d}
-                              <button type="button" onClick={() => setSpecificDates((prev) => prev.filter((x) => x !== d))}><X size={10} /></button>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {availabilityMode === "weekly" && (
-                    <div className="space-y-2">
-                      <div className="flex gap-1.5">
-                        {["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map((day, i) => (
-                          <button key={i} type="button"
-                            onClick={() => setAvailableWeekdays((prev) => prev.includes(i) ? prev.filter((d) => d !== i) : [...prev, i])}
-                            className={`flex-1 py-2 rounded-xl text-[10px] font-black border-2 transition-all ${availableWeekdays.includes(i) ? "border-primary bg-primary text-white" : "border-slate-200 bg-slate-50 text-slate-500 hover:border-primary/30"}`}>
-                            {day}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Début période</label>
-                          <input type="date" value={availabilityStart} onChange={(e) => setAvailabilityStart(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Fin période</label>
-                          <input type="date" value={availabilityEnd} onChange={(e) => setAvailabilityEnd(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {availabilityMode === "period" && (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Date début *</label>
-                          <input type="date" value={availabilityStart} onChange={(e) => setAvailabilityStart(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Date fin *</label>
-                          <input type="date" value={availabilityEnd} onChange={(e) => setAvailabilityEnd(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Jours disponibles</label>
-                        <div className="flex gap-1.5">
-                          {["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map((day, i) => (
-                            <button key={i} type="button"
-                              onClick={() => setAvailableWeekdays((prev) => prev.includes(i) ? prev.filter((d) => d !== i) : [...prev, i])}
-                              className={`flex-1 py-2 rounded-xl text-[10px] font-black border-2 transition-all ${availableWeekdays.includes(i) ? "border-primary bg-primary text-white" : "border-slate-200 bg-slate-50 text-slate-500 hover:border-primary/30"}`}>
-                              {day}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {availabilityMode === "on_demand" && (
-                    <div className="space-y-2">
-                      <div>
-                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Délai de réponse *</label>
-                        <div className="flex gap-2">
-                          {["24h","48h","72h"].map((d) => (
-                            <button key={d} type="button" onClick={() => setAvailDelaiReponse(d)}
-                              className={`px-4 py-2 rounded-xl text-xs font-extrabold border-2 transition-all ${availDelaiReponse === d ? "border-primary bg-primary/10 text-primary" : "border-slate-200 bg-slate-50 text-slate-500 hover:border-primary/30"}`}>
-                              {d}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Message d'accueil</label>
-                        <textarea rows={2} value={availMessageAccueil} onChange={(e) => setAvailMessageAccueil(e.target.value)}
-                          placeholder="Ex : Contactez-moi pour vérifier la disponibilité…"
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none placeholder:text-slate-400" />
-                      </div>
-                    </div>
-                  )}
-                  {availabilityMode === "season" && (
-                    <div>
-                      <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Saisons *</label>
-                      <div className="flex gap-2">
-                        {SAISONS.map((s) => (
-                          <button key={s} type="button"
-                            onClick={() => setAvailSaisons((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s])}
-                            className={`flex-1 py-2 rounded-xl text-[10px] font-black border-2 transition-all ${availSaisons.includes(s) ? "border-primary bg-primary text-white" : "border-slate-200 bg-slate-50 text-slate-500 hover:border-primary/30"}`}>
-                            {s}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {availabilityMode !== "on_demand" && (
-                    <div className="grid grid-cols-2 gap-2 mt-2">
-                      <div>
-                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Heure début</label>
-                        <input type="time" value={availHeureDebut} onChange={(e) => setAvailHeureDebut(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Heure fin</label>
-                        <input type="time" value={availHeureFin} onChange={(e) => setAvailHeureFin(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                      </div>
-                    </div>
-                  )}
-                </div>}
-
-                {/* ── BLOC 4 : TARIFICATION — global pour non-hébergement seulement ── */}
-                {offerActivity?.category !== 'hebergement' && <div className="space-y-3">
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase block">Tarification</label>
-
-                  {/* Prix par sous-type en mode VARIANT */}
-                  {offerMode === "variant" && offerSubtypes.length > 1 && (
-                    <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 space-y-3">
-                      <p className="text-[10px] font-black tracking-widest text-primary uppercase">Prix par variante — Le voyageur choisit</p>
-                      {offerSubtypes.map((st) => (
-                        <div key={st}>
-                          <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">
-                            {st} (TND)
-                          </label>
-                          <div className="relative">
-                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px] font-bold">DT</span>
-                            <input type="number" min="0" step="1" placeholder="Ex : 250"
-                              value={subtypePrices[st] ?? ""}
-                              onChange={(e) => setSubtypePrices((prev) => ({ ...prev, [st]: e.target.value }))}
-                              className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">
-                      {offerMode === "variant" && offerSubtypes.length > 1
-                        ? "Prix de référence général (optionnel)"
-                        : "Prix par personne * (TND)"}
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px] font-bold">DT</span>
-                      <input type="number" min="0" step="1" placeholder="350" value={form.price}
-                        onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white font-mono" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Prix groupe <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px] font-bold">DT</span>
-                        <input type="number" min="0" placeholder="1200" value={prixGroupe} onChange={(e) => setPrixGroupe(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
-                      </div>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]">pers.</span>
-                        <input type="number" min="1" placeholder="10" value={nbPersonnesGroupe} onChange={(e) => setNbPersonnesGroupe(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Prix enfant <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px] font-bold">DT</span>
-                        <input type="number" min="0" placeholder="150" value={prixEnfant} onChange={(e) => setPrixEnfant(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
-                      </div>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]">≤ âge</span>
-                        <input type="number" min="0" max="18" placeholder="12" value={ageMaxEnfant} onChange={(e) => setAgeMaxEnfant(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-12 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Supplément privatisation <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
-                    <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px] font-bold">DT</span>
-                      <input type="number" min="0" placeholder="500" value={suppPrivatisation} onChange={(e) => setSuppPrivatisation(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
-                    </div>
-                  </div>
-                  <div>
-                    <button type="button" onClick={() => setAcompteRequis((v) => !v)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${acompteRequis ? "border-primary bg-primary/10 text-primary" : "border-slate-200 bg-slate-50 text-slate-500 hover:border-primary/30"}`}>
-                      <div className={`w-3.5 h-3.5 rounded-sm border-2 flex items-center justify-center transition-all ${acompteRequis ? "border-primary bg-primary" : "border-slate-300"}`}>
-                        {acompteRequis && <Check size={9} className="text-white" />}
-                      </div>
-                      Acompte requis
-                    </button>
-                    {acompteRequis && (
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        <select value={typeAcompte} onChange={(e) => setTypeAcompte(e.target.value)}
-                          className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                          <option value="pourcentage">% du prix</option>
-                          <option value="fixe">Montant fixe (DT)</option>
-                        </select>
-                        <div className="relative">
-                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]">{typeAcompte === "pourcentage" ? "%" : "DT"}</span>
-                          <input type="number" min="1" placeholder={typeAcompte === "pourcentage" ? "30" : "100"} value={valeurAcompte} onChange={(e) => setValeurAcompte(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>}
-
-                {/* ── BLOC 5 : CONFIRMATION ──────────────────────────────── */}
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Mode de confirmation</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {CONFIRMATION_TYPES.slice(0, 3).map((m) => (
-                      <button key={m.value} type="button" onClick={() => setOfferConfirmMode(m.value)}
-                        className={`flex flex-col items-center gap-1 py-3 px-2 rounded-2xl border-2 text-center transition-all ${offerConfirmMode === m.value ? "border-primary bg-primary/10 text-slate-900 shadow-sm" : "border-slate-200 bg-slate-50 text-slate-500 hover:border-primary/30 hover:bg-white"}`}>
-                        <span className={`material-symbols-outlined text-xl ${offerConfirmMode === m.value ? "text-primary" : "text-slate-400"}`}>{m.icon}</span>
-                        <span className="text-[10px] font-extrabold">{m.label}</span>
-                        <span className="text-[9px] font-medium text-slate-400">{m.desc}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    {CONFIRMATION_TYPES.slice(3).map((m) => (
-                      <button key={m.value} type="button" onClick={() => setOfferConfirmMode(m.value)}
-                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-xs font-bold transition-all ${offerConfirmMode === m.value ? "border-primary bg-primary/10 text-slate-900" : "border-slate-200 bg-slate-50 text-slate-500 hover:border-primary/30"}`}>
-                        <span className={`material-symbols-outlined text-base ${offerConfirmMode === m.value ? "text-primary" : "text-slate-400"}`}>{m.icon}</span>
-                        <div>
-                          <p className="font-extrabold">{m.label}</p>
-                          <p className="text-[9px] font-medium text-slate-400">{m.desc}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                  {offerConfirmMode === "deposit" && (
-                    <div className="mt-3">
-                      <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Acompte requis (%)</label>
-                      <input type="number" min="1" max="100" value={offerDepositPct} onChange={(e) => setOfferDepositPct(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
-                    </div>
-                  )}
-                </div>
-
-                {/* ── BLOC 6 : ANNULATION ────────────────────────────────── */}
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Politique d'annulation *</label>
-                  <div className="space-y-1.5">
-                    {CANCELLATION_POLICIES.map((p) => (
-                      <button key={p.value} type="button" onClick={() => setCancellationPolicy(p.value)}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${cancellationPolicy === p.value ? "border-primary bg-primary/10" : "border-slate-200 bg-slate-50 hover:border-primary/30"}`}>
-                        <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 flex items-center justify-center ${cancellationPolicy === p.value ? "border-primary" : "border-slate-300"}`}>
-                          {cancellationPolicy === p.value && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
-                        </div>
-                        <div>
-                          <p className={`text-xs font-extrabold ${cancellationPolicy === p.value ? "text-slate-900" : "text-slate-600"}`}>{p.label}</p>
-                          <p className="text-[10px] font-medium text-slate-400">{p.desc}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                  {cancellationPolicy === "custom" && (
-                    <textarea rows={2} value={cancellationDesc} onChange={(e) => setCancellationDesc(e.target.value)}
-                      placeholder="Décrivez votre politique d'annulation personnalisée…"
-                      className="w-full mt-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none placeholder:text-slate-400" />
-                  )}
-                </div>
-
                 {publishError && (
                   <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
                     <span className="material-symbols-outlined text-red-500 text-base">error</span>
@@ -5669,8 +1730,8 @@ export default function ProviderProfilePage() {
               <button type="submit" form="publish-offer-form" disabled={publishing}
                 className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs shadow-sm hover:shadow transition-all active:scale-95 disabled:opacity-60 cursor-pointer">
                 {publishing
-                  ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />{offerEditMode ? "Enregistrement…" : "Publication…"}</>
-                  : <><Send size={14} />{offerEditMode ? "Enregistrer les modifications" : "Publier l'offre"}</>
+                  ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Publication…</>
+                  : <><Send size={14} />Publier l'offre</>
                 }
               </button>
             </div>
@@ -5680,21 +1741,17 @@ export default function ProviderProfilePage() {
 
       {/* ══ OFFER DETAIL / EDIT MODAL ════════════════════════════════════════ */}
       {editModalOpen && viewOffer && (() => {
-        // Exclure les photos d'entités (stockées dans details.photos) du slider principal
-        const entityPhotoUrls = new Set<string>(
-          Object.values((viewOffer.details as any)?.photos ?? {}).flat() as string[]
-        );
-        const allImgs = viewOffer.images?.length
+        const sliderImgs = viewOffer.images?.length
           ? viewOffer.images
           : viewOffer.cover_image ? [viewOffer.cover_image] : [];
-        const sliderImgs = allImgs.filter((url) => !entityPhotoUrls.has(url));
         const td = OFFER_TYPES.find((t) => t.value === viewOffer.offer_type) ?? OFFER_TYPES[OFFER_TYPES.length - 1];
         const safeIdx = Math.min(sliderIdx, Math.max(sliderImgs.length - 1, 0));
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-3xl w-full max-w-xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="modal-content bg-white rounded-3xl w-full max-w-xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
 
+              {/* Shared X button */}
               <button onClick={closeEditModal}
                 className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center transition-colors">
                 <X size={16} />
@@ -5703,6 +1760,7 @@ export default function ProviderProfilePage() {
               {!editMode ? (
                 /* ── VIEW MODE ───────────────────────────────────────────── */
                 <>
+                  {/* Image carousel */}
                   <div
                     className="relative h-56 w-full overflow-hidden shrink-0 select-none"
                     onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
@@ -5718,6 +1776,7 @@ export default function ProviderProfilePage() {
                     }}
                   >
                     {sliderImgs.length > 0 ? (
+                      /* Sliding strip */
                       <div
                         className="flex h-full transition-transform duration-300 ease-out"
                         style={{ transform: `translateX(-${(safeIdx / sliderImgs.length) * 100}%)`, width: `${sliderImgs.length * 100}%` }}
@@ -5729,12 +1788,14 @@ export default function ProviderProfilePage() {
                         ))}
                       </div>
                     ) : (
+                      /* Fallback gradient */
                       <>
                         <div className={`absolute inset-0 bg-gradient-to-br ${td.gradient} opacity-90`} />
                         <span className="material-symbols-outlined text-white/25 absolute inset-0 flex items-center justify-center" style={{ fontSize: 110 }}>{td.icon}</span>
                       </>
                     )}
 
+                    {/* Prev / Next arrows */}
                     {sliderImgs.length > 1 && (
                       <>
                         <button type="button"
@@ -5752,6 +1813,7 @@ export default function ProviderProfilePage() {
                       </>
                     )}
 
+                    {/* Dot indicators */}
                     {sliderImgs.length > 1 && (
                       <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
                         {sliderImgs.map((_, i) => (
@@ -5762,6 +1824,7 @@ export default function ProviderProfilePage() {
                       </div>
                     )}
 
+                    {/* Image counter badge */}
                     {sliderImgs.length > 1 && (
                       <div className="absolute top-3 left-3 bg-black/40 text-white text-[10px] font-bold px-2 py-1 rounded-lg">
                         {safeIdx + 1} / {sliderImgs.length}
@@ -5769,6 +1832,7 @@ export default function ProviderProfilePage() {
                     )}
                   </div>
 
+                  {/* Details */}
                   <div className="overflow-y-auto flex-1 px-8 py-6 space-y-5">
                     <h2 className="text-2xl font-extrabold text-slate-800 tracking-tight leading-tight pr-8">{viewOffer.title}</h2>
 
@@ -5800,133 +1864,11 @@ export default function ProviderProfilePage() {
                         <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-line">{viewOffer.description}</p>
                       </div>
                     )}
-                    {(viewOffer.details as any)?.description_longue && (
-                      <div>
-                        <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Description détaillée</p>
-                        <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-line">{(viewOffer.details as any).description_longue}</p>
-                      </div>
-                    )}
-
-                    {/* ── Détails spécifiques au(x) sous-type(s) ── */}
-                    {(() => {
-                      const details = viewOffer.details as Record<string, any> | null;
-                      if (!details) return null;
-
-                      function renderFieldValue(type: string, v: any): React.ReactNode {
-                        if (type === "boolean") {
-                          return <span className={`text-xs font-extrabold px-2 py-0.5 rounded-lg ${v ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{v ? "Oui" : "Non"}</span>;
-                        }
-                        if (type === "multiselect" && Array.isArray(v)) {
-                          return (
-                            <div className="flex flex-wrap gap-1 mt-0.5">
-                              {v.map((item: string) => (
-                                <span key={item} className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-lg">{item}</span>
-                              ))}
-                            </div>
-                          );
-                        }
-                        return <span className="text-sm font-semibold text-slate-700">{String(v)}</span>;
-                      }
-
-                      function renderFieldsFromData(data: Record<string, any>, config: { sections: any[] }) {
-                        return config.sections.map((section, si) => {
-                          const rows = section.fields.filter((f: any) => {
-                            const v = data[f.key];
-                            return v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0);
-                          });
-                          if (!rows.length) return null;
-                          return (
-                            <div key={si}>
-                              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">{section.label}</p>
-                              <div className="grid grid-cols-2 gap-2">
-                                {rows.map((field: any) => (
-                                  <div key={field.key} className="bg-slate-50 border border-slate-100 rounded-xl p-3">
-                                    <p className="text-[9px] font-black tracking-widest text-slate-400 uppercase mb-1">{field.label}</p>
-                                    {renderFieldValue(field.type, data[field.key])}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        });
-                      }
-
-                      // ── Cas hébergement : subtypes_units + subtypes_config ──
-                      const subtypesUnits = details.subtypes_units as Record<string, Record<string, any>[]> | undefined;
-                      if (subtypesUnits) {
-                        const allSubtypes = viewOffer.offer_subtypes ?? Object.keys(subtypesUnits);
-                        const PROVIDER_SCHEMA_MAP: Record<string, string> = {
-                          chambre_standard: "Chambre standard", chambre_superieure: "Chambre supérieure",
-                          suite: "Suite", dortoir: "Dortoir", bungalow: "Bungalow",
-                          tente_glamping: "Tente glamping", gite_rural: "Gîte rural",
-                          maison_hotes: "Maison d'hôtes", riad_traditionnel: "Riad",
-                          ecolodge: "Écolodge", camping_sauvage: "Camping", ferme_agritouristique: "Ferme agritouristique",
-                        };
-
-                        return (
-                          <div className="space-y-5">
-                            {allSubtypes.map((st) => {
-                              const stConfig = OFFER_DETAIL_FIELDS[st];
-                              if (!stConfig) return null;
-                              const units = subtypesUnits[st] ?? [];
-                              const stCfg = (details.subtypes_config as Record<string, any> | undefined)?.[st] ?? {};
-                              const stLabel = PROVIDER_SCHEMA_MAP[st] ?? st;
-
-                              return (
-                                <div key={st} className="rounded-2xl border border-slate-100 overflow-hidden">
-                                  <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-100">
-                                    <p className="text-[11px] font-black tracking-widest text-slate-500 uppercase">{stLabel}</p>
-                                  </div>
-                                  <div className="p-4 space-y-4">
-                                    {/* Config partagé (check-in, restauration…) */}
-                                    {Object.keys(stCfg).length > 0 && renderFieldsFromData(stCfg, stConfig)}
-
-                                    {/* Unités */}
-                                    {units.map((unit, ui) => {
-                                      const unitKey = `${st}_unit_${ui}`;
-                                      const photosMap = details.photos as Record<string, string[]> | undefined;
-                                      // fallback sur clé ancienne format (suite) si suite_unit_0 absent
-                                      const unitPhotos = photosMap?.[unitKey] ?? photosMap?.[st] ?? [];
-                                      return (
-                                        <div key={ui} className="space-y-3">
-                                          {units.length > 1 && (
-                                            <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Unité {ui + 1}</p>
-                                          )}
-                                          {unitPhotos.length > 0 && (
-                                            <div className="grid grid-cols-3 gap-1.5">
-                                              {unitPhotos.map((url, pi) => (
-                                                <div key={pi} className={`aspect-square rounded-xl overflow-hidden border-2 ${pi === 0 ? "border-primary" : "border-transparent"}`}>
-                                                  <img src={url} alt="" className="w-full h-full object-cover" />
-                                                </div>
-                                              ))}
-                                            </div>
-                                          )}
-                                          {renderFieldsFromData({ ...stCfg, ...unit }, stConfig)}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      }
-
-                      // ── Cas activité/circuit : champs plats ──
-                      const subtype = viewOffer.offer_subtype ?? viewOffer.offer_subtypes?.[0];
-                      if (!subtype) return null;
-                      const config = OFFER_DETAIL_FIELDS[subtype];
-                      if (!config) return null;
-                      const nodes = renderFieldsFromData(details, config);
-                      if (!nodes.some(Boolean)) return null;
-                      return <div className="space-y-4">{nodes}</div>;
-                    })()}
 
                     {viewOffer.inclusions && (
                       <div className="bg-emerald-50/60 border border-emerald-100/70 rounded-2xl p-4">
                         <div className="flex items-center gap-2 mb-2">
-                          <span className="material-symbols-outlined text-emerald-600 text-base leading-none">check_circle</span>
+                          <span className="material-symbols-outlined text-primary text-base leading-none">check_circle</span>
                           <p className="text-[10px] font-black tracking-widest text-emerald-700 uppercase">Inclusions</p>
                         </div>
                         <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-line">{viewOffer.inclusions}</p>
@@ -5983,6 +1925,19 @@ export default function ProviderProfilePage() {
                       </div>
                     )}
 
+                    {viewOffer.venue_id && (() => {
+                      const proj = profile.venues.find((p) => p.id === viewOffer.venue_id);
+                      return proj ? (
+                        <div className="flex items-center gap-3 p-3 bg-emerald-50/60 border border-emerald-100/60 rounded-xl">
+                          <span className="material-symbols-outlined text-primary text-xl">domain</span>
+                          <div>
+                            <p className="text-[10px] font-black tracking-widest text-primary uppercase">Établissement associé</p>
+                            <p className="text-sm font-semibold text-slate-700 mt-0.5">{proj.name}</p>
+                          </div>
+                        </div>
+                      ) : null;
+                    })()}
+
                     <p className="text-[11px] font-bold text-slate-400">
                       Publiée le {new Date(viewOffer.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
                     </p>
@@ -5993,8 +1948,33 @@ export default function ProviderProfilePage() {
                       className="px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer">
                       Fermer
                     </button>
-                    <button type="button"
-                      onClick={() => { if (viewOffer) openPublishModalForEdit(viewOffer); }}
+                    <button type="button" onClick={() => {
+                      if (!viewOffer) return;
+                      setEditForm({
+                        title:               viewOffer.title,
+                        offer_type:          viewOffer.offer_type          ?? "",
+                        venue_id:          viewOffer.venue_id          ?? "",
+                        description:         viewOffer.description         ?? "",
+                        price:               viewOffer.price !== null ? String(viewOffer.price) : "",
+                        duration:            viewOffer.duration            ?? "",
+                        status:              viewOffer.status,
+                        region:              viewOffer.region              ?? "",
+                        inclusions:          viewOffer.inclusions          ?? "",
+                        meeting_point:       viewOffer.meeting_point       ?? "",
+                        min_group_size:      viewOffer.min_group_size !== null ? String(viewOffer.min_group_size) : "",
+                        max_group_size:      viewOffer.max_group_size !== null ? String(viewOffer.max_group_size) : "",
+                        min_age:             viewOffer.min_age       !== null ? String(viewOffer.min_age)       : "",
+                        cancellation_policy: viewOffer.cancellation_policy ?? "",
+                      });
+                      setEditTitleError(""); setEditError("");
+                      const imgs = (viewOffer.images?.length
+                        ? viewOffer.images
+                        : viewOffer.cover_image ? [viewOffer.cover_image] : []
+                      ).filter((src) => src.startsWith("http"));
+                      setEditImages(imgs.map((src) => ({ src })));
+                      setEditCoverIdx(0);
+                      setEditMode(true);
+                    }}
                       className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs shadow-sm transition-all active:scale-95 cursor-pointer">
                       <Edit3 size={14} />Gérer
                     </button>
@@ -6015,8 +1995,10 @@ export default function ProviderProfilePage() {
                     </div>
                   </div>
 
+                  {/* Form with submit button INSIDE — eliminates form="id" flash bug */}
                   <div className="overflow-y-auto flex-1">
                     <form onSubmit={handleSaveOffer} className="px-8 py-6 space-y-5">
+                      {/* Titre */}
                       <div>
                         <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Titre de l'offre *</label>
                         <input type="text" placeholder="Ex : Séjour éco en forêt de Mogods"
@@ -6026,6 +2008,7 @@ export default function ProviderProfilePage() {
                         />
                         {editTitleError && <p className="text-xs font-semibold text-red-500 mt-1">{editTitleError}</p>}
                       </div>
+                      {/* Description */}
                       <div>
                         <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Description détaillée</label>
                         <textarea rows={4} placeholder="Décrivez le concept écologique, les activités durables…"
@@ -6034,6 +2017,7 @@ export default function ProviderProfilePage() {
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
                         />
                       </div>
+                      {/* Région */}
                       <div>
                         <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Région / Emplacement</label>
                         <input type="text" placeholder="Tunis, Djerba, Sfax…"
@@ -6042,6 +2026,16 @@ export default function ProviderProfilePage() {
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white placeholder:text-slate-400"
                         />
                       </div>
+                      {/* Inclusions */}
+                      <div>
+                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Inclusions</label>
+                        <textarea rows={3} placeholder={"Ex :\n• Transport inclus\n• Repas traditionnels\n• Guide bilingue"}
+                          value={editForm.inclusions}
+                          onChange={(e) => setEditForm((f) => ({ ...f, inclusions: e.target.value }))}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
+                        />
+                      </div>
+                      {/* Localisation */}
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
                           <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Localisation</label>
@@ -6057,23 +2051,18 @@ export default function ProviderProfilePage() {
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white placeholder:text-slate-400 mb-2"
                         />
                         {showEditMap && (
-                          <MapPicker
-                            lat={editMapLat} lng={editMapLng}
-                            onPick={(lat, lng, address) => {
-                              setEditMapLat(lat); setEditMapLng(lng);
-                              setEditForm((f) => ({ ...f, meeting_point: address }));
-                            }}
-                          />
+                          <div className="overflow-hidden rounded-xl">
+                            <MapPicker
+                              lat={editMapLat} lng={editMapLng}
+                              onPick={(lat, lng, address) => {
+                                setEditMapLat(lat); setEditMapLng(lng);
+                                setEditForm((f) => ({ ...f, meeting_point: address }));
+                              }}
+                            />
+                          </div>
                         )}
                       </div>
-                      <div>
-                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Inclusions</label>
-                        <textarea rows={3} placeholder={"Ex :\n• Transport inclus\n• Repas traditionnels\n• Guide bilingue"}
-                          value={editForm.inclusions}
-                          onChange={(e) => setEditForm((f) => ({ ...f, inclusions: e.target.value }))}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
-                        />
-                      </div>
+                      {/* Groupe + âge */}
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Max. pers.</label>
@@ -6092,6 +2081,7 @@ export default function ProviderProfilePage() {
                           />
                         </div>
                       </div>
+                      {/* Politique d'annulation */}
                       <div>
                         <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Politique d'annulation</label>
                         <textarea rows={2} placeholder="Ex : Remboursement intégral si annulation 48h avant."
@@ -6100,6 +2090,7 @@ export default function ProviderProfilePage() {
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
                         />
                       </div>
+                      {/* Photos */}
                       <div>
                         <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Photos de l'offre</label>
                         {editImages.length > 0 && (
@@ -6146,6 +2137,7 @@ export default function ProviderProfilePage() {
                         )}
                       </div>
 
+                      {/* Type d'offre */}
                       <div>
                         <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Type d'offre</label>
                         <div className="grid grid-cols-3 gap-2">
@@ -6162,6 +2154,7 @@ export default function ProviderProfilePage() {
                           })}
                         </div>
                       </div>
+                      {/* Prix + Durée */}
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Tarif (TND)</label>
@@ -6184,142 +2177,31 @@ export default function ProviderProfilePage() {
                           </div>
                         </div>
                       </div>
-                      {/* ── Champs détaillés du sous-type ── */}
+                      {/* Projet lié */}
                       {(() => {
-                        if (!viewOffer) return null;
-                        const subtypes = viewOffer.offer_subtypes ?? (viewOffer.offer_subtype ? [viewOffer.offer_subtype] : []);
-                        if (!subtypes.length) return null;
-                        const isHeberg = !!(editDetails.subtypes_units);
-
-                        const PROVIDER_SCHEMA_MAP: Record<string, string> = {
-                          chambre_standard: "Chambre standard", chambre_superieure: "Chambre supérieure",
-                          suite: "Suite", dortoir: "Dortoir", bungalow: "Bungalow",
-                          tente_glamping: "Tente glamping", gite_rural: "Gîte rural",
-                          maison_hotes: "Maison d'hôtes", riad_traditionnel: "Riad",
-                          ecolodge: "Écolodge", camping_sauvage: "Camping", ferme_agritouristique: "Ferme",
-                        };
-
-                        function renderDetailField(field: { key: string; label: string; type: string; options?: string[] }, val: any, onChange: (v: any) => void) {
-                          if (field.type === "boolean") {
-                            return (
-                              <button type="button" onClick={() => onChange(!val)}
-                                className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${val ? "border-primary bg-primary/10 text-primary" : "border-slate-200 bg-slate-50 text-slate-500"}`}>
-                                <div className={`w-3.5 h-3.5 rounded-sm border-2 flex items-center justify-center ${val ? "border-primary bg-primary" : "border-slate-300"}`}>
-                                  {val && <Check size={9} className="text-white" />}
-                                </div>
-                                Oui
-                              </button>
-                            );
-                          }
-                          if (field.type === "select") {
-                            const opts = field.options ?? [];
-                            return (
-                              <select value={val ?? ""} onChange={(e) => onChange(e.target.value)}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                                <option value="">— Sélectionner —</option>
-                                {opts.map((o) => <option key={o} value={o}>{o}</option>)}
-                              </select>
-                            );
-                          }
-                          if (field.type === "multiselect") {
-                            const opts = field.options ?? [];
-                            const sel: string[] = Array.isArray(val) ? val : [];
-                            return (
-                              <div className="flex flex-wrap gap-1.5">
-                                {opts.map((o) => (
-                                  <button key={o} type="button"
-                                    onClick={() => onChange(sel.includes(o) ? sel.filter((x) => x !== o) : [...sel, o])}
-                                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all ${sel.includes(o) ? "bg-primary text-white border-primary" : "bg-white border-slate-200 text-slate-600"}`}>
-                                    {o}
-                                  </button>
-                                ))}
-                              </div>
-                            );
-                          }
-                          if (field.type === "time") {
-                            return <input type="time" value={val ?? ""} onChange={(e) => onChange(e.target.value)}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />;
-                          }
-                          if (field.type === "textarea") {
-                            return <textarea rows={2} value={val ?? ""} onChange={(e) => onChange(e.target.value)}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" />;
-                          }
-                          if (field.type === "number") {
-                            return <input type="number" value={val ?? ""} onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />;
-                          }
-                          if (field.type === "file" || field.type === "repeater") return null;
-                          return <input type="text" value={val ?? ""} onChange={(e) => onChange(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />;
-                        }
-
+                        const activeProjects = profile.venues.filter((p) => p.status === "active");
                         return (
-                          <div className="space-y-4 pt-2 border-t border-slate-100">
-                            <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Détails de l'offre</p>
-                            {subtypes.map((st) => {
-                              const stConfig = OFFER_DETAIL_FIELDS[st];
-                              if (!stConfig) return null;
-                              const stLabel = PROVIDER_SCHEMA_MAP[st] ?? st;
-
-                              const units: Record<string, any>[] = isHeberg
-                                ? ((editDetails.subtypes_units as any)?.[st] ?? [{}])
-                                : [editDetails];
-
-                              return (
-                                <div key={st} className="rounded-2xl border border-slate-100 overflow-hidden">
-                                  {subtypes.length > 1 && (
-                                    <div className="bg-slate-50 px-4 py-2 border-b border-slate-100">
-                                      <p className="text-[10px] font-black tracking-widest text-slate-500 uppercase">{stLabel}</p>
-                                    </div>
-                                  )}
-                                  <div className="p-4 space-y-4">
-                                    {units.map((unit, ui) => {
-                                      const stCfg = isHeberg ? ((editDetails.subtypes_config as any)?.[st] ?? {}) : {};
-                                      const merged = { ...stCfg, ...unit };
-
-                                      function getVal(key: string) { return merged[key]; }
-                                      function setVal(key: string, v: any) {
-                                        setEditDetails((prev) => {
-                                          if (!isHeberg) return { ...prev, [key]: v };
-                                          const prevUnits: any[] = [...((prev.subtypes_units as any)?.[st] ?? [{}])];
-                                          prevUnits[ui] = { ...prevUnits[ui], [key]: v };
-                                          return { ...prev, subtypes_units: { ...(prev.subtypes_units as any), [st]: prevUnits } };
-                                        });
-                                      }
-
-                                      return (
-                                        <div key={ui} className="space-y-3">
-                                          {units.length > 1 && <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Unité {ui + 1}</p>}
-                                          {stConfig.sections.map((section, si) => (
-                                            <div key={si}>
-                                              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">{section.label}</p>
-                                              <div className="space-y-2">
-                                                {section.fields.filter((f) => f.type !== "file" && f.type !== "repeater").map((field) => (
-                                                  <div key={field.key}>
-                                                    <label className="text-[9px] font-black tracking-widest text-slate-400 uppercase mb-1 block">{field.label}</label>
-                                                    {renderDetailField(field as any, getVal(field.key), (v) => setVal(field.key, v))}
-                                                  </div>
-                                                ))}
-                                              </div>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            })}
+                          <div>
+                            <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Établissement associé (optionnel)</label>
+                            {activeProjects.length === 0 ? (
+                              <p className="text-xs font-medium text-amber-600 bg-amber-50 px-3 py-2 rounded-xl">Aucun établissement validé disponible.</p>
+                            ) : (
+                              <select value={editForm.venue_id} onChange={(e) => setEditForm((f) => ({ ...f, venue_id: e.target.value }))}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white">
+                                <option value="">— Aucun établissement lié —</option>
+                                {activeProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                              </select>
+                            )}
                           </div>
                         );
                       })()}
-
                       {editError && (
                         <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
                           <span className="material-symbols-outlined text-red-500 text-base">error</span>
                           <p className="text-sm font-semibold text-red-600">{editError}</p>
                         </div>
                       )}
+                      {/* Footer inside form — no form="id" needed, eliminates flash bug */}
                       <div className="flex items-center justify-between gap-3 pt-2">
                         <div className="flex items-center gap-2">
                           <button type="button" onClick={() => setEditMode(false)}
@@ -6349,6 +2231,496 @@ export default function ProviderProfilePage() {
         );
       })()}
 
+      {/* ══ PROJECT DETAIL / EDIT MODAL ══════════════════════════════════════ */}
+      {projDetailOpen && viewVenue && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={closeProjDetail}>
+          <div className="modal-content bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
+              <h2 className="text-lg font-extrabold text-slate-900 truncate">{viewVenue.name}</h2>
+              <button onClick={closeProjDetail} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors shrink-0">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            {projDetailMode === "view" ? (
+              /* ── VIEW MODE ─────────────────────────────────────────────── */
+              <div className="overflow-y-auto flex-1 p-6 space-y-5">
+                {/* Photos slider */}
+                {(() => {
+                  const imgs = (viewVenue.photos?.length ? viewVenue.photos : viewVenue.photo ? [viewVenue.photo] : []).filter((s) => s.startsWith("http"));
+                  if (!imgs.length) return null;
+                  return (
+                    <div className="relative w-full h-52 rounded-2xl overflow-hidden bg-slate-100 group">
+                      <div className="flex h-full transition-transform duration-300" style={{ transform: `translateX(-${(projSliderIdx / imgs.length) * 100}%)`, width: `${imgs.length * 100}%` }}>
+                        {imgs.map((src, i) => <div key={i} style={{ width: `${100 / imgs.length}%` }} className="h-full shrink-0"><img src={src} alt="" className="w-full h-full object-cover" /></div>)}
+                      </div>
+                      {imgs.length > 1 && <>
+                        <button type="button" onClick={() => setProjSliderIdx((s) => Math.max(0, s - 1))} className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><ChevronLeft size={16} /></button>
+                        <button type="button" onClick={() => setProjSliderIdx((s) => Math.min(imgs.length - 1, s + 1))} className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><ChevronRight size={16} /></button>
+                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                          {imgs.map((_, i) => <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === projSliderIdx ? "bg-white scale-125" : "bg-white/50"}`} />)}
+                        </div>
+                      </>}
+                    </div>
+                  );
+                })()}
+
+                {/* Status + type */}
+                <div className="flex flex-wrap gap-2">
+                  <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${viewVenue.status === "active" ? "bg-green-50 text-green-600 border border-green-100" : viewVenue.status === "rejected" ? "bg-red-50 text-red-600 border border-red-100" : "bg-amber-50 text-amber-600 border border-amber-100"}`}>
+                    {viewVenue.status === "active" ? "Actif" : viewVenue.status === "rejected" ? "Refusé" : "En attente"}
+                  </span>
+                  {viewVenue.venue_type?.map((t) => (
+                    <span key={t} className="px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">{VENUE_TYPE_LABELS[t] ?? t}</span>
+                  ))}
+                </div>
+
+                {/* Description */}
+                {viewVenue.description && <p className="text-slate-600 text-sm leading-relaxed">{viewVenue.description}</p>}
+
+                {/* Info grid */}
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  {viewVenue.region && <div className="bg-slate-50 rounded-xl p-3"><p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Région</p><p className="font-semibold text-slate-800">{viewVenue.region}</p></div>}
+                  {(viewVenue.lat || viewVenue.address || viewVenue.region) && (
+                    <div className="col-span-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        <MapPin size={14} className="text-slate-500" />
+                        <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Localisation</p>
+                      </div>
+                      {(viewVenue.address || viewVenue.region) && (
+                        <p className="text-sm font-semibold text-slate-700 mb-2">
+                          {[viewVenue.address, viewVenue.region].filter(Boolean).join(", ")}
+                        </p>
+                      )}
+                      <LocationMap
+                        lat={viewVenue.lat ?? null}
+                        lng={viewVenue.lng ?? null}
+                        address={[viewVenue.address, viewVenue.region].filter(Boolean).join(", ")}
+                      />
+                    </div>
+                  )}
+                  {viewVenue.opening_hours && <div className="bg-slate-50 rounded-xl p-3"><p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Horaires</p><p className="font-semibold text-slate-800">{viewVenue.opening_hours}</p></div>}
+                  {viewVenue.phone && <div className="bg-slate-50 rounded-xl p-3"><p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Téléphone</p><p className="font-semibold text-slate-800">{viewVenue.phone}</p></div>}
+                  {viewVenue.website && <div className="bg-slate-50 rounded-xl p-3"><p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Site web</p><a href={viewVenue.website} target="_blank" rel="noreferrer" className="font-semibold text-primary hover:underline truncate block">{viewVenue.website}</a></div>}
+                  {viewVenue.facebook && <div className="bg-slate-50 rounded-xl p-3"><p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Facebook</p><a href={viewVenue.facebook} target="_blank" rel="noreferrer" className="font-semibold text-primary hover:underline truncate block">{viewVenue.facebook}</a></div>}
+                  {viewVenue.instagram && <div className="bg-slate-50 rounded-xl p-3"><p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Instagram</p><a href={viewVenue.instagram} target="_blank" rel="noreferrer" className="font-semibold text-primary hover:underline truncate block">{viewVenue.instagram}</a></div>}
+                </div>
+
+                {/* Services */}
+                {viewVenue.services?.length ? (
+                  <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Services</p>
+                    <div className="flex flex-wrap gap-2">{viewVenue.services.map((s) => <span key={s} className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-100 rounded-full text-xs font-bold">{VENUE_SERVICES.find((x) => x.value === s)?.label ?? s}</span>)}</div>
+                  </div>
+                ) : null}
+
+                {/* Éco-pratiques */}
+                {viewVenue.eco_labels?.length ? (
+                  <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Pratiques éco-responsables</p>
+                    <div className="flex flex-wrap gap-2">{viewVenue.eco_labels.map((l) => <span key={l} className="px-3 py-1 bg-green-50 text-green-700 border border-green-100 rounded-full text-xs font-bold">{l}</span>)}</div>
+                  </div>
+                ) : null}
+
+                {/* Footer actions */}
+                <div className="flex items-center justify-end pt-4 border-t border-slate-100">
+                  <button onClick={() => { setProjSliderIdx(0); setProjDetailMode("edit"); }}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white font-extrabold rounded-xl text-sm hover:bg-primary/90 transition-colors">
+                    <Edit3 size={14} />Gérer
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* ── EDIT MODE ─────────────────────────────────────────────── */
+              <form onSubmit={handleSaveProject} className="overflow-y-auto flex-1 p-6 space-y-4">
+                {/* Photos */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Photos</label>
+                  {projEditImages.length > 0 && (
+                    <div className="grid grid-cols-4 gap-2 mb-2">
+                      {projEditImages.map((img, i) => {
+                        const isCover = i === projEditCoverIdx;
+                        return (
+                          <div key={i} onClick={() => setProjEditCoverIdx(i)}
+                            className={`relative group aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${isCover ? "border-primary shadow-md" : "border-transparent hover:border-slate-300"}`}>
+                            <img src={img.src} alt="" className="w-full h-full object-cover" />
+                            {isCover && <div className="absolute top-1 left-1 bg-primary text-white text-[9px] font-black px-1.5 py-0.5 rounded-md leading-none">Cover</div>}
+                            <button type="button" onClick={(e) => { e.stopPropagation(); setProjEditImages((prev) => prev.filter((_, idx) => idx !== i)); setProjEditCoverIdx((c) => c >= i && c > 0 ? c - 1 : c); }}
+                              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <label htmlFor="proj-edit-images" className="flex items-center justify-center gap-2 w-full h-16 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
+                    <span className="material-symbols-outlined text-slate-300 text-xl">add_photo_alternate</span>
+                    <p className="text-xs font-semibold text-slate-400">Ajouter des photos</p>
+                    <input id="proj-edit-images" type="file" accept="image/*" multiple className="hidden"
+                      onChange={(e) => { const files = Array.from(e.target.files ?? []); setProjEditImages((prev) => [...prev, ...files.map((f) => ({ src: URL.createObjectURL(f), file: f }))]); e.target.value = ""; }} />
+                  </label>
+                </div>
+
+                {/* Nom */}
+                <div><label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Nom *</label>
+                  <input value={venueEditForm.name} onChange={(e) => setVenueEditForm((f) => ({ ...f, name: e.target.value }))} className="w-full px-4 py-3 bg-slate-50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 font-medium" />
+                </div>
+
+                {/* Description */}
+                <div><label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Description</label>
+                  <textarea rows={3} value={venueEditForm.description} onChange={(e) => setVenueEditForm((f) => ({ ...f, description: e.target.value }))} className="w-full px-4 py-3 bg-slate-50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 font-medium resize-none" />
+                </div>
+
+                {/* Région */}
+                <div><label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Région</label>
+                  <input value={venueEditForm.region} onChange={(e) => setVenueEditForm((f) => ({ ...f, region: e.target.value }))} placeholder="Tataouine, Djerba…" className="w-full px-4 py-3 bg-slate-50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 font-medium" />
+                </div>
+
+                {/* Localisation */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Localisation</label>
+                    <button type="button" onClick={() => setShowProjEditMap((v) => !v)} className="text-[10px] font-bold text-primary hover:underline">
+                      {showProjEditMap ? "Masquer la carte" : "Choisir sur la carte"}
+                    </button>
+                  </div>
+                  <input readOnly value={venueEditForm.address} placeholder="Auto-rempli par la carte…"
+                    className="w-full px-4 py-3 bg-slate-50 rounded-xl text-slate-500 font-medium cursor-default" />
+                  {showProjEditMap && (
+                    <div className="overflow-hidden rounded-xl">
+                      <MapPicker lat={projEditMapLat} lng={projEditMapLng} onPick={(lat, lng, address) => { setProjEditMapLat(lat); setProjEditMapLng(lng); setVenueEditForm((f) => ({ ...f, address })); }} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Horaires */}
+                <div><label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Horaires</label>
+                  <input value={venueEditForm.opening_hours} onChange={(e) => setVenueEditForm((f) => ({ ...f, opening_hours: e.target.value }))} placeholder="Lun-Sam 9h-19h" className="w-full px-4 py-3 bg-slate-50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 font-medium" />
+                </div>
+
+                {/* Téléphone + Site web */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Téléphone</label>
+                    <input value={venueEditForm.phone} onChange={(e) => setVenueEditForm((f) => ({ ...f, phone: e.target.value }))} className="w-full px-4 py-3 bg-slate-50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 font-medium" />
+                  </div>
+                  <div><label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Site web</label>
+                    <input value={venueEditForm.website} onChange={(e) => setVenueEditForm((f) => ({ ...f, website: e.target.value }))} className="w-full px-4 py-3 bg-slate-50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 font-medium" />
+                  </div>
+                </div>
+
+                {/* Facebook + Instagram */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Facebook</label>
+                    <input value={venueEditForm.facebook} onChange={(e) => setVenueEditForm((f) => ({ ...f, facebook: e.target.value }))} placeholder="https://facebook.com/..." className="w-full px-4 py-3 bg-slate-50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 font-medium" />
+                  </div>
+                  <div><label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Instagram</label>
+                    <input value={venueEditForm.instagram} onChange={(e) => setVenueEditForm((f) => ({ ...f, instagram: e.target.value }))} placeholder="https://instagram.com/..." className="w-full px-4 py-3 bg-slate-50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 font-medium" />
+                  </div>
+                </div>
+
+                {/* Types */}
+                <div><label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Type d'établissement</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {VENUE_TYPES_FULL.map((t) => { const active = venueEditForm.venue_type.includes(t.value); return (
+                      <button key={t.value} type="button" onClick={() => setVenueEditForm((f) => ({ ...f, venue_type: active ? f.venue_type.filter((x) => x !== t.value) : [...f.venue_type, t.value] }))}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-sm font-bold transition-all ${active ? "bg-primary/10 border-primary text-slate-900" : "border-slate-200 text-slate-600 hover:border-primary/30"}`}>
+                        <span className="material-symbols-outlined text-base">{t.icon}</span>{t.label}{active && <Check className="w-3.5 h-3.5 ml-auto text-primary" />}
+                      </button>
+                    ); })}
+                  </div>
+                </div>
+
+                {/* Services */}
+                <div><label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Services</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {VENUE_SERVICES.map((s) => { const active = venueEditForm.services.includes(s.value); return (
+                      <button key={s.value} type="button" onClick={() => setVenueEditForm((f) => ({ ...f, services: active ? f.services.filter((x) => x !== s.value) : [...f.services, s.value] }))}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-sm font-bold transition-all ${active ? "bg-primary/10 border-primary text-slate-900" : "border-slate-200 text-slate-600 hover:border-primary/30"}`}>
+                        <span className="material-symbols-outlined text-base">{s.icon}</span>{s.label}{active && <Check className="w-3.5 h-3.5 ml-auto text-primary" />}
+                      </button>
+                    ); })}
+                  </div>
+                </div>
+
+                {/* Éco-pratiques */}
+                <div><label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Pratiques éco-responsables</label>
+                  <div className="flex flex-wrap gap-2">
+                    {ECO_PRACTICES.map((p) => { const active = venueEditForm.eco_labels.includes(p); return (
+                      <button key={p} type="button" onClick={() => setVenueEditForm((f) => ({ ...f, eco_labels: active ? f.eco_labels.filter((x) => x !== p) : [...f.eco_labels, p] }))}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border-2 transition-all ${active ? "bg-green-50 border-green-400 text-green-700" : "border-slate-200 text-slate-500 hover:border-green-300"}`}>
+                        {active && <Check className="w-3 h-3" />}{p}
+                      </button>
+                    ); })}
+                  </div>
+                </div>
+
+                {projEditError && <p className="text-sm font-semibold text-red-500 bg-red-50 p-3 rounded-xl">{projEditError}</p>}
+
+                <div className="flex items-center justify-between gap-3 pt-2">
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => setProjDetailMode("view")} className="py-3 px-5 rounded-xl border-2 border-slate-200 text-slate-700 font-extrabold text-sm hover:bg-slate-50 transition-colors">Annuler</button>
+                    <button type="button" onClick={handleDeleteProject} disabled={projDeleting}
+                      className="flex items-center gap-1.5 px-4 py-3 rounded-xl text-red-500 hover:bg-red-50 font-bold text-sm transition-colors disabled:opacity-50">
+                      <span className="material-symbols-outlined text-base">delete</span>
+                      {projDeleting ? "Suppression…" : "Supprimer"}
+                    </button>
+                  </div>
+                  <button type="submit" disabled={projEditSaving} className="py-3 px-6 bg-primary text-white font-extrabold rounded-xl text-sm hover:bg-primary/90 disabled:opacity-60 transition-colors">
+                    {projEditSaving ? "Sauvegarde…" : "Sauvegarder"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ══ PROJECT CREATION MODAL ═══════════════════════════════════════════ */}
+      {projModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={closeProjModal}>
+          <div className="modal-content bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+              <h2 className="text-xl font-extrabold text-slate-900">Ajouter un établissement</h2>
+              <button onClick={closeProjModal} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateProject} className="p-6 space-y-4">
+
+              {/* Photo de couverture */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-slate-700">Photos de l'établissement</label>
+                <label htmlFor="proj-images-input" className="flex flex-col items-center justify-center gap-2 w-full h-24 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70">
+                  <span className="material-symbols-outlined text-slate-300 text-3xl">add_photo_alternate</span>
+                  <p className="text-xs font-semibold text-slate-400">Cliquez pour ajouter des photos</p>
+                  <input id="proj-images-input" type="file" accept="image/*" multiple className="hidden"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files ?? []);
+                      setProjImages((prev) => [...prev, ...files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))]);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                {projImages.length > 0 && (
+                  <>
+                    <div className="grid grid-cols-4 gap-2 mt-2">
+                      {projImages.map((img, i) => {
+                        const isCover = i === projCoverIdx;
+                        return (
+                          <div key={i} onClick={() => setProjCoverIdx(i)}
+                            className={`relative group aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${isCover ? "border-primary shadow-md" : "border-transparent hover:border-slate-300"}`}>
+                            <img src={img.preview} alt="" className="w-full h-full object-cover" />
+                            {isCover && <div className="absolute top-1 left-1 bg-primary text-white text-[9px] font-black px-1.5 py-0.5 rounded-md leading-none">Cover</div>}
+                            <button type="button" onClick={(e) => { e.stopPropagation(); URL.revokeObjectURL(img.preview); setProjImages((prev) => prev.filter((_, idx) => idx !== i)); setProjCoverIdx((c) => c >= i && c > 0 ? c - 1 : c); }}
+                              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              <X size={10} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-medium">Cliquez sur une photo pour la définir comme cover.</p>
+                  </>
+                )}
+              </div>
+
+              {/* Nom */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-slate-700">Nom du projet *</label>
+                <input
+                  value={venueForm.name}
+                  onChange={(e) => { setVenueForm((f) => ({ ...f, name: e.target.value })); setProjFieldErrors((fe) => ({ ...fe, name: undefined })); }}
+                  placeholder="Éco-Lodge Sahara, Restaurant Terroir…"
+                  className={`w-full px-4 py-3 rounded-xl font-medium text-slate-900 focus:outline-none focus:ring-2 transition-all ${projFieldErrors.name ? "bg-red-50 border border-red-400 focus:ring-red-300" : "bg-slate-50 border border-transparent focus:ring-primary"}`}
+                />
+                {projFieldErrors.name && <p className="text-xs font-semibold text-red-500">{projFieldErrors.name}</p>}
+              </div>
+
+              {/* Type(s) */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-slate-700">
+                  Type d'établissement <span className="ml-1.5 text-xs font-normal text-slate-400">(plusieurs choix possibles)</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {VENUE_TYPES_FULL.map((t) => {
+                    const active = venueForm.venue_type.includes(t.value);
+                    return (
+                      <button key={t.value} type="button"
+                        onClick={() => setVenueForm((f) => ({
+                          ...f,
+                          venue_type: active
+                            ? f.venue_type.filter((x) => x !== t.value)
+                            : [...f.venue_type, t.value],
+                        }))}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-sm font-bold transition-all ${active ? "bg-primary/10 border-primary text-slate-900" : "border-slate-200 text-slate-600 hover:border-primary/30"}`}>
+                        <span className="material-symbols-outlined text-base">{t.icon}</span>
+                        {t.label}
+                        {active && <Check className="w-3.5 h-3.5 ml-auto text-primary" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-slate-700">Description</label>
+                <textarea rows={3}
+                  value={venueForm.description}
+                  onChange={(e) => setVenueForm((f) => ({ ...f, description: e.target.value }))}
+                  placeholder="Décrivez votre établissement éco-touristique…"
+                  className="w-full px-4 py-3 bg-slate-50 border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 font-medium resize-none"
+                />
+              </div>
+
+              {/* Région */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-slate-700">Région</label>
+                <input
+                  value={venueForm.region}
+                  onChange={(e) => { setVenueForm((f) => ({ ...f, region: e.target.value })); setProjFieldErrors((fe) => ({ ...fe, region: undefined })); }}
+                  placeholder="Tataouine, Djerba…"
+                  className={`w-full px-4 py-3 rounded-xl font-medium text-slate-900 focus:outline-none focus:ring-2 transition-all ${projFieldErrors.region ? "bg-red-50 border border-red-400 focus:ring-red-300" : "bg-slate-50 border border-transparent focus:ring-primary"}`}
+                />
+                {projFieldErrors.region && <p className="text-xs font-semibold text-red-500">{projFieldErrors.region}</p>}
+              </div>
+
+              {/* Téléphone + Site web */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-slate-700">Téléphone</label>
+                  <input type="tel"
+                    value={venueForm.phone}
+                    onChange={(e) => { setVenueForm((f) => ({ ...f, phone: e.target.value })); setProjFieldErrors((fe) => ({ ...fe, phone: undefined })); }}
+                    placeholder="+216 XX XXX XXX"
+                    className={`w-full px-4 py-3 rounded-xl font-medium text-slate-900 focus:outline-none focus:ring-2 transition-all ${projFieldErrors.phone ? "bg-red-50 border border-red-400 focus:ring-red-300" : "bg-slate-50 border border-transparent focus:ring-primary"}`}
+                  />
+                  {projFieldErrors.phone && <p className="text-xs font-semibold text-red-500">{projFieldErrors.phone}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-slate-700">Site web</label>
+                  <input
+                    value={venueForm.website}
+                    onChange={(e) => { setVenueForm((f) => ({ ...f, website: e.target.value })); setProjFieldErrors((fe) => ({ ...fe, website: undefined })); }}
+                    placeholder="https://mon-projet.tn"
+                    className={`w-full px-4 py-3 rounded-xl font-medium text-slate-900 focus:outline-none focus:ring-2 transition-all ${projFieldErrors.website ? "bg-red-50 border border-red-400 focus:ring-red-300" : "bg-slate-50 border border-transparent focus:ring-primary"}`}
+                  />
+                  {projFieldErrors.website && <p className="text-xs font-semibold text-red-500">{projFieldErrors.website}</p>}
+                </div>
+              </div>
+
+              {/* Services */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">
+                  Services proposés <span className="ml-1.5 text-xs font-normal text-slate-400">(plusieurs choix possibles)</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {VENUE_SERVICES.map((s) => {
+                    const active = venueForm.services.includes(s.value);
+                    return (
+                      <button key={s.value} type="button"
+                        onClick={() => setVenueForm((f) => ({
+                          ...f,
+                          services: active ? f.services.filter((x) => x !== s.value) : [...f.services, s.value],
+                        }))}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-sm font-bold transition-all ${active ? "bg-primary/10 border-primary text-slate-900" : "border-slate-200 text-slate-600 hover:border-primary/30"}`}>
+                        <span className="material-symbols-outlined text-base">{s.icon}</span>
+                        {s.label}
+                        {active && <Check className="w-3.5 h-3.5 ml-auto text-primary" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Localisation */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-bold text-slate-700">Localisation</label>
+                  <button type="button" onClick={() => setShowProjCreateMap((v) => !v)} className="text-xs font-bold text-primary hover:underline">
+                    {showProjCreateMap ? "Masquer la carte" : "Choisir sur la carte"}
+                  </button>
+                </div>
+                <input readOnly value={venueForm.address} placeholder="Auto-rempli par la carte…"
+                  className="w-full px-4 py-3 bg-slate-50 border border-transparent rounded-xl text-slate-500 font-medium cursor-default" />
+                {showProjCreateMap && (
+                  <div className="overflow-hidden rounded-xl">
+                    <MapPicker lat={projCreateMapLat} lng={projCreateMapLng} onPick={(lat, lng, address) => { setProjCreateMapLat(lat); setProjCreateMapLng(lng); setVenueForm((f) => ({ ...f, address })); }} />
+                  </div>
+                )}
+              </div>
+
+              {/* Horaires */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-slate-700">Horaires d'ouverture</label>
+                <input
+                  value={venueForm.opening_hours}
+                  onChange={(e) => setVenueForm((f) => ({ ...f, opening_hours: e.target.value }))}
+                  placeholder="Lun-Sam 9h-19h"
+                  className="w-full px-4 py-3 bg-slate-50 border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 font-medium"
+                />
+              </div>
+
+              {/* Réseaux sociaux */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-slate-700">Facebook</label>
+                  <input
+                    value={venueForm.facebook}
+                    onChange={(e) => setVenueForm((f) => ({ ...f, facebook: e.target.value }))}
+                    placeholder="https://facebook.com/..."
+                    className="w-full px-4 py-3 bg-slate-50 border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 font-medium"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-slate-700">Instagram</label>
+                  <input
+                    value={venueForm.instagram}
+                    onChange={(e) => setVenueForm((f) => ({ ...f, instagram: e.target.value }))}
+                    placeholder="https://instagram.com/..."
+                    className="w-full px-4 py-3 bg-slate-50 border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 font-medium"
+                  />
+                </div>
+              </div>
+
+              {/* Éco-pratiques */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">Pratiques éco-responsables</label>
+                <div className="flex flex-wrap gap-2">
+                  {ECO_PRACTICES.map((p) => {
+                    const active = venueForm.eco_labels.includes(p);
+                    return (
+                      <button key={p} type="button"
+                        onClick={() => setVenueForm((f) => ({
+                          ...f,
+                          eco_labels: active
+                            ? f.eco_labels.filter((x) => x !== p)
+                            : [...f.eco_labels, p],
+                        }))}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border-2 transition-all ${active ? "bg-green-50 border-green-400 text-green-700" : "border-slate-200 text-slate-500 hover:border-green-300"}`}>
+                        {active && <Check className="w-3 h-3" />}
+                        {p}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {projError && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl">
+                  <span className="material-symbols-outlined text-base text-red-500">error</span>
+                  <p className="text-sm font-semibold text-red-600">{projError}</p>
+                </div>
+              )}
+
+              <button type="submit" disabled={projSaving}
+                className="w-full py-3.5 bg-primary text-slate-900 font-extrabold rounded-xl shadow-lg shadow-emerald-500/20 hover:-translate-y-0.5 active:scale-95 transition-all disabled:opacity-60">
+                {projSaving ? "Création en cours…" : "Créer le projet"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 pt-6">
 
         {/* ══ PROFILE HEADER CARD ═══════════════════════════════════════════ */}
@@ -6357,51 +2729,44 @@ export default function ProviderProfilePage() {
             ? <div className="relative h-48 md:h-64 lg:h-72 w-full overflow-hidden"><img src={profile.cover_photo} alt="" className="w-full h-full object-cover" /></div>
             : <BotanicalCover />
           }
-          <div className="relative px-5 pb-5 pt-3 md:pt-0">
-            <div className="flex items-end justify-between gap-4 -mt-14 md:-mt-16">
-              {/* Avatar + score badge */}
-              <div className="flex flex-col items-center gap-2 shrink-0">
-                <div className="relative">
-                  <div className="absolute inset-0 bg-emerald-400/20 rounded-full blur-md" />
-                  <div className="relative w-24 h-24 md:w-28 md:h-28 rounded-full border-4 border-white bg-slate-200 overflow-hidden shadow-lg flex items-center justify-center">
-                    <AvatarImg />
+          <div className="relative px-6 pb-6 pt-3 md:pt-0">
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between -mt-16 md:-mt-20">
+              <div className="flex flex-col sm:flex-row items-center sm:items-end space-y-4 sm:space-y-0 sm:space-x-6">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-emerald-400/20 rounded-full blur-md" />
+                    <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-full border-4 border-white bg-slate-200 overflow-hidden shadow-lg flex items-center justify-center">
+                      <AvatarImg />
+                    </div>
+                  </div>
+                  <div className="bg-primary text-white text-[10px] font-extrabold px-3 py-1 rounded-full flex items-center gap-1 shadow-md uppercase tracking-wider border border-white">
+                    <span className="material-symbols-outlined text-yellow-300" style={{ fontSize: 11 }}>star</span>
+                    {scoreLabel(profile.sustainability_score)}
                   </div>
                 </div>
-                <div className="bg-primary text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-md uppercase tracking-wider border border-white">
-                  <span className="material-symbols-outlined text-yellow-300" style={{ fontSize: 10 }}>star</span>
-                  {scoreLabel(profile.sustainability_score)}
-                </div>
-              </div>
-
-              {/* Name + buttons row */}
-              <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 pb-1">
-                <div className="min-w-0">
-                  <div className="flex items-start gap-2">
-                    <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-800 leading-tight break-words">
-                      {profile.organization || profile.full_name || "Prestataire"}
-                    </h1>
-                    <ShieldCheck size={18} className="text-emerald-500 fill-emerald-100 shrink-0 mt-1 hidden sm:block" />
+                <div className="text-center sm:text-left pt-3 sm:pt-0 pb-1">
+                  <div className="flex items-center justify-center sm:justify-start gap-2">
+                    <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-800">{profile.full_name || "Propriétaire"}</h1>
+                    <ShieldCheck size={20} className="text-primary fill-emerald-100 hidden sm:block" />
                   </div>
-                  <div className="flex items-center gap-1.5 mt-1 text-primary font-semibold text-xs">
-                    <span className="relative flex h-2 w-2 shrink-0">
+                  <div className="flex items-center justify-center sm:justify-start gap-1.5 mt-1 text-primary font-semibold text-sm">
+                    <span>{roleLabel}</span>
+                    <span className="relative flex h-2 w-2">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
                     </span>
-                    <span>Prestataire</span>
                   </div>
                 </div>
-
-                {/* Buttons always side-by-side */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <button onClick={openModal}
-                    className="bg-primary hover:bg-primary/90 active:scale-95 text-white font-bold px-4 py-2.5 rounded-xl inline-flex items-center gap-1.5 hover:shadow-lg transition-all shadow-sm text-sm whitespace-nowrap">
-                    <Plus size={16} strokeWidth={2.5} /><span>Publier une offre</span>
-                  </button>
-                  <button onClick={openEditProfile}
-                    className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold px-4 py-2.5 rounded-xl inline-flex items-center gap-1.5 hover:shadow-sm active:scale-95 transition-all text-sm whitespace-nowrap">
-                    <Edit3 size={15} /><span>Modifier</span>
-                  </button>
-                </div>
+              </div>
+              <div className="mt-6 md:mt-0 flex flex-row flex-wrap justify-center sm:justify-end gap-3 self-center md:self-end">
+                <button onClick={openModal}
+                  className="bg-primary hover:bg-primary/90 active:scale-95 text-white font-bold px-5 py-3 rounded-2xl inline-flex items-center gap-2 hover:shadow-lg transition-all shadow-sm text-sm">
+                  <Plus size={18} strokeWidth={2.5} /><span>Publier une offre</span>
+                </button>
+                <button onClick={openEditProfile}
+                  className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold px-5 py-3 rounded-2xl inline-flex items-center gap-2 hover:shadow-sm active:scale-95 transition-all text-sm">
+                  <Edit3 size={16} /><span>Modifier le profil</span>
+                </button>
               </div>
             </div>
           </div>
@@ -6420,62 +2785,26 @@ export default function ProviderProfilePage() {
                 <h2 className="text-base font-extrabold text-slate-800">Informations</h2>
               </div>
               <div className="space-y-4">
-                {/* Bio / Description */}
-                {profile.bio && (
+                {profile.country && (
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 p-1.5 rounded-lg bg-emerald-50 text-emerald-500 shrink-0">
-                      <span className="material-symbols-outlined" style={{ fontSize: 16 }}>description</span>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-extrabold text-slate-400 tracking-wider uppercase">Description</p>
-                      <p className="text-xs text-slate-600 mt-0.5 leading-relaxed line-clamp-3">{profile.bio}</p>
-                    </div>
-                  </div>
-                )}
-                {/* Type */}
-                {profile.provider_type && (() => {
-                  const pt = PROVIDER_TYPES.find((t) => t.value === profile.provider_type);
-                  return pt ? (
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 p-1.5 rounded-lg bg-primary/10 text-primary shrink-0">
-                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>{pt.icon}</span>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-extrabold text-slate-400 tracking-wider uppercase">Type</p>
-                        <p className="text-sm font-semibold text-slate-700 mt-0.5">{pt.label}</p>
-                      </div>
-                    </div>
-                  ) : null;
-                })()}
-                {/* Localisation — données org en priorité, fallback profil */}
-                {(org?.address || org?.zone || org?.region || org?.country || profile.region || profile.country) && (
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 p-1.5 rounded-lg bg-slate-50 text-slate-400 shrink-0"><MapPin size={16} /></div>
+                    <div className="mt-0.5 p-1.5 rounded-lg bg-slate-50 text-slate-400"><MapPin size={16} /></div>
                     <div>
                       <p className="text-[10px] font-extrabold text-slate-400 tracking-wider uppercase">Localisation</p>
-                      <p className="text-sm font-semibold text-slate-700 mt-0.5">
-                        {[
-                          org?.zone,
-                          org?.region ?? profile.region,
-                          (org?.country ?? profile.country) ? (COUNTRY_LABELS[org?.country ?? profile.country ?? ""] ?? (org?.country ?? profile.country)) : null,
-                        ].filter(Boolean).join(", ")}
-                      </p>
+                      <p className="text-sm font-semibold text-slate-700 mt-0.5">{COUNTRY_LABELS[profile.country] ?? profile.country}</p>
                     </div>
                   </div>
                 )}
-                {/* Site web */}
-                {profile.website && (
+                {profile.position && (
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 p-1.5 rounded-lg bg-slate-50 text-slate-400 shrink-0"><Globe size={16} /></div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-extrabold text-slate-400 tracking-wider uppercase">Site web</p>
-                      <a href={profile.website} target="_blank" rel="noreferrer" className="text-sm font-semibold text-primary hover:underline truncate block mt-0.5">{profile.website.replace(/^https?:\/\//, "")}</a>
+                    <div className="mt-0.5 p-1.5 rounded-lg bg-slate-50 text-slate-400"><Briefcase size={16} /></div>
+                    <div>
+                      <p className="text-[10px] font-extrabold text-slate-400 tracking-wider uppercase">Poste</p>
+                      <p className="text-sm font-semibold text-slate-700 mt-0.5">{profile.position.charAt(0).toUpperCase() + profile.position.slice(1)}</p>
                     </div>
                   </div>
                 )}
-                {/* Membre depuis */}
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 p-1.5 rounded-lg bg-slate-50 text-slate-400 shrink-0"><Calendar size={16} /></div>
+                  <div className="mt-0.5 p-1.5 rounded-lg bg-slate-50 text-slate-400"><Calendar size={16} /></div>
                   <div>
                     <p className="text-[10px] font-extrabold text-slate-400 tracking-wider uppercase">Membre depuis</p>
                     <p className="text-sm font-semibold text-slate-700 mt-0.5">
@@ -6483,81 +2812,9 @@ export default function ProviderProfilePage() {
                     </p>
                   </div>
                 </div>
-                {/* Données org — contact & réseaux */}
-                {org && (org.phone || org.whatsapp || org.email || org.website || org.instagram || org.facebook || org.tiktok) && (
-                  <div className="pt-3 border-t border-slate-50 space-y-3">
-                    {(org.website || org.email) && (
-                      <div className="space-y-2">
-                        {org.website && (
-                          <a href={org.website.startsWith("http") ? org.website : `https://${org.website}`} target="_blank" rel="noreferrer"
-                            className="flex items-center gap-2.5 text-xs font-semibold text-primary hover:underline">
-                            <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                              <Globe size={13} className="text-primary" />
-                            </div>
-                            <span className="truncate">{org.website.replace(/^https?:\/\//, "")}</span>
-                          </a>
-                        )}
-                        {org.email && (
-                          <a href={`mailto:${org.email}`}
-                            className="flex items-center gap-2.5 text-xs font-semibold text-slate-600 hover:text-primary">
-                            <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                              <Mail size={13} className="text-slate-500" />
-                            </div>
-                            <span className="truncate">{org.email}</span>
-                          </a>
-                        )}
-                      </div>
-                    )}
-                    {(org.phone || org.whatsapp) && (
-                      <div className="space-y-2">
-                        {org.phone && (
-                          <a href={`tel:${org.phone}`}
-                            className="flex items-center gap-2.5 text-xs font-semibold text-slate-600 hover:text-primary">
-                            <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                              <Phone size={13} className="text-slate-500" />
-                            </div>
-                            <span>{org.phone}</span>
-                          </a>
-                        )}
-                        {org.whatsapp && (
-                          <a href={`https://wa.me/${org.whatsapp.replace(/\D/g, "")}`} target="_blank" rel="noreferrer"
-                            className="flex items-center gap-2.5 text-xs font-semibold text-slate-600 hover:text-primary">
-                            <div className="w-7 h-7 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
-                              <MessageCircle size={13} className="text-green-500" />
-                            </div>
-                            <span>{org.whatsapp}</span>
-                          </a>
-                        )}
-                      </div>
-                    )}
-                    {(org.instagram || org.facebook || org.tiktok) && (
-                      <div className="flex gap-2 flex-wrap">
-                        {org.instagram && (
-                          <a href={socialHref("instagram", org.instagram)} target="_blank" rel="noreferrer"
-                            className="flex items-center gap-1.5 bg-pink-50 text-pink-600 hover:bg-pink-100 text-[11px] font-black px-3 py-1.5 rounded-xl transition-colors">
-                            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>photo_camera</span>
-                            Instagram
-                          </a>
-                        )}
-                        {org.facebook && (
-                          <a href={socialHref("facebook", org.facebook)} target="_blank" rel="noreferrer"
-                            className="flex items-center gap-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 text-[11px] font-black px-3 py-1.5 rounded-xl transition-colors">
-                            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>group</span>
-                            Facebook
-                          </a>
-                        )}
-                        {org.tiktok && (
-                          <a href={socialHref("tiktok", org.tiktok)} target="_blank" rel="noreferrer"
-                            className="flex items-center gap-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 text-[11px] font-black px-3 py-1.5 rounded-xl transition-colors">
-                            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>music_note</span>
-                            TikTok
-                          </a>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                {!profile.country && !profile.position && (
+                  <p className="text-xs text-slate-400 italic">Aucune information renseignée.</p>
                 )}
-
               </div>
             </div>
 
@@ -6571,19 +2828,21 @@ export default function ProviderProfilePage() {
                 {followers.length > 0 && <span className="bg-primary/10 text-primary text-xs font-black px-2 py-0.5 rounded-full">{followers.length}</span>}
               </div>
               {followers.length > 0 ? (
-                <div className="flex items-center gap-1.5 flex-wrap mb-3">
-                  {followers.slice(0, 5).map((f) => {
-                    const path = f._type === "eco_traveler" ? `/profile/ecovoyageur/${f.user_id}` : f._type === "guide" ? `/profile/guide/${f.user_id}` : `/profile/project-owner/${f.user_id}`;
-                    return (
-                      <button key={f.user_id} onClick={() => router.push(path)}
-                        className="w-10 h-10 rounded-xl bg-slate-100 border-2 border-white shadow-sm overflow-hidden flex items-center justify-center hover:scale-105 transition-transform"
-                        title={f.full_name}>
-                        {f.photo ? <img src={f.photo} alt={f.full_name} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-slate-400 text-lg">person</span>}
-                      </button>
-                    );
-                  })}
-                  {followers.length > 5 && <div className="w-10 h-10 rounded-xl bg-emerald-50 text-primary text-[11px] font-black border border-emerald-100/60 shadow-sm flex items-center justify-center">+{followers.length - 5}</div>}
-                </div>
+                <>
+                  <div className="flex items-center gap-1.5 flex-wrap mb-3">
+                    {followers.slice(0, 5).map((f) => {
+                      const path = f._type === "eco_traveler" ? `/profile/ecovoyageur/${f.user_id}` : f._type === "guide" ? `/profile/guide/${f.user_id}` : `/profile/provider/${f.user_id}`;
+                      return (
+                        <button key={f.user_id} onClick={() => router.push(path)}
+                          className="w-10 h-10 rounded-xl bg-slate-100 border-2 border-white shadow-sm overflow-hidden flex items-center justify-center hover:scale-105 transition-transform"
+                          title={f.full_name}>
+                          {f.photo ? <img src={f.photo} alt={f.full_name} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-slate-400 text-lg">person</span>}
+                        </button>
+                      );
+                    })}
+                    {followers.length > 5 && <div className="w-10 h-10 rounded-xl bg-emerald-50 text-primary text-[11px] font-black border border-emerald-100/60 shadow-sm flex items-center justify-center">+{followers.length - 5}</div>}
+                  </div>
+                </>
               ) : (
                 <p className="text-xs text-slate-400 font-medium">Aucun follower pour l'instant.</p>
               )}
@@ -6595,192 +2854,52 @@ export default function ProviderProfilePage() {
           <div className="lg:col-span-8 space-y-6">
             <div className="bg-slate-100 p-1.5 rounded-2xl flex flex-wrap gap-1 border border-slate-200/50">
               {[
-                { key: "tout",      label: "Tout",       Icon: LayoutGrid },
-                { key: "offres",    label: "Offres",     Icon: Tag },
-                { key: "activites", label: "Activités",  Icon: Sparkles },
-                { key: "circuits",  label: "Circuits",   Icon: Route },
-                { key: "reseau",    label: "Réseau",     Icon: Users },
-                { key: "apropos",   label: "À propos",   Icon: Info },
+                { key: "tout",    label: "Tout",     Icon: LayoutGrid },
+                { key: "offres",  label: "Offres",   Icon: Tag },
+                { key: "projets", label: "Établissements",  Icon: Briefcase },
+                { key: "reseau",  label: "Réseau",   Icon: Users },
+                { key: "apropos", label: "À propos", Icon: Info },
               ].map(({ key, label, Icon }) => (
                 <button key={key} onClick={() => setActiveTab(key as Tab)}
-                  className={`flex-1 min-w-[60px] py-3 px-3 rounded-xl text-xs font-black tracking-tight flex items-center justify-center gap-1.5 transition-all cursor-pointer ${activeTab === key ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-50/50"}`}>
+                  className={`flex-1 min-w-[70px] py-3 px-4 rounded-xl text-xs font-black tracking-tight flex items-center justify-center gap-1.5 transition-all cursor-pointer ${activeTab === key ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-50/50"}`}>
                   <Icon size={14} strokeWidth={2.5} /><span>{label}</span>
                 </button>
               ))}
             </div>
 
-            {activeTab === "tout" && (() => {
-              const allActivityTypes = [
-                ...(profile.activity_types ?? []).map((v) => ({ value: v, level: "primary" as const })),
-                ...(profile.secondary_activity_types ?? []).map((v) => ({ value: v, level: "secondary" as const })),
-              ];
-              return (
-                <div className="space-y-6">
-                  {/* Offers section — first, like project-owner */}
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
-                      <Tag size={12} className="text-primary" /><span>Offres Écotourisme Actives</span>
-                    </h3>
-                    {offers.length === 0 ? (
-                      <div className="bg-white rounded-3xl border border-slate-100/90 shadow-sm p-12 text-center">
-                        <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                          <span className="material-symbols-outlined text-primary text-3xl">sell</span>
-                        </div>
-                        <p className="text-slate-800 font-extrabold text-base mb-1">Aucune offre publiée</p>
-                        <p className="text-slate-400 text-sm mb-5">Publiez votre première expérience éco-touristique.</p>
-                        <button onClick={openModal} className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-2xl text-sm font-bold hover:bg-primary/90 shadow-sm">
-                          <Plus size={16} /> Publier une offre
-                        </button>
-                      </div>
-                    ) : (
-                      offers.map((offer) => <OfferCard key={offer.id} offer={offer} />)
-                    )}
-                  </div>
-
-                  {/* Activities section */}
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center justify-between">
-                      <span className="flex items-center gap-1.5"><Sparkles size={12} className="text-primary" />Activités Proposées</span>
-                      {orgActivities.length > 0 && (
-                        <button onClick={() => setActiveTab("activites")} className="text-primary text-[10px] font-black hover:underline flex items-center gap-1">Tout voir <ArrowRight size={10} /></button>
-                      )}
-                    </h3>
-                    {orgActivities.length === 0 ? (
-                      <LaunchActivityCard />
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {orgActivities.slice(0, 4).map((act) => {
-                          const meta = findProviderTypeMeta(act.category);
-                          const cat = getCategoryByValue(act.category);
-                          const isPrimary = act.level === "primary";
-                          const firstPhoto = Object.values(act.photos ?? {}).flat().filter(Boolean)[0] ?? null;
-                          const subtypeLabels = (act.subtypes ?? []).map((sv) => cat?.subtypes.find((s) => s.value === sv)?.label ?? sv);
-                          return (
-                            <div key={act.id} className="bg-white rounded-3xl border border-slate-100/90 shadow-sm overflow-hidden hover:shadow-md transition-shadow duration-300">
-                              <div className="relative h-48 w-full overflow-hidden">
-                                <div className={`absolute inset-0 bg-gradient-to-br ${meta.gradient}`} />
-                                {firstPhoto ? <img src={firstPhoto} alt={meta.label} className="absolute inset-0 w-full h-full object-cover" />
-                                  : <div className="absolute inset-0 flex items-center justify-center select-none opacity-20"><span className="material-symbols-outlined" style={{ fontSize: 80 }}>{meta.categoryIcon}</span></div>}
-                                <div className={`absolute top-3 left-3 text-[10px] font-black tracking-widest uppercase px-3 py-1.5 rounded-xl shadow-md border ${isPrimary ? "bg-primary text-white border-white/20" : "bg-white/95 text-orange-500 border-orange-100"}`}>
-                                  {isPrimary ? "Principale" : "Secondaire"}
-                                </div>
-                                <div className="absolute top-3 right-3 bg-black/40 backdrop-blur-sm text-white text-[10px] font-bold px-2.5 py-1 rounded-xl">
-                                  <span className="material-symbols-outlined align-middle" style={{ fontSize: 13 }}>{meta.categoryIcon}</span> {meta.categoryLabel}
-                                </div>
-                              </div>
-                              <div className="p-5">
-                                <h3 className="text-lg font-extrabold text-slate-800 tracking-tight mb-1 leading-tight">{meta.label}</h3>
-                                {act.years_experience != null && <p className="text-slate-500 text-sm mb-2">{act.years_experience} an{act.years_experience > 1 ? "s" : ""} d'expérience</p>}
-                                {org?.region && <div className="flex items-center gap-1.5 text-slate-400 text-xs font-semibold mb-3"><MapPin size={12} /><span>{org.region}</span></div>}
-                                {subtypeLabels.length > 0 && (
-                                  <div className="mb-3 bg-slate-50/50 p-3 rounded-xl border border-slate-100/50 flex flex-wrap gap-1.5">
-                                    {subtypeLabels.map((label) => <span key={label} className="bg-primary/10 text-primary text-[10px] font-bold px-2.5 py-1 rounded-full">{label}</span>)}
-                                  </div>
-                                )}
-                                <div className="border border-dashed border-primary/40 rounded-xl py-1.5 px-3 mb-3 text-center text-[11px] font-bold text-primary/70">🌿 Évaluer la durabilité</div>
-                                <div className="flex items-center justify-between border-t border-slate-50 pt-3">
-                                  <p className="text-[11px] font-bold text-slate-400">{isPrimary ? "Activité principale" : "Activité secondaire"}</p>
-                                  <button onClick={() => { setViewOrgActivity(act); setOrgActSliderIdx(0); }}
-                                    className="text-primary hover:text-primary/80 font-extrabold text-xs inline-flex items-center gap-1 hover:translate-x-1 transition-transform duration-200">
-                                    <span>Voir les détails</span><ArrowRight size={14} strokeWidth={2.5} />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {activeTab === "activites" && (() => {
-              const primaryActs = orgActivities.filter((a) => a.level === "primary");
-              const secondaryActs = orgActivities.filter((a) => a.level === "secondary");
-              const filtered = activityFilter === "primary" ? primaryActs
-                : activityFilter === "secondary" ? secondaryActs
-                : orgActivities;
-
-              return (
+            {activeTab === "tout" && (
+              <div className="space-y-6">
                 <div className="space-y-5">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-extrabold text-slate-800">Activités ({orgActivities.length})</h3>
-                    <button onClick={() => openActModal("secondary")} className="text-orange-500 hover:text-orange-400 text-xs font-extrabold flex items-center gap-1 transition-colors">
-                      <Plus size={14} />Ajouter une activité secondaire
-                    </button>
-                  </div>
-
-                  {orgActivities.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        { key: null,        label: "Toutes",                  count: orgActivities.length,   active: !activityFilter,                 cls: "bg-primary text-white border-primary" },
-                        { key: "primary",   label: `Principales`,             count: primaryActs.length,     active: activityFilter === "primary",    cls: "bg-primary text-white border-primary" },
-                        { key: "secondary", label: `Secondaires`,             count: secondaryActs.length,   active: activityFilter === "secondary",  cls: "bg-orange-500 text-white border-orange-500" },
-                      ].filter((f) => f.count > 0 || f.key === null).map((f) => (
-                        <button key={String(f.key)} onClick={() => setActivityFilter(f.active ? null : f.key)}
-                          className={`px-3 py-1.5 rounded-xl text-[11px] font-black border transition-all ${f.active ? f.cls : "bg-white text-slate-500 border-slate-200 hover:border-primary/40"}`}>
-                          {f.label} ({f.count})
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {orgActivities.length === 0 ? (
-                    <LaunchActivityCard />
-                  ) : filtered.length === 0 ? (
+                  <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
+                    <Sparkles size={12} className="text-primary" /><span>Offres Écotourisme Actives</span>
+                  </h3>
+                  {offers.length === 0 ? (
                     <div className="bg-white rounded-3xl border border-slate-100/90 shadow-sm p-12 text-center">
-                      <p className="text-slate-800 font-extrabold text-base">Aucune activité dans cette catégorie</p>
-                      <button onClick={() => setActivityFilter(null)} className="mt-3 text-primary text-xs font-bold hover:underline">Voir toutes</button>
+                      <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <span className="material-symbols-outlined text-primary text-3xl">sell</span>
+                      </div>
+                      <p className="text-slate-800 font-extrabold text-base mb-1">Aucune offre publiée</p>
+                      <p className="text-slate-400 text-sm mb-5">Publiez votre première expérience éco-touristique.</p>
+                      <button onClick={openModal}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-2xl text-sm font-bold hover:bg-primary/90 shadow-sm">
+                        <Plus size={16} /> Publier une offre
+                      </button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {filtered.map((act) => {
-                        const meta = findProviderTypeMeta(act.category);
-                        const cat = getCategoryByValue(act.category);
-                        const isPrimary = act.level === "primary";
-                        const firstPhoto = Object.values(act.photos ?? {}).flat().filter(Boolean)[0] ?? null;
-                        const subtypeLabels = (act.subtypes ?? []).map((sv) => cat?.subtypes.find((s) => s.value === sv)?.label ?? sv);
-                        return (
-                          <div key={act.id} className="bg-white rounded-3xl border border-slate-100/90 shadow-sm overflow-hidden hover:shadow-md transition-shadow duration-300">
-                            <div className="relative h-48 w-full overflow-hidden">
-                              <div className={`absolute inset-0 bg-gradient-to-br ${meta.gradient}`} />
-                              {firstPhoto ? <img src={firstPhoto} alt={meta.label} className="absolute inset-0 w-full h-full object-cover" />
-                                : <div className="absolute inset-0 flex items-center justify-center select-none opacity-20"><span className="material-symbols-outlined" style={{ fontSize: 80 }}>{meta.categoryIcon}</span></div>}
-                              <div className={`absolute top-3 left-3 text-[10px] font-black tracking-widest uppercase px-3 py-1.5 rounded-xl shadow-md border ${isPrimary ? "bg-primary text-white border-white/20" : "bg-white/95 text-orange-500 border-orange-100"}`}>
-                                {isPrimary ? "Principale" : "Secondaire"}
-                              </div>
-                              <div className="absolute top-3 right-3 bg-black/40 backdrop-blur-sm text-white text-[10px] font-bold px-2.5 py-1 rounded-xl">
-                                <span className="material-symbols-outlined align-middle" style={{ fontSize: 13 }}>{meta.categoryIcon}</span> {meta.categoryLabel}
-                              </div>
-                            </div>
-                            <div className="p-5">
-                              <h3 className="text-lg font-extrabold text-slate-800 tracking-tight mb-1 leading-tight">{meta.label}</h3>
-                              {act.years_experience != null && <p className="text-slate-500 text-sm mb-2">{act.years_experience} an{act.years_experience > 1 ? "s" : ""} d'expérience</p>}
-                              {org?.region && <div className="flex items-center gap-1.5 text-slate-400 text-xs font-semibold mb-3"><MapPin size={12} /><span>{org.region}</span></div>}
-                              {subtypeLabels.length > 0 && (
-                                <div className="mb-3 bg-slate-50/50 p-3 rounded-xl border border-slate-100/50 flex flex-wrap gap-1.5">
-                                  {subtypeLabels.map((label) => <span key={label} className="bg-primary/10 text-primary text-[10px] font-bold px-2.5 py-1 rounded-full">{label}</span>)}
-                                </div>
-                              )}
-                              <div className="border border-dashed border-primary/40 rounded-xl py-1.5 px-3 mb-3 text-center text-[11px] font-bold text-primary/70">🌿 Évaluer la durabilité</div>
-                              <div className="flex items-center justify-between border-t border-slate-50 pt-3">
-                                <p className="text-[11px] font-bold text-slate-400">{isPrimary ? "Activité principale" : "Activité secondaire"}</p>
-                                <button onClick={() => { setViewOrgActivity(act); setOrgActSliderIdx(0); }}
-                                  className="text-primary hover:text-primary/80 font-extrabold text-xs inline-flex items-center gap-1 hover:translate-x-1 transition-transform duration-200">
-                                  <span>Voir les détails</span><ArrowRight size={14} strokeWidth={2.5} />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    offers.map((offer) => <OfferCard key={offer.id} offer={offer} />)
                   )}
                 </div>
-              );
-            })()}
+                <div className="space-y-5 pt-2">
+                  <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
+                    <Briefcase size={12} className="text-teal-500" /><span>Établissements Citoyens & Éco-Chantiers</span>
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    {profile.venues.map((proj) => <VenueCard key={proj.id} proj={proj} />)}
+                    <LaunchVenueCard />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {activeTab === "offres" && (
               <div className="space-y-5">
@@ -6802,106 +2921,32 @@ export default function ProviderProfilePage() {
               </div>
             )}
 
-            {activeTab === "circuits" && (
+            {activeTab === "projets" && (
               <div className="space-y-5">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-extrabold text-slate-800">Circuits multi-étapes</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">Organisez des itinéraires sur plusieurs jours avec différentes destinations et activités</p>
-                  </div>
-                  <button onClick={() => openCircuitModal()} className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs shadow-sm transition-all active:scale-95 cursor-pointer">
-                    <Plus size={13} />Créer un circuit
-                  </button>
+                  <h3 className="text-sm font-extrabold text-slate-800">Établissements d'initiative verte ({profile.venues.length})</h3>
+                  <button onClick={openProjModal} className="text-primary text-xs font-extrabold">+ Lancer un projet</button>
                 </div>
-
-                {circuits.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-slate-100/80 shadow-sm text-center gap-4">
-                    <div className="w-16 h-16 rounded-3xl bg-primary/10 flex items-center justify-center">
-                      <Route size={28} className="text-primary" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  {profile.venues.length === 0 ? (
+                    <div className="col-span-2 bg-white rounded-3xl border border-slate-100/90 shadow-sm p-12 text-center">
+                      <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <span className="material-symbols-outlined text-slate-400 text-3xl">domain</span>
+                      </div>
+                      <p className="text-slate-800 font-extrabold text-base">Aucun établissement</p>
+                      <p className="text-slate-400 text-sm mt-1">Ajoutez votre premier établissement depuis le tableau de bord.</p>
                     </div>
-                    <div>
-                      <p className="text-slate-800 font-extrabold text-base">Aucun circuit créé</p>
-                      <p className="text-slate-400 text-sm mt-1 max-w-xs">Créez votre premier circuit multi-étapes avec des destinations, activités et hébergements.</p>
-                    </div>
-                    <button onClick={() => openCircuitModal()} className="flex items-center gap-1.5 px-5 py-2.5 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs shadow-sm transition-all cursor-pointer">
-                      <Plus size={13} />Créer mon premier circuit
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-4">
-                    {circuits.map((circuit) => {
-                      const catLabels = [...new Set(circuit.etapes.map((e) => PROVIDER_SCHEMA.find((c) => c.value === e.categorie)?.label ?? e.categorie))];
-                      return (
-                        <div key={circuit.id} className="bg-white rounded-3xl border border-slate-100/80 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-                          <div className="flex gap-0">
-                            {/* Cover */}
-                            <div className="relative w-40 shrink-0 bg-gradient-to-br from-primary/20 to-emerald-100 flex items-center justify-center">
-                              {circuit.cover_image
-                                ? <img src={circuit.cover_image} alt="" className="w-full h-full object-cover absolute inset-0" />
-                                : <Route size={32} className="text-primary/40" />}
-                            </div>
-                            {/* Info */}
-                            <div className="flex-1 p-5">
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <h4 className="text-base font-extrabold text-slate-800 leading-tight">{circuit.title}</h4>
-                                  {circuit.description && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{circuit.description}</p>}
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <button onClick={() => openCircuitModal(circuit)} className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-primary/10 text-slate-500 hover:text-primary flex items-center justify-center transition-colors cursor-pointer">
-                                    <Edit3 size={14} />
-                                  </button>
-                                  <button onClick={async () => { if (!confirm("Supprimer ce circuit ?")) return; try { await apiFetch(`/circuits/${circuit.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }); setCircuits((prev) => prev.filter((c) => c.id !== circuit.id)); } catch {} }} className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-500 flex items-center justify-center transition-colors cursor-pointer">
-                                    <Trash2 size={14} />
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="flex flex-wrap gap-2 mt-3">
-                                <span className="flex items-center gap-1 text-[10px] font-black tracking-widest uppercase text-primary bg-primary/10 px-2.5 py-1 rounded-xl">
-                                  <Calendar size={10} />{circuit.nb_jours} jour{circuit.nb_jours > 1 ? "s" : ""}
-                                </span>
-                                <span className="flex items-center gap-1 text-[10px] font-black tracking-widest uppercase text-slate-500 bg-slate-100 px-2.5 py-1 rounded-xl">
-                                  <MapPin size={10} />{circuit.etapes.length} étape{circuit.etapes.length > 1 ? "s" : ""}
-                                </span>
-                                {catLabels.slice(0, 3).map((l) => (
-                                  <span key={l} className="text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-100 px-2 py-1 rounded-xl">{l}</span>
-                                ))}
-                              </div>
-                              {/* Étapes preview */}
-                              <div className="mt-3 space-y-1">
-                                {circuit.etapes.slice(0, 3).map((etape, i) => {
-                                  const cat = PROVIDER_SCHEMA.find((c) => c.value === etape.categorie);
-                                  const stLabels = etape.subtypes.map((sv) => cat?.subtypes.find((s) => s.value === sv)?.label ?? sv);
-                                  return (
-                                    <div key={etape.id} className="flex items-center gap-2 text-xs">
-                                      <span className="w-5 h-5 rounded-full bg-primary/10 text-primary font-black flex items-center justify-center text-[10px] shrink-0">{etape.jour}</span>
-                                      <span className="font-semibold text-slate-700 truncate">{etape.destination}</span>
-                                      <span className="text-slate-400 shrink-0">·</span>
-                                      <span className="text-slate-400 truncate">{stLabels.join(", ")}</span>
-                                    </div>
-                                  );
-                                })}
-                                {circuit.etapes.length > 3 && <p className="text-[10px] text-slate-400 font-semibold">+{circuit.etapes.length - 3} étape{circuit.etapes.length - 3 > 1 ? "s" : ""}…</p>}
-                              </div>
-                              <button
-                                onClick={() => setViewingCircuit(circuit)}
-                                className="mt-3 flex items-center gap-1.5 text-[11px] font-extrabold text-primary hover:text-primary/80 transition-colors cursor-pointer"
-                              >
-                                <Info size={12} />Voir les détails
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                  ) : (
+                    profile.venues.map((proj) => <VenueCard key={proj.id} proj={proj} />)
+                  )}
+                  <LaunchVenueCard />
+                </div>
               </div>
             )}
 
             {activeTab === "reseau" && (
               <div className="space-y-5">
-                {/* Search */}
+                {/* Search guides */}
                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
                   <h3 className="font-extrabold text-slate-800 text-base mb-4 flex items-center gap-2"><Search size={16} className="text-primary" />Rechercher un guide certifié</h3>
                   <div className="relative">
@@ -6982,8 +3027,8 @@ export default function ProviderProfilePage() {
                   {followers.length === 0 ? <p className="text-sm text-slate-400">Aucun abonné pour l'instant.</p> : (
                     <div className="divide-y divide-slate-50" onClick={() => setNetMenuId(null)}>
                       {followers.map((f) => {
-                        const path = f._type === "eco_traveler" ? `/profile/ecovoyageur/${f.user_id}` : f._type === "guide" ? `/profile/guide/${f.user_id}` : `/profile/project-owner/${f.user_id}`;
-                        const typeLabel = f._type === "eco_traveler" ? "Éco-Voyageur" : f._type === "guide" ? "Guide" : "Prestataire";
+                        const path = f._type === "eco_traveler" ? `/profile/ecovoyageur/${f.user_id}` : f._type === "guide" ? `/profile/guide/${f.user_id}` : `/profile/provider/${f.user_id}`;
+                        const typeLabel = f._type === "eco_traveler" ? "Éco-Voyageur" : f._type === "guide" ? "Guide" : "Propriétaire";
                         return (
                           <div key={f.user_id} className="flex items-center justify-between py-3 gap-2">
                             <button onClick={() => router.push(path)} className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 text-left">
@@ -7033,363 +3078,89 @@ export default function ProviderProfilePage() {
             {activeTab === "apropos" && (
               <div className="space-y-5">
 
-                {/* ── SECTION PRESTATAIRE ──────────────────────────────────── */}
-                <div className="bg-white rounded-3xl border border-slate-100/80 shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="material-symbols-outlined text-primary" style={{ fontSize: 18 }}>person</span>
-                    </div>
-                    <p className="text-sm font-extrabold text-slate-800">Prestataire</p>
-                  </div>
-                  <div className="divide-y divide-slate-50">
-                    {/* Photo + nom + rôle */}
-                    <div className="flex items-center gap-4 px-6 py-5">
-                      <div className="w-14 h-14 rounded-full bg-slate-100 overflow-hidden flex items-center justify-center shrink-0 border-2 border-primary/20 shadow-sm">
-                        {profile.photo
-                          ? <img src={profile.photo} alt="" className="w-full h-full object-cover" />
-                          : <span className="material-symbols-outlined text-primary text-2xl">person</span>
-                        }
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-base font-extrabold text-slate-900 truncate">{profile.full_name || "—"}</p>
-                        {profile.position && <p className="text-xs font-semibold text-slate-500 mt-0.5">{profile.position}</p>}
-                      </div>
-                    </div>
-                    {/* Bio personnelle */}
-                    {profile.personal_bio && (
-                      <div className="px-6 py-4">
-                        <p className="text-[10px] font-black text-primary/70 tracking-widest uppercase mb-2">À propos</p>
-                        <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{profile.personal_bio}</p>
-                      </div>
-                    )}
-                    {/* Expérience */}
-                    {profile.years_experience !== null && (
-                      <div className="flex items-center gap-4 px-6 py-4">
-                        <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                          <span className="material-symbols-outlined text-primary" style={{ fontSize: 18 }}>workspace_premium</span>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-0.5">Expérience</p>
-                          <p className="text-sm font-bold text-slate-800">{profile.years_experience} an{profile.years_experience > 1 ? "s" : ""}</p>
-                        </div>
-                      </div>
-                    )}
-                    {/* Langues */}
-                    {(profile.languages_spoken?.length || profile.language) && (
-                      <div className="flex items-start gap-4 px-6 py-4">
-                        <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                          <span className="material-symbols-outlined text-primary" style={{ fontSize: 18 }}>translate</span>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-2">Langues parlées</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {(profile.languages_spoken?.length
-                              ? profile.languages_spoken
-                              : profile.language ? [profile.language] : []
-                            ).map((l) => (
-                              <span key={l} className="bg-primary/10 text-primary text-[11px] font-bold px-2.5 py-1 rounded-full">
-                                {{ fr: "Français", ar: "Arabe", en: "Anglais", es: "Espagnol", de: "Allemand", it: "Italien", ber: "Amazigh" }[l] ?? l}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    {/* Certifications personnelles */}
-                    {profile.personal_certifications?.length ? (
-                      <div className="px-6 py-4">
-                        <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-3">Certifications personnelles</p>
-                        <div className="space-y-2">
-                          {profile.personal_certifications.map((cert, i) => (
-                            <div key={i} className="flex items-center gap-3 bg-primary/5 border border-primary/10 rounded-xl px-3 py-2.5">
-                              <span className="material-symbols-outlined text-primary shrink-0" style={{ fontSize: 16 }}>verified</span>
-                              <span className="text-sm font-bold text-slate-700 flex-1 min-w-0 truncate">{cert.name}</span>
-                              {cert.document_url && (
-                                <button onClick={() => openDoc(cert.document_url!)}
-                                  className="text-[10px] font-black text-primary hover:underline shrink-0 bg-primary/10 px-2 py-1 rounded-full">
-                                  Voir
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                    {!profile.full_name && !profile.position && !profile.personal_bio && !profile.years_experience && !profile.language && !profile.languages_spoken?.length && !profile.personal_certifications?.length && (
-                      <div className="px-6 py-6 text-center text-slate-400 text-xs font-medium">Aucune information renseignée.</div>
-                    )}
-                  </div>
-                </div>
-
-                {/* ── SECTION ORGANISATION ──────────────────────────────────── */}
-                <div className="bg-white rounded-3xl border border-slate-100/80 shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Building2 size={16} className="text-primary" />
-                    </div>
-                    <p className="text-sm font-extrabold text-slate-800">Organisation</p>
-                  </div>
-                  {org ? (
-                    <div className="divide-y divide-slate-50">
-                      {/* Logo + nom + type */}
-                      <div className="flex items-center gap-4 px-6 py-5">
-                        <div className="w-14 h-14 rounded-2xl bg-slate-100 overflow-hidden flex items-center justify-center shrink-0 border border-primary/15 shadow-sm">
-                          {org.logo
-                            ? <img src={org.logo} alt="" className="w-full h-full object-cover" />
-                            : <span className="material-symbols-outlined text-primary text-2xl">store</span>
-                          }
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-base font-extrabold text-slate-900 truncate">{org.name}</p>
-                          {org.provider_type && (() => {
-                            const pt = PROVIDER_TYPES.find((t) => t.value === org.provider_type);
-                            return pt ? (
-                              <span className="inline-flex items-center gap-1 mt-1 bg-primary/10 text-primary text-[10px] font-black px-2.5 py-1 rounded-lg">
-                                <span className="material-symbols-outlined" style={{ fontSize: 11 }}>{pt.icon}</span>{pt.label}
-                              </span>
-                            ) : null;
-                          })()}
-                        </div>
-                      </div>
-                      {/* Description */}
-                      {org.bio && (
-                        <div className="px-6 py-4">
-                          <p className="text-[10px] font-black text-primary/70 tracking-widest uppercase mb-2">Description</p>
-                          <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{org.bio}</p>
-                        </div>
-                      )}
-                      {/* Histoire */}
-                      {org.history && (
-                        <div className="px-6 py-4">
-                          <p className="text-[10px] font-black text-primary/70 tracking-widest uppercase mb-2">Histoire & Origine</p>
-                          <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{org.history}</p>
-                        </div>
-                      )}
-                      {/* Localisation */}
-                      {(org.region || org.country || org.address || org.zone) && (
-                        <div className="flex items-start gap-4 px-6 py-4">
-                          <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                            <MapPin size={16} className="text-primary" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-0.5">Localisation</p>
-                            <p className="text-sm font-bold text-slate-800">
-                              {[org.address, org.zone, org.region, org.country].filter(Boolean).join(", ")}
-                            </p>
-                            {org.lat && org.lng && (
-                              <div className="mt-3">
-                                <LocationMap lat={org.lat} lng={org.lng} address={[org.address, org.zone, org.region].filter(Boolean).join(", ")} />
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      {/* Contact */}
-                      {(org.phone || org.whatsapp || org.email) && (
-                        <div className="px-6 py-4 space-y-2">
-                          <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-3">Contact</p>
-                          {[
-                            org.phone    && { icon: "phone", href: `tel:${org.phone}`,                              label: org.phone },
-                            org.whatsapp && { icon: "chat",  href: `https://wa.me/${org.whatsapp.replace(/\D/g,"")}`, label: org.whatsapp, ext: true },
-                            org.email    && { icon: "email", href: `mailto:${org.email}`,                            label: org.email },
-                          ].filter(Boolean).map((item: any, i) => (
-                            <a key={i} href={item.href} {...(item.ext ? { target: "_blank", rel: "noreferrer" } : {})}
-                              className="flex items-center gap-3 text-sm font-semibold text-primary hover:underline group">
-                              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
-                                <span className="material-symbols-outlined text-primary" style={{ fontSize: 16 }}>{item.icon}</span>
-                              </div>
-                              <span className="truncate">{item.label}</span>
-                            </a>
-                          ))}
-                        </div>
-                      )}
-                      {/* Réseaux sociaux & site */}
-                      {(org.website || org.instagram || org.facebook || org.tiktok) && (
-                        <div className="px-6 py-4 space-y-2">
-                          <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-3">Présence en ligne</p>
-                          {[
-                            org.website   && { icon: "language",     href: org.website,                            label: org.website },
-                            org.instagram && { icon: "photo_camera", href: socialHref("instagram", org.instagram), label: org.instagram },
-                            org.facebook  && { icon: "groups",       href: socialHref("facebook",  org.facebook),  label: org.facebook },
-                            org.tiktok    && { icon: "videocam",     href: socialHref("tiktok",    org.tiktok),    label: org.tiktok },
-                          ].filter(Boolean).map((item: any, i) => (
-                            <a key={i} href={item.href} target="_blank" rel="noreferrer"
-                              className="flex items-center gap-3 text-sm font-semibold text-primary hover:underline group">
-                              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
-                                <span className="material-symbols-outlined text-primary" style={{ fontSize: 16 }}>{item.icon}</span>
-                              </div>
-                              <span className="truncate">{item.label}</span>
-                            </a>
-                          ))}
-                        </div>
-                      )}
-                      {/* Vidéos */}
-                      {org.videos?.filter(Boolean).length ? (
-                        <div className="px-6 py-4 space-y-2">
-                          <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-3">Vidéos</p>
-                          {org.videos!.filter(Boolean).map((url, i) => (
-                            <a key={i} href={url} target="_blank" rel="noreferrer"
-                              className="flex items-center gap-3 text-sm font-semibold text-primary hover:underline group">
-                              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
-                                <span className="material-symbols-outlined text-primary" style={{ fontSize: 16 }}>play_circle</span>
-                              </div>
-                              <span className="truncate">{url}</span>
-                            </a>
-                          ))}
-                        </div>
-                      ) : null}
-                      {/* Photos de présentation */}
-                      {org.photos?.filter(Boolean).length ? (
-                        <div className="px-6 py-4">
-                          <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-3">Photos</p>
-                          <div className="grid grid-cols-3 gap-2">
-                            {org.photos!.filter(Boolean).map((src, i) => (
-                              <div key={i} className="aspect-square rounded-xl overflow-hidden bg-slate-100 border border-slate-100">
-                                <img src={src} alt="" className="w-full h-full object-cover" />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                      {/* Certifications org */}
-                      {org.certifications?.length ? (
-                        <div className="px-6 py-4">
-                          <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-3">Certifications</p>
-                          <div className="space-y-2">
-                            {org.certifications.map((cert, i) => (
-                              <div key={i} className="flex items-center gap-3 bg-primary/5 border border-primary/10 rounded-xl px-3 py-2.5">
-                                <span className="material-symbols-outlined text-primary shrink-0" style={{ fontSize: 16 }}>verified</span>
-                                <span className="text-sm font-bold text-slate-700 flex-1 min-w-0 truncate">{cert.name}</span>
-                                {cert.document_url && (
-                                  <button onClick={() => openDoc(cert.document_url!)}
-                                    className="text-[10px] font-black text-primary shrink-0 bg-primary/10 px-2 py-1 rounded-full hover:bg-primary/20 transition-colors">
-                                    Voir
-                                  </button>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <div className="px-6 py-8 text-center">
-                      <span className="material-symbols-outlined text-slate-200 text-4xl block mb-2">store</span>
-                      <p className="text-slate-400 text-xs font-medium">Aucune organisation enregistrée.</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Activités proposées — même style que ActivityCard */}
-                {orgActivities.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
-                        <Sparkles size={12} className="text-primary" />
-                        <span>Activités proposées</span>
-                      </h3>
-                      <button onClick={() => setActiveTab("activites")}
-                        className="text-primary text-[10px] font-black hover:underline flex items-center gap-1">
-                        Voir toutes <ArrowRight size={10} />
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {orgActivities.map((act) => {
-                        const meta = findProviderTypeMeta(act.category);
-                        const cat = getCategoryByValue(act.category);
-                        const isPrimary = act.level === "primary";
-                        const allPhotos = Object.values(act.photos ?? {}).flat().filter(Boolean);
-                        const firstPhoto = allPhotos[0] ?? null;
-                        const subtypeLabels = (act.subtypes ?? []).map((sv) =>
-                          cat?.subtypes.find((s) => s.value === sv)?.label ?? sv
-                        );
-
-                        return (
-                          <div key={act.id} className="bg-white rounded-3xl border border-slate-100/90 shadow-sm overflow-hidden hover:shadow-md transition-shadow duration-300">
-                            {/* Cover */}
-                            <div className="relative h-48 w-full overflow-hidden">
-                              <div className={`absolute inset-0 bg-gradient-to-br ${meta.gradient}`} />
-                              {firstPhoto
-                                ? <img src={firstPhoto} alt={meta.label} className="absolute inset-0 w-full h-full object-cover" />
-                                : <div className="absolute inset-0 flex items-center justify-center select-none opacity-20">
-                                    <span className="material-symbols-outlined" style={{ fontSize: 80 }}>{meta.categoryIcon}</span>
-                                  </div>
-                              }
-                              {allPhotos.length > 1 && (
-                                <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-black/40 text-white text-[10px] font-bold px-2 py-0.5 rounded-lg">
-                                  {allPhotos.length} photos
-                                </div>
-                              )}
-                              <div className={`absolute top-3 left-3 text-[10px] font-black tracking-widest uppercase px-3 py-1.5 rounded-xl shadow-md border ${isPrimary ? "bg-primary text-white border-white/20" : "bg-white/95 text-orange-500 border-orange-100"}`}>
-                                {isPrimary ? "Principale" : "Secondaire"}
-                              </div>
-                              <div className="absolute top-3 right-3 bg-black/40 backdrop-blur-sm text-white text-[10px] font-bold px-2.5 py-1 rounded-xl">
-                                <span className="material-symbols-outlined align-middle" style={{ fontSize: 13 }}>{meta.categoryIcon}</span> {meta.categoryLabel}
-                              </div>
-                            </div>
-
-                            {/* Content */}
-                            <div className="p-5">
-                              <h3 className="text-lg font-extrabold text-slate-800 tracking-tight mb-1 leading-tight">{meta.label}</h3>
-                              {act.years_experience != null && (
-                                <p className="text-slate-500 text-sm leading-relaxed mb-2">
-                                  {act.years_experience} an{act.years_experience > 1 ? "s" : ""} d'expérience
-                                </p>
-                              )}
-                              {org?.region && (
-                                <div className="flex items-center gap-1.5 text-slate-400 text-xs font-semibold mb-3">
-                                  <MapPin size={12} /><span>{org.region}</span>
-                                </div>
-                              )}
-                              {/* Subtypes + certifications info block */}
-                              {(subtypeLabels.length > 0 || act.certifications?.length > 0) && (
-                                <div className="mb-3 bg-slate-50/50 p-3 rounded-xl border border-slate-100/50 space-y-1.5">
-                                  {subtypeLabels.length > 0 && (
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {subtypeLabels.map((label) => (
-                                        <span key={label} className="bg-primary/10 text-primary text-[10px] font-bold px-2.5 py-1 rounded-full">{label}</span>
-                                      ))}
-                                    </div>
-                                  )}
-                                  {act.certifications?.length > 0 && (
-                                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-600">
-                                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>verified</span>
-                                      {act.certifications.length} certification{act.certifications.length > 1 ? "s" : ""}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              <div className="border border-dashed border-primary/40 rounded-xl py-1.5 px-3 mb-3 text-center text-[11px] font-bold text-primary/70">
-                                🌿 Évaluer la durabilité
-                              </div>
-                              <div className="flex items-center justify-between border-t border-slate-50 pt-3">
-                                <p className="text-[11px] font-bold text-slate-400">
-                                  {isPrimary ? "Activité principale" : "Activité secondaire"}
-                                </p>
-                                <button
-                                  onClick={() => { setViewOrgActivity(act); setOrgActSliderIdx(0); }}
-                                  className="text-primary hover:text-primary/80 font-extrabold text-xs inline-flex items-center gap-1 hover:translate-x-1 transition-transform duration-200"
-                                >
-                                  <span>Voir les détails</span>
-                                  <ArrowRight size={14} strokeWidth={2.5} />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                {/* Bio */}
+                {profile.bio && (
+                  <div className="bg-white p-6 rounded-3xl border border-slate-100/80 shadow-sm">
+                    <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-3">Présentation</p>
+                    <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-line">{profile.bio}</p>
                   </div>
                 )}
 
-                {/* Activité stats */}
+                {/* Infos professionnelles + contact */}
+                <div className="bg-white rounded-3xl border border-slate-100/80 shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-50">
+                    <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase">Informations professionnelles</p>
+                  </div>
+                  <div className="divide-y divide-slate-50">
+                    {profile.organization && (
+                      <div className="flex items-center gap-4 px-6 py-4">
+                        <div className="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center shrink-0">
+                          <Building2 size={16} className="text-violet-500" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-0.5">Organisation</p>
+                          <p className="text-sm font-bold text-slate-800 truncate">{profile.organization}</p>
+                        </div>
+                      </div>
+                    )}
+                    {profile.position && (
+                      <div className="flex items-center gap-4 px-6 py-4">
+                        <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+                          <Briefcase size={16} className="text-blue-500" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-0.5">Poste</p>
+                          <p className="text-sm font-bold text-slate-800">{profile.position.charAt(0).toUpperCase() + profile.position.slice(1)}</p>
+                        </div>
+                      </div>
+                    )}
+                    {profile.country && (
+                      <div className="flex items-center gap-4 px-6 py-4">
+                        <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                          <Globe size={16} className="text-primary" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-0.5">Pays</p>
+                          <p className="text-sm font-bold text-slate-800">{COUNTRY_LABELS[profile.country] ?? profile.country}</p>
+                        </div>
+                      </div>
+                    )}
+                    {profile.language && (
+                      <div className="flex items-center gap-4 px-6 py-4">
+                        <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                          <span className="material-symbols-outlined text-primary" style={{ fontSize: 18 }}>translate</span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-0.5">Langue</p>
+                          <p className="text-sm font-bold text-slate-800">{{ fr: "Français", ar: "Arabe", en: "Anglais", es: "Espagnol" }[profile.language] ?? profile.language}</p>
+                        </div>
+                      </div>
+                    )}
+                    {profile.phone && (
+                      <div className="flex items-center gap-4 px-6 py-4">
+                        <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+                          <Phone size={16} className="text-amber-500" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-0.5">Téléphone</p>
+                          <a href={`tel:${profile.phone}`} className="text-sm font-bold text-slate-800 hover:text-primary transition-colors">{profile.phone}</a>
+                        </div>
+                      </div>
+                    )}
+                    {!profile.organization && !profile.position && !profile.country && !profile.phone && !profile.language && (
+                      <div className="px-6 py-8 text-center text-slate-400 text-xs font-medium">Aucune information renseignée.</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Activité */}
                 <div className="bg-white p-6 rounded-3xl border border-slate-100/80 shadow-sm">
                   <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-4">Activité</p>
                   <div className="grid grid-cols-3 gap-4">
                     {[
-                      { value: offers.length,              label: "Offres",       icon: "sell",            color: "text-primary   bg-primary/10" },
-                      { value: profile.total_reservations, label: "Réservations", icon: "event_available", color: "text-blue-500  bg-blue-50" },
-                      { value: profile.feedback_received,  label: "Avis reçus",   icon: "star",            color: "text-amber-500 bg-amber-50" },
+                      { value: profile.venues.length, label: "Établissements",       icon: "domain",          color: "text-primary    bg-primary/10" },
+                      { value: profile.total_reservations, label: "Réservations", icon: "event_available", color: "text-blue-500   bg-blue-50" },
+                      { value: profile.feedback_received,  label: "Avis reçus",  icon: "star",            color: "text-amber-500  bg-amber-50" },
                     ].map((s) => (
                       <div key={s.label} className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-slate-50 border border-slate-100">
                         <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${s.color}`}>
@@ -7414,7 +3185,7 @@ export default function ProviderProfilePage() {
                         style={{ width: `${profile.sustainability_score}%` }} />
                     </div>
                     <p className="text-xs font-bold text-slate-500 mt-2">
-                      {scoreLabel(profile.sustainability_score)}
+                      {profile.sustainability_score >= 80 ? "Propriétaire Ambassadeur Éco Voyage" : scoreLabel(profile.sustainability_score)}
                     </p>
                   </div>
                 )}
@@ -7427,209 +3198,176 @@ export default function ProviderProfilePage() {
       </div>
     </div>
 
-    {/* ══ ACTIVITY TYPE DETAIL / EDIT MODAL ════════════════════════════════ */}
-    {actTypeOpen && actTypeCurrent && (() => {
-      const meta = findProviderTypeMeta(actTypeCurrent.value);
-      const isPrimary = actTypeCurrent.level === "primary";
-      const editCategoryData = getCategoryByValue(actTypeEditCategory);
-      const editSubtypeSections = SUBTYPE_FIELDS[actTypeEditSubtype]?.sections ?? [];
+    {/* ══ SUSTAINABILITY QUESTIONNAIRE MODAL ══════════════════════════════════ */}
+    {qOpen && (
+      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="modal-content bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
 
-      function DynFieldInline({ field, value, onChange }: { field: FieldConfig; value: any; onChange: (v: any) => void }) {
-        if (field.type === "multiselect" && field.options) {
-          const selected: string[] = value || [];
-          return (
-            <div className="space-y-1.5">
-              <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">{field.label}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {field.options.map((opt) => (
-                  <button key={opt} type="button"
-                    onClick={() => onChange(selected.includes(opt) ? selected.filter((x) => x !== opt) : [...selected, opt])}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold border-2 transition-all ${selected.includes(opt) ? "bg-primary border-primary text-white" : "border-slate-200 text-slate-600 hover:border-primary/40"}`}>
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        }
-        if (field.type === "boolean") return (
-          <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl">
-            <span className="text-sm font-semibold text-slate-700">{field.label}</span>
-            <button type="button" onClick={() => onChange(!value)} className={`w-11 h-6 rounded-full relative flex-shrink-0 transition-all ${value ? "bg-primary" : "bg-slate-200"}`}>
-              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${value ? "left-5" : "left-0.5"}`} />
+          {/* Header */}
+          <div className="relative px-6 pt-6 pb-4 border-b border-slate-100">
+            <button
+              onClick={() => setQOpen(false)}
+              className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors"
+            >
+              <X className="w-4 h-4 text-slate-500" />
             </button>
-          </div>
-        );
-        if (field.type === "textarea") return (
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">{field.label}</label>
-            <textarea className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-medium resize-none focus:ring-2 focus:ring-primary" value={value || ""} onChange={(e) => onChange(e.target.value)} rows={3} placeholder="Décrivez…" />
-          </div>
-        );
-        if (field.type === "select" && field.options) return (
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">{field.label}</label>
-            <select className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-primary" value={value || ""} onChange={(e) => onChange(e.target.value)}>
-              <option value="">Sélectionner…</option>
-              {field.options.map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </div>
-        );
-        return (
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">{field.label}</label>
-            <input type={field.type === "number" ? "number" : field.type === "url" ? "url" : "text"}
-              className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-primary"
-              value={value || ""} onChange={(e) => onChange(e.target.value)} placeholder={field.label} />
-          </div>
-        );
-      }
-
-      return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
-            {/* Header gradient */}
-            <div className={`relative h-32 bg-gradient-to-br ${meta.gradient} flex-shrink-0`}>
-              <div className="absolute inset-0 flex items-center justify-center opacity-20">
-                <span className="material-symbols-outlined" style={{ fontSize: 64 }}>{meta.categoryIcon}</span>
-              </div>
-              <div className={`absolute top-4 left-4 text-[10px] font-black tracking-widest uppercase px-3 py-1.5 rounded-xl ${isPrimary ? "bg-primary text-white" : "bg-white/90 text-orange-500"}`}>
-                {isPrimary ? "Principale" : "Secondaire"}
-              </div>
-              <button onClick={() => setActTypeOpen(false)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/20 hover:bg-black/40 flex items-center justify-center text-white transition-colors">
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Body */}
-            <div className="overflow-y-auto flex-1">
-              {/* Title bar */}
-              <div className="px-7 pt-5 pb-4 border-b border-slate-100 flex items-start justify-between">
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-1 flex items-center gap-1">
-                    <span className="material-symbols-outlined" style={{ fontSize: 13 }}>{meta.categoryIcon}</span> {meta.categoryLabel}
-                  </p>
-                  <h2 className="text-xl font-extrabold text-slate-800">{meta.label}</h2>
-                  {profile?.region && <p className="flex items-center gap-1 text-slate-400 text-xs mt-1"><MapPin size={11} />{profile.region}</p>}
-                </div>
-                {actTypeMode === "view" && (
-                  <button onClick={() => setActTypeMode("edit")} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:border-primary/40 hover:text-primary text-xs font-bold transition-all">
-                    <Edit3 size={12} />Modifier
-                  </button>
-                )}
-              </div>
-
-              {actTypeMode === "view" ? (
-                <div className="px-7 py-5 space-y-4">
-                  {profile?.bio && (
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-2">Description</p>
-                      <p className="text-slate-600 text-sm leading-relaxed">{profile.bio}</p>
-                    </div>
-                  )}
-                  {profile?.sustainability_score !== null && profile?.sustainability_score !== undefined && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase">Durabilité</p>
-                        <span className="text-sm font-extrabold text-primary">{profile.sustainability_score}/100</span>
-                      </div>
-                      <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-primary rounded-full" style={{ width: `${profile.sustainability_score}%` }} />
-                      </div>
-                    </div>
-                  )}
-                  {SUBTYPE_FIELDS[actTypeCurrent.value]?.sections.map((sec, si) => (
-                    <div key={si} className="rounded-2xl border border-slate-100 overflow-hidden">
-                      <div className="px-4 py-2 bg-slate-50 border-b border-slate-100">
-                        <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">{sec.section}</p>
-                      </div>
-                      <div className="px-4 py-3">
-                        <p className="text-slate-400 text-xs">Aucune information renseignée — cliquez sur Modifier pour compléter.</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            <p className="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-1">Évaluation de durabilité</p>
+            <h2 className="text-xl font-black text-slate-900">
+              {qStep < SUSTAINABILITY_STEPS.length ? (
+                <>{SUSTAINABILITY_STEPS[qStep].emoji} {SUSTAINABILITY_STEPS[qStep].category}</>
               ) : (
-                <div className="px-7 py-5 space-y-5">
-                  {/* Category selector */}
-                  <div>
-                    <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Catégorie</p>
-                    <div className="flex flex-wrap gap-2">
-                      {PROVIDER_SCHEMA.map((cat) => (
-                        <button key={cat.value} type="button"
-                          onClick={() => { setActTypeEditCategory(cat.value); setActTypeEditSubtype(""); setActTypeEditDynFields({}); }}
-                          className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-bold border-2 transition-all ${actTypeEditCategory === cat.value ? "bg-primary border-primary text-white" : "border-slate-200 text-slate-600 hover:border-primary/40"}`}>
-                          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>{cat.icon}</span> {cat.label}
-                        </button>
-                      ))}
+                "🎯 Résultat"
+              )}
+            </h2>
+            {qStep < SUSTAINABILITY_STEPS.length && (
+              <p className="text-sm text-slate-500 mt-1">{SUSTAINABILITY_STEPS[qStep].description}</p>
+            )}
+
+            {/* Progress bar */}
+            <div className="mt-4 flex gap-1.5">
+              {SUSTAINABILITY_STEPS.map((_, i) => (
+                <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i < qStep ? "bg-primary" : i === qStep ? "bg-primary/60" : "bg-slate-100"}`} />
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-400 font-semibold mt-1.5">
+              {qStep < SUSTAINABILITY_STEPS.length ? `Étape ${qStep + 1} / ${SUSTAINABILITY_STEPS.length}` : "Toutes les étapes complétées"}
+            </p>
+          </div>
+
+          {/* Step content */}
+          <div className="p-6">
+            {qStep < SUSTAINABILITY_STEPS.length ? (
+              <div className="space-y-6">
+                {SUSTAINABILITY_STEPS[qStep].questions.map((q) => (
+                  <div key={q.id}>
+                    <p className="text-sm font-bold text-slate-800 mb-3 leading-snug">{q.text}</p>
+                    <div className="space-y-2">
+                      {q.options.map((opt) => {
+                        const selected = qAnswers[q.id] === opt.value;
+                        return (
+                          <button
+                            key={opt.label}
+                            type="button"
+                            onClick={() => setQAnswers((prev) => ({ ...prev, [q.id]: opt.value }))}
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left text-sm font-semibold transition-all ${
+                              selected
+                                ? "border-primary bg-primary/10 text-slate-900"
+                                : "border-slate-200 text-slate-600 hover:border-primary/40 hover:bg-slate-50"
+                            }`}
+                          >
+                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${selected ? "border-primary bg-primary" : "border-slate-300"}`}>
+                              {selected && <span className="w-2 h-2 rounded-full bg-white block" />}
+                            </span>
+                            {opt.label}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
+                ))}
 
-                  {/* Subtype selector */}
-                  {editCategoryData && (
-                    <div>
-                      <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1">
-                        Sous-type — <span className="material-symbols-outlined align-middle" style={{ fontSize: 15 }}>{editCategoryData.icon}</span> {editCategoryData.label}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {editCategoryData.subtypes.map((st) => (
-                          <button key={st.value} type="button"
-                            onClick={() => { setActTypeEditSubtype(st.value); setActTypeEditDynFields({}); }}
-                            className={`px-3.5 py-2 rounded-full text-sm font-bold border-2 transition-all ${actTypeEditSubtype === st.value ? "bg-primary border-primary text-white" : "border-slate-200 text-slate-600 hover:border-primary/40"}`}>
-                            {st.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                <div className="flex gap-3 pt-2">
+                  {qStep > 0 && (
+                    <button onClick={() => setQStep((s) => s - 1)} className="flex-1 py-3 border-2 border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-2">
+                      <ChevronLeft size={16} /> Précédent
+                    </button>
                   )}
-
-                  {/* Dynamic field sections */}
-                  {editSubtypeSections.map((sec, si) => (
-                    <div key={si} className="rounded-2xl border border-slate-100 overflow-hidden">
-                      <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100">
-                        <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">{sec.section}</p>
-                      </div>
-                      <div className="p-4 space-y-4">
-                        {sec.fields
-                          .filter((f) => !f.dependsOn || actTypeEditDynFields[f.dependsOn.field] === f.dependsOn.value)
-                          .map((field) => (
-                            <DynFieldInline key={field.key} field={field} value={actTypeEditDynFields[field.key]}
-                              onChange={(v) => setActTypeEditDynFields((prev) => ({ ...prev, [field.key]: v }))} />
-                          ))}
-                      </div>
-                    </div>
-                  ))}
-
-                  {actTypeSaveError && <p className="text-xs text-red-500 font-semibold">{actTypeSaveError}</p>}
+                  <button
+                    onClick={() => {
+                      if (qStep === SUSTAINABILITY_STEPS.length - 1) {
+                        setQStep((s) => s + 1);
+                        submitQuestionnaire();
+                      } else {
+                        setQStep((s) => s + 1);
+                      }
+                    }}
+                    disabled={!qStepAnswered}
+                    className={`flex-1 py-3 font-extrabold rounded-xl flex items-center justify-center gap-2 transition-all ${
+                      qStepAnswered
+                        ? "bg-primary text-slate-900 hover:bg-primary/90"
+                        : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                    }`}
+                  >
+                    {qStep === SUSTAINABILITY_STEPS.length - 1 ? "Voir mon score" : "Suivant"}
+                    <ChevronRight size={16} />
+                  </button>
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              /* Result screen */
+              <div className="text-center">
+                {(() => {
+                  const level = getSustainabilityLevel(qScore);
+                  const pct = qScore;
+                  return (
+                    <>
+                      {/* Score circle */}
+                      <div className="relative w-36 h-36 mx-auto mb-6">
+                        <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
+                          <circle cx="60" cy="60" r="50" fill="none" stroke="#f1f5f9" strokeWidth="12" />
+                          <circle cx="60" cy="60" r="50" fill="none" stroke="currentColor" strokeWidth="12" strokeLinecap="round"
+                            strokeDasharray={`${2 * Math.PI * 50}`}
+                            strokeDashoffset={`${2 * Math.PI * 50 * (1 - pct / 100)}`}
+                            className="text-primary transition-all duration-1000"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <span className="text-3xl font-black text-slate-900">{qScore}</span>
+                          <span className="text-xs font-bold text-slate-400">/100</span>
+                        </div>
+                      </div>
 
-            {/* Footer */}
-            <div className="px-7 py-4 border-t border-slate-100 flex items-center justify-between flex-shrink-0">
-              {actTypeMode === "edit" ? (
-                <>
-                  <button onClick={() => setActTypeMode("view")} className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 text-sm font-bold transition-colors">
-                    <ArrowLeft size={14} />Retour
-                  </button>
-                  <button onClick={saveActivityType} disabled={actTypeSaving || !actTypeEditSubtype}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-2xl text-sm font-bold hover:bg-primary/90 disabled:opacity-50 shadow-sm">
-                    {actTypeSaving ? "Sauvegarde…" : <><Check size={14} />Enregistrer</>}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button onClick={() => setActTypeOpen(false)} className="text-slate-500 hover:text-slate-700 text-sm font-bold">Fermer</button>
-                  <button onClick={() => setActTypeMode("edit")} className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-2xl text-sm font-bold hover:bg-primary/90 shadow-sm">
-                    <Edit3 size={14} />Modifier
-                  </button>
-                </>
-              )}
-            </div>
+                      <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${level.bg} mb-3`}>
+                        <span className="text-base">{level.emoji}</span>
+                        <span className={`font-extrabold text-sm ${level.color}`}>{level.label}</span>
+                      </div>
+
+                      <p className="text-slate-500 text-sm mb-6 leading-relaxed">
+                        {qScore >= 71
+                          ? "Félicitations ! Votre projet affiche un excellent engagement éco-responsable."
+                          : qScore >= 51
+                          ? "Votre projet est sur la bonne voie. Continuez vos efforts !"
+                          : "Ce questionnaire vous aide à identifier les axes d'amélioration pour votre projet."}
+                      </p>
+
+                      {/* Category breakdown */}
+                      <div className="space-y-2 mb-6 text-left">
+                        {SUSTAINABILITY_STEPS.map((step) => {
+                          const catScore = step.questions.reduce((sum, q) => sum + (qAnswers[q.id] ?? 0), 0);
+                          const catMax = step.questions.reduce((sum, q) => sum + Math.max(...q.options.map((o) => o.value)), 0);
+                          return (
+                            <div key={step.category} className="flex items-center gap-3">
+                              <span className="text-base w-6 shrink-0">{step.emoji}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex justify-between mb-0.5">
+                                  <span className="text-xs font-bold text-slate-600 truncate">{step.category}</span>
+                                  <span className="text-xs font-black text-slate-700 shrink-0 ml-2">{catScore}/{catMax}</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className="h-full bg-primary rounded-full" style={{ width: `${catMax > 0 ? (catScore / catMax) * 100 : 0}%` }} />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <button
+                        onClick={() => setQOpen(false)}
+                        disabled={qSaving}
+                        className="w-full py-3 bg-primary text-slate-900 font-extrabold rounded-xl hover:bg-primary/90 transition-colors"
+                      >
+                        {qSaving ? "Enregistrement…" : "Fermer"}
+                      </button>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
           </div>
         </div>
-      );
-    })()}
+      </div>
+    )}
 
     {/* ══ OFFER SUSTAINABILITY QUESTIONNAIRE ═══════════════════════════════ */}
     {oqOpen && (() => {
@@ -7680,94 +3418,65 @@ export default function ProviderProfilePage() {
                       </button>
                     )}
                     <button
-                      onClick={() => {
-                        if (oqStep === OFFER_SUSTAINABILITY_STEPS.length - 1) {
-                          setOqStep((s) => s + 1);
-                          submitOfferQuestionnaire();
-                        } else {
-                          setOqStep((s) => s + 1);
-                        }
-                      }}
+                      onClick={() => { if (oqStep === OFFER_SUSTAINABILITY_STEPS.length - 1) { setOqStep((s) => s + 1); submitOfferQuestionnaire(); } else { setOqStep((s) => s + 1); } }}
                       disabled={!oqStepAnswered}
                       className={`flex-1 py-3 font-extrabold rounded-xl flex items-center justify-center gap-2 transition-all ${oqStepAnswered ? "bg-primary text-slate-900 hover:bg-primary/90" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
                     >
-                      {oqStep === OFFER_SUSTAINABILITY_STEPS.length - 1 ? "Voir mon score" : "Suivant"}
-                      <ChevronRight size={16} />
+                      {oqStep === OFFER_SUSTAINABILITY_STEPS.length - 1 ? "Voir mon score" : "Suivant"}<ChevronRight size={16} />
                     </button>
                   </div>
                 </div>
-              ) : (
-                <div className="text-center">
-                  {(() => {
-                    const level = getOfferSustainabilityLevel(oqScore);
-                    return (
-                      <>
-                        <div className="relative w-36 h-36 mx-auto mb-6">
-                          <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-                            <circle cx="60" cy="60" r="50" fill="none" stroke="#f1f5f9" strokeWidth="12" />
-                            <circle cx="60" cy="60" r="50" fill="none" stroke="currentColor" strokeWidth="12" strokeLinecap="round"
-                              strokeDasharray={`${2 * Math.PI * 50}`}
-                              strokeDashoffset={`${2 * Math.PI * 50 * (1 - oqScore / 100)}`}
-                              className="text-primary transition-all duration-1000"
-                            />
-                          </svg>
-                          <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-3xl font-black text-slate-900">{oqScore}</span>
-                            <span className="text-xs font-bold text-slate-400">/100</span>
-                          </div>
-                        </div>
-
-                        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${level.bg} mb-3`}>
-                          <span className="text-base">{level.emoji}</span>
-                          <span className={`font-extrabold text-sm ${level.color}`}>{level.label}</span>
-                        </div>
-
-                        <p className="text-slate-500 text-sm mb-6 leading-relaxed">
-                          {oqScore >= 71
-                            ? "Excellente offre éco-responsable ! Vous montrez l'exemple."
-                            : oqScore >= 51
-                            ? "Votre offre est sur la bonne voie. Continuez vos efforts !"
-                            : "Ce questionnaire vous aide à identifier les axes d'amélioration."}
-                        </p>
-
-                        <div className="space-y-2 mb-6 text-left">
-                          {OFFER_SUSTAINABILITY_STEPS.map((step) => {
-                            const catScore = step.questions.reduce((sum, q) => sum + (oqAnswers[q.id] ?? 0), 0);
-                            const catMax   = step.questions.reduce((sum, q) => sum + Math.max(...q.options.map((o) => o.value)), 0);
-                            return (
-                              <div key={step.category} className="flex items-center gap-3">
-                                <span className="text-base w-6 shrink-0">{step.emoji}</span>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex justify-between mb-0.5">
-                                    <span className="text-xs font-bold text-slate-600 truncate">{step.category}</span>
-                                    <span className="text-xs font-black text-slate-700 shrink-0 ml-2">{catScore}/{catMax}</span>
-                                  </div>
-                                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                    <div className="h-full bg-primary rounded-full" style={{ width: `${catMax > 0 ? (catScore / catMax) * 100 : 0}%` }} />
-                                  </div>
-                                </div>
+              ) : (() => {
+                const level = getOfferSustainabilityLevel(oqScore);
+                const pct = oqScore;
+                const r = 54; const circ = 2 * Math.PI * r;
+                return (
+                  <>
+                    <div className="flex flex-col items-center py-4">
+                      <svg width="140" height="140" viewBox="0 0 140 140">
+                        <circle cx="70" cy="70" r={r} fill="none" stroke="#e2e8f0" strokeWidth="10" />
+                        <circle cx="70" cy="70" r={r} fill="none" stroke="#86efac" strokeWidth="10"
+                          strokeDasharray={circ} strokeDashoffset={circ * (1 - pct / 100)}
+                          strokeLinecap="round" transform="rotate(-90 70 70)" className="transition-all duration-700" />
+                        <text x="70" y="65" textAnchor="middle" className="text-3xl font-black fill-slate-900" style={{ fontSize: 28, fontWeight: 900 }}>{oqScore}</text>
+                        <text x="70" y="82" textAnchor="middle" className="fill-slate-400" style={{ fontSize: 12, fontWeight: 700 }}>/100</text>
+                      </svg>
+                      <span className={`mt-2 text-base font-extrabold ${level.color}`}>{level.emoji} {level.label}</span>
+                      <p className="text-sm text-slate-500 mt-1 text-center">{oqScore >= 71 ? "Votre offre est éco-responsable. Excellent !" : oqScore >= 51 ? "Votre offre est sur la bonne voie. Continuez vos efforts !" : "Des améliorations sont possibles pour cette offre."}</p>
+                    </div>
+                    <div className="space-y-3 mb-4">
+                      {OFFER_SUSTAINABILITY_STEPS.map((step) => {
+                        const catScore = step.questions.reduce((sum, q) => sum + (oqAnswers[q.id] ?? 0), 0);
+                        const catMax = step.questions.reduce((sum, q) => sum + Math.max(...q.options.map((o) => o.value)), 0);
+                        return (
+                          <div key={step.category} className="flex items-center gap-3">
+                            <span className="text-base w-6 shrink-0">{step.emoji}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between mb-0.5">
+                                <span className="text-xs font-bold text-slate-600 truncate">{step.category}</span>
+                                <span className="text-xs font-black text-slate-700 shrink-0 ml-2">{catScore}/{catMax}</span>
                               </div>
-                            );
-                          })}
-                        </div>
-
-                        <button
-                          onClick={() => setOqOpen(false)}
-                          disabled={oqSaving}
-                          className="w-full py-3 bg-primary text-slate-900 font-extrabold rounded-xl hover:bg-primary/90 transition-colors"
-                        >
-                          {oqSaving ? "Enregistrement…" : "Fermer"}
-                        </button>
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
+                              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-primary rounded-full" style={{ width: `${catMax > 0 ? (catScore / catMax) * 100 : 0}%` }} />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <button onClick={() => setOqOpen(false)} disabled={oqSaving}
+                      className="w-full py-3 bg-primary text-slate-900 font-extrabold rounded-xl hover:bg-primary/90 transition-colors">
+                      {oqSaving ? "Enregistrement…" : "Fermer"}
+                    </button>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
       );
     })()}
+
     </>
   );
 }

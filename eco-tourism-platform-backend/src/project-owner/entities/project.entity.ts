@@ -9,23 +9,23 @@ import {
 } from 'typeorm';
 import { ProjectOwner } from './project-owner.entity';
 
-@Entity('projects')
-export class Project {
+@Entity('venues')
+export class Venue {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
   @Column('uuid')
-  owner_id!: string;
+  provider_id!: string;
 
   @ManyToOne(() => ProjectOwner)
-  @JoinColumn({ name: 'owner_id', referencedColumnName: 'user_id' })
-  owner!: ProjectOwner;
+  @JoinColumn({ name: 'provider_id', referencedColumnName: 'user_id' })
+  provider!: ProjectOwner;
 
   @Column({ type: 'varchar' })
   name!: string;
 
   @Column({ type: 'simple-array', nullable: true })
-  project_type!: string[] | null;
+  venue_type!: string[] | null;
 
   @Column({ type: 'text', nullable: true })
   description!: string | null;
@@ -78,21 +78,8 @@ export class Project {
   @Column({ type: 'varchar', nullable: true })
   phone!: string | null;
 
-  // Champs Prestataire supplémentaires (proposition encadrant)
-  @Column({ type: 'varchar', nullable: true })
-  whatsapp!: string | null;
-
-  @Column({ type: 'simple-array', nullable: true })
-  secondary_activity_types!: string[] | null;
-
-  @Column({ type: 'simple-array', nullable: true })
-  certifications!: string[] | null;
-
-  @Column({ type: 'text', nullable: true })
-  history!: string | null;
-
-  @Column({ type: 'simple-array', nullable: true })
-  videos!: string[] | null;
+  @Column({ type: 'uuid', nullable: true })
+  organization_id!: string | null;
 
   @CreateDateColumn()
   created_at!: Date;
