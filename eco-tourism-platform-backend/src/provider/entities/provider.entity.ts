@@ -7,6 +7,7 @@ import {
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { User } from '../../users/entities/user.entity';
 
 // Types de prestataires (remplace guide_type + project_type)
 // guide | agence | ecolodge | camping | restaurant | artisan | association | bien_etre | transport
@@ -16,6 +17,10 @@ export class Provider {
   // Même ID que le user (relation 1-1)
   @PrimaryColumn('uuid')
   user_id!: string;
+
+  @OneToOne(() => User)
+  @JoinColumn({ name: 'user_id' })
+  user!: User;
 
   // ── Identité personnelle du prestataire ──────────────────────────────────
   @Column({ type: 'varchar', nullable: true })

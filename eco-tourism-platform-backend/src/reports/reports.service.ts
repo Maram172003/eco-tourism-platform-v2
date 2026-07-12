@@ -1,9 +1,15 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Report } from './entities/report.entity';
 import { User } from '../users/entities/user.entity';
 import { EcoTraveler } from '../eco-traveler/entities/eco-traveler.entity';
+import { Guide } from '../guide/entities/guide.entity';
 import { Provider } from '../provider/entities/provider.entity';
 import { MailService } from '../mail/mail.service';
 
@@ -16,30 +22,57 @@ export class ReportsService {
     private readonly userRepo: Repository<User>,
     @InjectRepository(EcoTraveler)
     private readonly ecoRepo: Repository<EcoTraveler>,
+    @InjectRepository(Guide)
+    private readonly guideRepo: Repository<Guide>,
     @InjectRepository(Provider)
     private readonly providerRepo: Repository<Provider>,
     private readonly mailService: MailService,
   ) {}
 
-  private async getUserInfo(userId: string, role: string) {
-    let entity: any = null;
-    if (role === 'eco_traveler') entity = await this.ecoRepo.findOne({ where: { user_id: userId } });
-    else entity = await this.providerRepo.findOne({ where: { user_id: userId } });
-    const user = await this.userRepo.findOne({ where: { id: userId } });
-    return { user_id: userId, full_name: entity?.full_name ?? null, photo: entity?.photo ?? null, role, email: user?.email ?? null, status: user?.status ?? null };
+  private roleNorm(role: string) {
+    return role === 'provider' ? 'provider' : role;
   }
 
-  async createReport(reporterId: string, reporterRole: string, reportedId: string, reason: string) {
-    if (reporterId === reportedId) throw new BadRequestException('Vous ne pouvez pas vous signaler vous-même.');
+  private async getUserInfo(userId: string, role: string) {
+    const r = this.roleNorm(role);
+    let entity: any = null;
+    if (r === 'eco_traveler')
+      entity = await this.ecoRepo.findOne({ where: { user_id: userId } });
+    else if (r === 'guide')
+      entity = await this.guideRepo.findOne({ where: { user_id: userId } });
+    else entity = await this.providerRepo.findOne({ where: { user_id: userId } });
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    return {
+      user_id: userId,
+      full_name: entity?.full_name ?? null,
+      photo: entity?.photo ?? null,
+      role: r,
+      email: user?.email ?? null,
+      status: user?.status ?? null,
+    };
+  }
 
-    const reportedUser = await this.userRepo.findOne({ where: { id: reportedId } });
+  async createReport(
+    reporterId: string,
+    reporterRole: string,
+    reportedId: string,
+    reason: string,
+  ) {
+    if (reporterId === reportedId)
+      throw new BadRequestException(
+        'Vous ne pouvez pas vous signaler vous-même.',
+      );
+
+    const reportedUser = await this.userRepo.findOne({
+      where: { id: reportedId },
+    });
     if (!reportedUser) throw new NotFoundException('Utilisateur introuvable.');
 
     const report = this.reportRepo.create({
       reporter_id: reporterId,
-      reporter_role: reporterRole,
+      reporter_role: this.roleNorm(reporterRole),
       reported_id: reportedId,
-      reported_role: reportedUser.role,
+      reported_role: this.roleNorm(reportedUser.role),
       reason,
       status: 'pending',
     });
@@ -47,7 +80,9 @@ export class ReportsService {
   }
 
   async getAllReports() {
-    const reports = await this.reportRepo.find({ order: { created_at: 'DESC' } });
+    const reports = await this.reportRepo.find({
+      order: { created_at: 'DESC' },
+    });
     return Promise.all(
       reports.map(async (r) => {
         const reporter = await this.getUserInfo(r.reporter_id, r.reporter_role);
@@ -57,17 +92,27 @@ export class ReportsService {
     );
   }
 
-  async resolveReport(reportId: string, action: string, adminNote: string, banDays?: number) {
+  async resolveReport(
+    reportId: string,
+    action: string,
+    adminNote: string,
+    banDays?: number,
+  ) {
     // Atomic update: only transitions from 'pending' → 'processing' once
     const lockResult = await this.reportRepo
       .createQueryBuilder()
       .update(Report)
       .set({ status: 'processing' })
-      .where('id = :id AND status = :status', { id: reportId, status: 'pending' })
+      .where('id = :id AND status = :status', {
+        id: reportId,
+        status: 'pending',
+      })
       .execute();
 
     if (lockResult.affected === 0) {
-      const existing = await this.reportRepo.findOne({ where: { id: reportId } });
+      const existing = await this.reportRepo.findOne({
+        where: { id: reportId },
+      });
       if (!existing) throw new NotFoundException('Signalement introuvable.');
       throw new BadRequestException('Ce signalement est déjà traité.');
     }
@@ -75,13 +120,25 @@ export class ReportsService {
     const report = await this.reportRepo.findOne({ where: { id: reportId } });
     if (!report) throw new NotFoundException('Signalement introuvable.');
 
-    const reportedUser = await this.userRepo.findOne({ where: { id: report.reported_id } });
-    const reporterUser = await this.userRepo.findOne({ where: { id: report.reporter_id } });
-    const reportedInfo = await this.getUserInfo(report.reported_id, report.reported_role);
+    const reportedUser = await this.userRepo.findOne({
+      where: { id: report.reported_id },
+    });
+    const reporterUser = await this.userRepo.findOne({
+      where: { id: report.reporter_id },
+    });
+    const reportedInfo = await this.getUserInfo(
+      report.reported_id,
+      report.reported_role,
+    );
 
     if (action === 'warn') {
       if (reportedUser) {
-        await this.mailService.sendReportWarning(reportedUser.email, reportedInfo.full_name ?? 'Utilisateur', report.reason, adminNote);
+        await this.mailService.sendReportWarning(
+          reportedUser.email,
+          reportedInfo.full_name ?? 'Utilisateur',
+          report.reason,
+          adminNote,
+        );
       }
     } else if (action === 'ban') {
       if (reportedUser) {
@@ -99,7 +156,12 @@ export class ReportsService {
         reportedUser.refresh_token = null;
         reportedUser.refresh_token_expires_at = null;
         await this.userRepo.save(reportedUser);
-        await this.mailService.sendAccountBanned(reportedUser.email, reportedInfo.full_name ?? 'Utilisateur', adminNote, banDays ?? 0);
+        await this.mailService.sendAccountBanned(
+          reportedUser.email,
+          reportedInfo.full_name ?? 'Utilisateur',
+          adminNote,
+          banDays ?? 0,
+        );
       }
     } else if (action === 'delete') {
       if (reportedUser) {
@@ -109,8 +171,17 @@ export class ReportsService {
 
     // Notify reporter of the decision
     if (reporterUser) {
-      const reporterInfo = await this.getUserInfo(report.reporter_id, report.reporter_role ?? 'provider');
-      await this.mailService.sendReportResult(reporterUser.email, reporterInfo.full_name ?? 'Utilisateur', action, reportedInfo.full_name ?? 'l\'utilisateur signalé', adminNote);
+      const reporterInfo = await this.getUserInfo(
+        report.reporter_id,
+        report.reporter_role,
+      );
+      await this.mailService.sendReportResult(
+        reporterUser.email,
+        reporterInfo.full_name ?? 'Utilisateur',
+        action,
+        reportedInfo.full_name ?? "l'utilisateur signalé",
+        adminNote,
+      );
     }
 
     report.status = action === 'dismiss' ? 'dismissed' : 'resolved';

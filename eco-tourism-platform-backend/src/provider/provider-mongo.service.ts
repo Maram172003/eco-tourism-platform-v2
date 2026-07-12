@@ -4,10 +4,10 @@ import { Model } from 'mongoose';
 import {
   ProjectEngagement,
   ProjectEngagementDocument,
-} from './schemas/project-engagement.schema';
+} from '../project-owner/schemas/project-engagement.schema';
 
 @Injectable()
-export class ProjectOwnerMongoService {
+export class ProviderMongoService {
   constructor(
     @InjectModel(ProjectEngagement.name)
     private readonly engagementModel: Model<ProjectEngagementDocument>,
