@@ -26,6 +26,7 @@ import { OrganizationModule } from './organization/organization.module';
 import { ProviderActivityModule } from './provider-activity/provider-activity.module';
 import { GuideModule } from './guide/guide.module';
 import { CircuitModule } from './circuit/circuit.module';
+import { CertificationModule } from './certification/certification.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { CircuitModule } from './circuit/circuit.module';
     ProviderActivityModule,
     GuideModule,
     CircuitModule,
+    CertificationModule,
   ],
   providers: [GoogleStrategy, {
     provide: APP_GUARD,
