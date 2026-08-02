@@ -52,11 +52,16 @@ type OwnerProfile = {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PROJECT_TYPES = [
-  { value: "hebergement", label: "Hébergement", icon: "hotel" },
-  { value: "restauration", label: "Restauration", icon: "restaurant" },
-  { value: "artisanat", label: "Artisanat", icon: "brush" },
-  { value: "agence", label: "Agence de voyage", icon: "luggage" },
-  { value: "centre_loisir", label: "Centre de loisirs", icon: "sports" },
+  { value: "accommodation", label: "Hébergement", icon: "hotel", description: "Hôtel, éco-lodge, gîte" },
+  { value: "camping", label: "Camping", icon: "camping", description: "Camping, espace tente" },
+  { value: "restaurant", label: "Restaurant", icon: "restaurant", description: "Restaurant, café, food truck" },
+  { value: "activity_center", label: "Centre d'activités", icon: "sports", description: "Sports, loisirs, plein air" },
+  { value: "artisan", label: "Artisanat", icon: "brush", description: "Artisanat local, artisan" },
+  { value: "farm", label: "Ferme écologique", icon: "eco", description: "Agrotourisme, ferme" },
+  { value: "transport", label: "Transport", icon: "directions_car", description: "Transport, transfert, location" },
+  { value: "event_space", label: "Espace événementiel", icon: "celebration", description: "Événements, séminaires" },
+  { value: "tourism_association", label: "Association tourisme", icon: "groups", description: "Association, guide local" },
+  { value: "eco_park", label: "Parc écologique", icon: "eco", description: "Parc naturel, réserve" },
 ];
 
 const ECO_PRACTICES = [

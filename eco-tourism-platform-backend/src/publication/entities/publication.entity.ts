@@ -42,6 +42,18 @@ export class Publication {
   @Column({ type: 'varchar', nullable: true })
   region!: string | null;
 
+  // Catégorie du lieu (restaurant, monument, nature, hébergement, plage, musée, artisanat, aventure)
+  @Column({ type: 'varchar', nullable: true })
+  category!: string | null;
+
+  // Tags libres
+  @Column({ type: 'simple-array', nullable: true })
+  tags!: string[] | null;
+
+  // Score de popularité calculé (likes + comments*2 + contributions*3)
+  @Column({ type: 'int', default: 0 })
+  popularity_score!: number;
+
   // pending = en attente de validation / approved = visible publiquement / rejected = refusé
   @Column({ type: 'varchar', default: 'pending' })
   status!: string;

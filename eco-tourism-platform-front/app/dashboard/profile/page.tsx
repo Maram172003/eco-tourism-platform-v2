@@ -12,7 +12,7 @@ export default function ProfileRouter() {
     const { role } = JSON.parse(stored) as { role: string };
     if (role === "eco_traveler") router.push("/profile/ecovoyageur");
     else if (role === "guide") router.push("/profile/guide");
-    else if (role === "project") router.push("/profile/project-owner");
+    else if (role === "provider") router.push("/profile/provider");
     else router.push("/auth/login");
   }, [router]);
 
