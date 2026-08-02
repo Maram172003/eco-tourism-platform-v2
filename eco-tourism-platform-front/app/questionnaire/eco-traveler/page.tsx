@@ -126,7 +126,7 @@ function ScoreCard({ result }: { result: ScoreResult }) {
 
             <button
                 onClick={() => router.push("/dashboard")}
-                className="w-full max-w-md py-4 bg-primary text-slate-900 font-extrabold rounded-2xl shadow-lg shadow-primary/30 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
+                className="w-full max-w-md py-4 bg-primary text-slate-900 font-extrabold rounded-2xl shadow-lg shadow-emerald-500/30 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
             >
                 <span className="material-symbols-outlined">dashboard</span>
                 Accéder à mon tableau de bord
@@ -363,7 +363,7 @@ export default function QuestionnairePage() {
                                     <button
                                         type="button"
                                         onClick={() => setCurrentQuestion((c) => c + 1)}
-                                        className="flex items-center gap-2 px-5 py-3 rounded-xl bg-primary text-slate-900 font-extrabold text-sm shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all"
+                                        className="flex items-center gap-2 px-5 py-3 rounded-xl bg-primary text-slate-900 font-extrabold text-sm shadow-lg shadow-emerald-500/20 hover:-translate-y-0.5 transition-all"
                                     >
                                         Suivant <ChevronRight className="w-4 h-4" />
                                     </button>
@@ -372,7 +372,7 @@ export default function QuestionnairePage() {
                                         type="button"
                                         onClick={handleSubmit}
                                         disabled={!allAnswered || submitting}
-                                        className="flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-slate-900 font-extrabold text-sm shadow-lg shadow-primary/20 hover:-translate-y-0.5 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-slate-900 font-extrabold text-sm shadow-lg shadow-emerald-500/20 hover:-translate-y-0.5 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {submitting ? "Calcul..." : (
                                             <>

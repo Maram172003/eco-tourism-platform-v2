@@ -20,7 +20,7 @@ type Props = {
   shareUrl: string;
   pubTitle?: string;
   /** API base for item-level endpoints. Default: "/publications"
-   *  For offers: "/interactions/offer", for projects: "/interactions/project" */
+   *  For offers: "/interactions/offer", for projects: "/interactions/venue" */
   itemApiBase?: string;
   /** API base for comment-level endpoints. Default: same as itemApiBase
    *  For interactions module use "/interactions" */
@@ -34,7 +34,7 @@ type Props = {
 };
 
 const ROLE_LABEL: Record<string, string> = {
-  eco_traveler: "Éco-Voyageur", guide: "Guide", project_owner: "Propriétaire", admin: "Admin",
+  eco_traveler: "Éco-Voyageur", guide: "Guide", provider: "Propriétaire", admin: "Admin",
 };
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
@@ -278,7 +278,7 @@ export default function PubInteractions({ pubId, token, viewerId, shareUrl, pubT
       for (const f of followings) {
         if (seen.has(f.user_id)) continue;
         seen.add(f.user_id);
-        list.push({ user_id: f.user_id, full_name: f.full_name, photo: f.photo, role: f._type === "project" ? "project_owner" : f._type });
+        list.push({ user_id: f.user_id, full_name: f.full_name, photo: f.photo, role: f._type === "provider" ? "provider" : f._type });
       }
 
       setContacts(list);
@@ -305,12 +305,12 @@ export default function PubInteractions({ pubId, token, viewerId, shareUrl, pubT
             ? apiFetch<any[]>(`/eco-traveler/search?q=${q}`, { headers }).catch(() => [])
             : Promise.resolve([]),
           apiFetch<any[]>(`/guide/public/search?q=${q}`, { headers }).catch(() => []),
-          apiFetch<any[]>(`/project-owner/public/search?q=${q}`, { headers }).catch(() => []),
+          apiFetch<any[]>(`/providers/public/search?q=${q}`, { headers }).catch(() => []),
         ]);
         const raw: Contact[] = [
           ...travelers.map((u: any) => ({ user_id: u.user_id, full_name: u.full_name, photo: u.photo, role: "eco_traveler" })),
           ...guides.map((u: any) => ({ user_id: u.user_id, full_name: u.full_name, photo: u.photo, role: "guide" })),
-          ...owners.map((u: any) => ({ user_id: u.user_id, full_name: u.full_name, photo: u.photo, role: "project_owner" })),
+          ...owners.map((u: any) => ({ user_id: u.user_id, full_name: u.full_name, photo: u.photo, role: "provider" })),
         ].filter((u) => u.user_id !== viewerId);
         const seen = new Set<string>();
         setSearchResults(raw.filter((u) => { if (seen.has(u.user_id)) return false; seen.add(u.user_id); return true; }));
@@ -362,9 +362,9 @@ export default function PubInteractions({ pubId, token, viewerId, shareUrl, pubT
             {(contributionsCount ?? 0) > 0 && contributionsContent && (
               <button
                 onClick={() => setContribOpen((o) => !o)}
-                className="flex items-center gap-1 font-medium text-emerald-600 hover:underline hover:text-emerald-700 transition-colors"
+                className="flex items-center gap-1 font-medium text-primary hover:underline hover:text-emerald-700 transition-colors"
               >
-                <span className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center">
+                <span className="w-4 h-4 rounded-full bg-primary flex items-center justify-center">
                   <svg width="8" height="8" viewBox="0 0 24 24" fill="white"><path d="M17 8C8 10 5.9 16.17 3.82 22c3.67-4 8.53-5.12 12.18-5.12V22l7-7-7-7v3z"/></svg>
                 </span>
                 {contributionsCount} contribution{(contributionsCount ?? 0) > 1 ? "s" : ""}
@@ -402,7 +402,7 @@ export default function PubInteractions({ pubId, token, viewerId, shareUrl, pubT
             <button
               onClick={(e) => { e.stopPropagation(); setContribOpen((o) => !o); }}
               className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold transition-all ${
-                contribOpen ? "text-emerald-600 bg-emerald-50/60" : "text-slate-500 hover:text-emerald-500 hover:bg-emerald-50/50"
+                contribOpen ? "text-primary bg-emerald-50/60" : "text-slate-500 hover:text-primary hover:bg-emerald-50/50"
               }`}
             >
               <Leaf size={16} />
@@ -416,7 +416,7 @@ export default function PubInteractions({ pubId, token, viewerId, shareUrl, pubT
         <div ref={shareRef} className="flex-1 relative">
           <button
             onClick={(e) => { e.stopPropagation(); setShareDropdown((o) => !o); }}
-            className={`w-full flex items-center justify-center gap-2 py-2.5 text-xs font-bold transition-all ${copied ? "text-emerald-500" : shareDropdown ? "text-slate-700 bg-slate-50" : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"}`}>
+            className={`w-full flex items-center justify-center gap-2 py-2.5 text-xs font-bold transition-all ${copied ? "text-primary" : shareDropdown ? "text-slate-700 bg-slate-50" : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"}`}>
             {copied ? <Check size={16} /> : <Share2 size={16} />}
             {copied ? "Copié !" : "Partager"}
           </button>
@@ -616,7 +616,7 @@ export default function PubInteractions({ pubId, token, viewerId, shareUrl, pubT
               /* ── Success ── */
               <div className="flex-1 flex flex-col items-center justify-center py-12 px-6 text-center">
                 <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center mb-4">
-                  <Check size={28} className="text-emerald-500" />
+                  <Check size={28} className="text-primary" />
                 </div>
                 <h4 className="font-extrabold text-slate-800 text-lg mb-1">Publication envoyée !</h4>
                 <p className="text-sm text-slate-500 mb-6">Le message a bien été envoyé à <span className="font-bold text-slate-700">{selectedContact?.full_name}</span>.</p>

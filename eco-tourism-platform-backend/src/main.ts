@@ -2,11 +2,11 @@ import 'reflect-metadata';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import * as session from 'express-session';
 
 import { AppModule } from './app.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
-
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -17,9 +17,22 @@ async function bootstrap() {
   app.use(require('express').json({ limit: '5mb' }));
   app.use(require('express').urlencoded({ limit: '5mb', extended: true }));
 
+  app.use(
+    session({
+      secret: process.env.JWT_SECRET || 'dev-session-secret',
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        maxAge: 1000 * 60 * 60, // 1h
+      },
+    }),
+  );
+
   const allowedOrigins = [
     'http://localhost:3000',
-    'http://localhost:4000',
+    'http://localhost:3002',
     process.env.FRONTEND_URL,
   ].filter(Boolean) as string[];
 
@@ -28,6 +41,17 @@ async function bootstrap() {
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+  });
+
+  app.use((req, res, next) => {
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' http://localhost:3001; frame-ancestors 'none'; base-uri 'self'",
+    );
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
   });
 
   app.setGlobalPrefix('api');
@@ -42,10 +66,7 @@ async function bootstrap() {
 
   const reflector = app.get(Reflector);
 
-  app.useGlobalGuards(
-    new JwtAuthGuard(reflector),
-    new RolesGuard(reflector),
-  );
+  app.useGlobalGuards(new JwtAuthGuard(reflector), new RolesGuard(reflector));
 
   const config = new DocumentBuilder()
     .setTitle('Eco Tourism Platform ')
@@ -70,12 +91,11 @@ async function bootstrap() {
     },
   });
 
-  const port = Number(process.env.PORT || 4000);
-
+  const port = Number(process.env.PORT || 3000);
   await app.listen(port);
 
-  console.log(`✅ API: http://localhost:${port}/api`);
-  console.log(`📘 Swagger: http://localhost:${port}/swagger`);
+  console.log(`API: http://localhost:${port}/api`);
+  console.log(`Swagger: http://localhost:${port}/swagger`);
 }
 
 bootstrap();
