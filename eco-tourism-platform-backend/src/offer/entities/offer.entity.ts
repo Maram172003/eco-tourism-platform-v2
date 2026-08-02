@@ -2,73 +2,70 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { Venue } from '../../provider/entities/venue.entity';
+import { OfferCategory } from './offer-category.entity';
+import { OfferItem } from './offer-item.entity';
 
 @Entity('offers')
 export class Offer {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  // ID du Provider qui a créé cette offre (= providers.user_id)
+  // Qui a créé cette offre (polymorphisme guide / provider)
   @Column('uuid')
   author_id!: string;
 
   @Column({ type: 'varchar', default: 'provider' })
-  author_type!: string;
+  author_type!: string; // 'guide' | 'provider' | 'provider' (legacy)
+
+  // FK vers l'établissement (nullable : les guides n'ont pas d'établissement)
+  @Column({ type: 'uuid', nullable: true })
+  venue_id!: string | null;
+
+  @ManyToOne(() => Venue, {
+    nullable: true,
+    onDelete: 'SET NULL',
+    eager: false,
+  })
+  @JoinColumn({ name: 'venue_id' })
+  venue!: Venue | null;
+
+  // Catégorie (remplace progressivement offer_type)
+  @Column({ type: 'uuid', nullable: true })
+  category_id!: string | null;
+
+  @ManyToOne(() => OfferCategory, { nullable: true })
+  @JoinColumn({ name: 'category_id' })
+  category!: OfferCategory | null;
 
   @Column({ type: 'varchar' })
   title!: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   description!: string | null;
 
+  // Prix indicatif (auto-calculé depuis les prix des items si null)
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   price!: number | null;
+
+  // Type de tarification
+  @Column({ type: 'varchar', nullable: true })
+  price_type!: string | null;
+  // 'per_person' | 'per_group' | 'per_night' | 'per_unit' | 'on_request'
 
   // Durée en texte libre : "2h", "1 journée", "3 jours"
   @Column({ type: 'varchar', nullable: true })
   duration!: string | null;
 
-  // 9 types : hebergement | activite | circuit | restauration | artisanat | location_materiel | volontariat | bien_etre | transport
+  // Type d'offre (déprécié, migrer vers category_id)
   @Column({ type: 'varchar', nullable: true })
   offer_type!: string | null;
-
-  @Column({ type: 'varchar', nullable: true })
-  offer_subtype!: string | null;
-
-  // instant_stock | calendar_stock | scheduled | recurring | on_request | mixed
-  @Column({ type: 'varchar', nullable: true })
-  fulfillment_mode!: string | null;
-
-  // instant | manual | conditional
-  @Column({ type: 'varchar', default: 'manual' })
-  confirmation_mode!: string;
-
-  // per_person | per_group | per_night | per_unit | on_request
-  @Column({ type: 'varchar', default: 'per_person' })
-  price_type!: string;
-
-  @Column({ type: 'int', nullable: true })
-  capacity!: number | null;
-
-  @Column({ type: 'int', nullable: true })
-  booking_deadline_hours!: number | null;
-
-  @Column({ type: 'int', nullable: true })
-  confirmation_deadline_hours!: number | null;
-
-  // Délai fabrication artisanat (jours)
-  @Column({ type: 'int', nullable: true })
-  production_delay_days!: number | null;
-
-  @Column({ type: 'int', nullable: true, default: 0 })
-  deposit_percentage!: number | null;
-
-  // Champs spécifiques au type (équipements, menus, matériaux...)
-  @Column({ type: 'jsonb', nullable: true })
-  details!: Record<string, unknown> | null;
 
   @Column({ type: 'simple-array', nullable: true })
   images!: string[] | null;
@@ -79,11 +76,25 @@ export class Offer {
   @Column({ type: 'varchar', nullable: true })
   region!: string | null;
 
+  // Adresse postale complète (distincte du point de rendez-vous)
+  @Column({ type: 'varchar', nullable: true })
+  address!: string | null;
+
+  // Coordonnées GPS de l'adresse (vs meeting_lat/lng pour le point de rendez-vous)
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  latitude!: number | null;
+
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  longitude!: number | null;
+
   @Column({ type: 'varchar', nullable: true })
   meeting_point!: string | null;
 
   @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
   meeting_lat!: number | null;
+
+  @Column({ type: 'varchar', default: 'fixed' })
+  location_type!: string;
 
   @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
   meeting_lng!: number | null;
@@ -103,23 +114,55 @@ export class Offer {
   @Column({ type: 'int', nullable: true })
   sustainability_score!: number | null;
 
-  // Lien vers l'organisation qui publie l'offre
-  @Column({ type: 'uuid', nullable: true })
-  organization_id!: string | null;
+  // Pourcentage d'acompte (0-100%)
+  @Column({ type: 'int', nullable: true, default: 0 })
+  deposit_percentage!: number | null;
 
-  // Lien optionnel vers la ProviderActivity source (pour pré-remplissage et contraintes)
-  @Column({ type: 'uuid', nullable: true })
-  activity_id!: string | null;
+  // Délai de préparation (artisanat, fabrication)
+  @Column({ type: 'int', nullable: true })
+  production_delay_days!: number | null;
 
-  // Sous-types multiples : ['dortoir', 'suite'] — remplace offer_subtype pour les offres multi
-  @Column({ type: 'jsonb', nullable: true })
-  offer_subtypes!: string[] | null;
+  // Mode d'exécution : 'instant_stock' | 'scheduled' | 'recurring' | 'on_request' | 'mixed'
+  @Column({ type: 'varchar', nullable: true })
+  fulfillment_mode!: string | null;
 
-  // 'single' | 'variant' (voyageur choisit) | 'package' (tout inclus)
+  // 'automatic' = confirmation instantanée, 'manual' = le provider valide
+  @Column({ type: 'varchar', default: 'automatic' })
+  confirmation_mode!: string;
+
+  // pending = en attente / approved = visible / rejected = refusé / archived = masqué / inactive = désactivé
+  @Column({ type: 'varchar', default: 'pending' })
+  status!: string;
+
+  // Override du requires_guide de la catégorie :
+  //   NULL = utiliser la catégorie (OfferCategory.requires_guide)
+  //   TRUE = obligatoire pour cette offre
+  //   FALSE = pas nécessaire (même si la catégorie l'exige)
+  @Column({ type: 'boolean', nullable: true, default: null })
+  requires_guide_override!: boolean | null;
+
+  // Prix final auto-calculé = base_price + applied_guide_price
+  // Visible par le voyageur. Le détail interne reste caché.
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  final_price!: number | null;
+
+  // true = toutes les collaborations sont complétées, le prestataire peut confirmer la publication
+  @Column({ type: 'boolean', default: false })
+  publish_ready!: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  rejection_reason!: string | null;
+
+  // Soft delete — préserver l'historique des réservations
+  @Column({ type: 'boolean', default: false })
+  is_deleted!: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
+  deleted_at!: Date | null;
+
   @Column({ type: 'varchar', default: 'single' })
   offer_mode!: string;
 
-  // 'period' | 'weekly' | 'specific' | 'always'
   @Column({ type: 'varchar', nullable: true })
   availability_mode!: string | null;
 
@@ -129,12 +172,43 @@ export class Offer {
   @Column({ type: 'date', nullable: true })
   availability_end!: Date | null;
 
-  // pending = en attente de validation / approved = visible publiquement / rejected = refusé
-  @Column({ type: 'varchar', default: 'pending' })
-  status!: string;
+  // Disponibilité au format agenda (SlotLike) pour la synchronisation guide/prestataire
+  // { type: 'specific'|'range'|'recurring', dates?, start_date?, end_date?, days_of_week?, time_slots? }
+  @Column({ type: 'jsonb', nullable: true })
+  disponibilite!: Record<string, any> | null;
 
-  @Column({ type: 'text', nullable: true })
-  rejection_reason!: string | null;
+  @Column({ type: 'varchar', nullable: true })
+  offer_subtype!: string | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  offer_subtypes!: string[] | null;
+
+  @Column({ type: 'int', nullable: true })
+  capacity!: number | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  organization_id!: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  activity_id!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  cover_image!: string | null;
+
+  @Column({ type: 'boolean', default: false })
+  featured!: boolean;
+
+  @Column({ type: 'jsonb', nullable: true })
+  sustainability_certifications!: string[] | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  sustainability_practices!: string[] | null;
+
+  @Column({ type: 'decimal', precision: 8, scale: 2, nullable: true })
+  carbon_estimate_kg!: number | null;
+
+  @OneToMany(() => OfferItem, (item) => item.offer)
+  items!: OfferItem[];
 
   @CreateDateColumn()
   created_at!: Date;

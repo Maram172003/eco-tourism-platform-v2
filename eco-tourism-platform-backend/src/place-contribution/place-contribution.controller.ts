@@ -1,6 +1,14 @@
 import {
-  Body, Controller, Delete, Get, Param, Post, Query, Req,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { PlaceContributionService } from './place-contribution.service';
 import { CreateContributionDto } from './dto/place-contribution.dto';
@@ -8,7 +16,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/roles.enum';
 import { Public } from '../common/decorators/public.decorator';
 
-const CONTRIBUTOR_ROLES = [Role.ECO_TRAVELER, Role.GUIDE, Role.PROJECT];
+const CONTRIBUTOR_ROLES = [Role.ECO_TRAVELER, Role.GUIDE, Role.PROVIDER];
 const ALL_ROLES = [...CONTRIBUTOR_ROLES, Role.ADMIN];
 
 @ApiTags('Place Contributions')
@@ -16,7 +24,8 @@ const ALL_ROLES = [...CONTRIBUTOR_ROLES, Role.ADMIN];
 export class PlaceContributionController {
   constructor(private readonly service: PlaceContributionService) {}
 
-  @ApiBearerAuth('bearer') @Roles(...CONTRIBUTOR_ROLES)
+  @ApiBearerAuth('bearer')
+  @Roles(...CONTRIBUTOR_ROLES)
   @Post('places/:publicationId/contributions')
   create(
     @Req() req: any,
@@ -26,6 +35,7 @@ export class PlaceContributionController {
     return this.service.create(publicationId, req.user.sub, req.user.role, dto);
   }
 
+  @SkipThrottle()
   @Public()
   @Get('places/:publicationId/contributions')
   findByPublication(
@@ -35,7 +45,8 @@ export class PlaceContributionController {
     return this.service.findByPublication(publicationId, viewer);
   }
 
-  @ApiBearerAuth('bearer') @Roles(...CONTRIBUTOR_ROLES)
+  @ApiBearerAuth('bearer')
+  @Roles(...CONTRIBUTOR_ROLES)
   @Post('contributions/:id/vote')
   toggleVote(
     @Req() req: any,
@@ -45,7 +56,8 @@ export class PlaceContributionController {
     return this.service.toggleVote(id, req.user.sub, body?.imageIndex);
   }
 
-  @ApiBearerAuth('bearer') @Roles(...ALL_ROLES)
+  @ApiBearerAuth('bearer')
+  @Roles(...ALL_ROLES)
   @Delete('contributions/:id')
   remove(@Req() req: any, @Param('id') id: string) {
     return this.service.remove(id, req.user.sub, req.user.role);

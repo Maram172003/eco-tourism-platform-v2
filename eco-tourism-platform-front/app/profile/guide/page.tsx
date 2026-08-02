@@ -7,11 +7,14 @@ import {
   Plus, Edit3, ShieldCheck, MapPin, Calendar, Leaf, ArrowLeft,
   LayoutGrid, Tag, Users, Info, Sparkles, ArrowRight, Send, X, Search, UserPlus,
   Clock, ChevronLeft, ChevronRight, Check, Globe, Star, BookOpen,
-  MoreVertical, UserX, ShieldBan, Flag,
+  MoreVertical, UserX, ShieldBan, Flag, BarChart3, Route, Handshake, CalendarDays,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import MessagerieWidget from "@/components/MessagerieWidget";
 import PubInteractions from "@/components/PubInteractions";
+import GuideAnalytics from "@/components/GuideAnalytics";
+import GuideCollaborationsTab from "@/components/collaboration/GuideCollaborationsTab";
+import AgendaManager from "@/components/collaboration/AgendaManager";
 
 const MapPicker = dynamic(() => import("@/components/map/MapPicker"),
   { ssr: false, loading: () => <div className="h-[268px] rounded-2xl bg-slate-100 animate-pulse" /> }
@@ -58,7 +61,7 @@ type GuideProfile = {
   years_experience: number | null;
   sustainability_score: number | null;
   feedback_received: number; reservations_handled: number;
-  skills_activities: string[]; skills_landscapes: string[]; certifications: { label: string; proof: string; _id?: string }[];
+  skills_activities: string[]; skills_landscapes: string[]; certifications: (string | { label: string; proof: string })[];
   badges: { label: string; obtained_at: string }[];
 };
 
@@ -72,6 +75,27 @@ type Offer = {
   min_age: number | null; cancellation_policy: string | null;
   sustainability_score: number | null;
   images?: string[] | null; cover_image?: string | null;
+};
+
+type Circuit = {
+  id: string; title: string; description: string | null;
+  base_price: number | null; currency: string;
+  duration_days: number | null; duration_nights: number | null;
+  region: string | null; status: string; created_at: string;
+  difficulty_level: string | null;
+  images?: string[] | null; cover_image?: string | null;
+  max_participants: number | null;
+};
+
+type GuideOffering = {
+  id: string; guide_id: string; title: string; description: string | null;
+  languages: string[] | null; price: number; pricing_unit: string;
+  min_travelers: number | null; max_travelers: number | null;
+  service_zone_type: string; lat: number | null; lng: number | null;
+  radius_km: number | null; zone_governorate: string | null;
+  zone_municipality: string | null; displacement_allowed: boolean;
+  displacement_max_km: number | null; displacement_type: string | null;
+  status: string; created_at: string;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -130,7 +154,7 @@ const OFFER_SUSTAINABILITY_STEPS = [
 
 function getOfferSustainabilityLevel(score: number) {
   if (score >= 86) return { label: "Offre Ambassadrice Éco Voyage", color: "text-primary",      bg: "bg-primary/10",   emoji: "⭐" };
-  if (score >= 71) return { label: "Offre Éco-Responsable",         color: "text-emerald-600", bg: "bg-emerald-50",   emoji: "🌿" };
+  if (score >= 71) return { label: "Offre Éco-Responsable",         color: "text-primary", bg: "bg-emerald-50",   emoji: "🌿" };
   if (score >= 51) return { label: "Offre Engagée",                 color: "text-teal-600",    bg: "bg-teal-50",      emoji: "🤝" };
   if (score >= 31) return { label: "Offre Sensibilisée",            color: "text-blue-600",    bg: "bg-blue-50",      emoji: "💡" };
   return              { label: "Offre Conventionnelle",              color: "text-slate-500",   bg: "bg-slate-100",    emoji: "📋" };
@@ -172,73 +196,6 @@ const LANDSCAPES_LIST = [
   { value: "lake",        label: "Lacs & Zones humides" },
 ];
 
-function ProofInput({ proof, onChange }: { proof: string; onChange: (v: string) => void }) {
-  const [mode, setMode] = useState<"url" | "image">("url");
-  const isImage = proof.startsWith("data:");
-
-  function handleImage(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => onChange(reader.result as string);
-    reader.readAsDataURL(file);
-  }
-
-  if (isImage) {
-    return (
-      <div className="flex items-center gap-3 p-2 bg-slate-50 border border-slate-200 rounded-xl">
-        <img src={proof} alt="Justificatif" className="w-10 h-10 object-cover rounded-lg shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-bold text-slate-700">Justificatif</p>
-          <p className="text-[10px] text-slate-400">Image uploadée</p>
-        </div>
-        <button type="button" onClick={() => onChange("")} className="text-slate-400 hover:text-red-500 transition-colors shrink-0">
-          <span className="material-symbols-outlined text-base">delete</span>
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="flex gap-2">
-        <button type="button" onClick={() => setMode("url")}
-          className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full border transition-all
-            ${mode === "url" ? "bg-primary border-primary text-slate-900" : "border-slate-200 text-slate-500 hover:border-primary/40"}`}>
-          <span className="material-symbols-outlined text-xs">link</span> URL
-        </button>
-        <button type="button" onClick={() => setMode("image")}
-          className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full border transition-all
-            ${mode === "image" ? "bg-primary border-primary text-slate-900" : "border-slate-200 text-slate-500 hover:border-primary/40"}`}>
-          <span className="material-symbols-outlined text-xs">photo_camera</span> Photo
-        </button>
-        {proof && (
-          <button type="button" onClick={() => onChange("")} className="ml-auto text-[10px] text-red-400 hover:text-red-600 font-bold flex items-center gap-0.5">
-            <span className="material-symbols-outlined text-xs">delete</span> Supprimer
-          </button>
-        )}
-      </div>
-      {mode === "url" ? (
-        <div className="relative">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-base">link</span>
-          <input type="url" value={proof} onChange={(e) => onChange(e.target.value)}
-            placeholder="https://exemple.com/certificat.pdf"
-            className="w-full pl-9 pr-4 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary text-slate-700 placeholder:text-slate-400 font-medium" />
-        </div>
-      ) : (
-        <label className="flex items-center gap-3 p-2.5 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all">
-          <span className="material-symbols-outlined text-slate-400 text-xl">upload_file</span>
-          <div>
-            <p className="text-xs font-bold text-slate-600">Cliquer pour uploader</p>
-            <p className="text-[10px] text-slate-400">JPG, PNG — max 2Mo</p>
-          </div>
-          <input type="file" accept="image/*" className="hidden" onChange={handleImage} />
-        </label>
-      )}
-    </div>
-  );
-}
-
 const CERTIFICATIONS_LIST = [
   "Guide certifié Éco-Voyage",
   "Premiers secours (PSC1)",
@@ -254,7 +211,7 @@ const LANGUAGES_LIST = [
   { value: "de", label: "Allemand" }, { value: "it", label: "Italien" },
 ];
 
-type Tab = "tout" | "offres" | "reseau" | "apropos";
+type Tab = "tout" | "offres" | "circuits" | "statistiques" | "reseau" | "collaborations" | "agenda" | "apropos";
 
 // ─── Botanical SVG Cover ──────────────────────────────────────────────────────
 
@@ -291,6 +248,8 @@ export default function GuideProfilePage() {
 
   const [profile,   setProfile]   = useState<GuideProfile | null>(null);
   const [offers,    setOffers]    = useState<Offer[]>([]);
+  const [circuits,  setCircuits]  = useState<Circuit[]>([]);
+  const [guideOfferings, setGuideOfferings] = useState<GuideOffering[]>([]);
   const [token,     setToken]     = useState("");
   const [loading,   setLoading]   = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("tout");
@@ -350,8 +309,8 @@ export default function GuideProfilePage() {
   const [editSpecialties,    setEditSpecialties]    = useState<string[]>([]);
   const [editLangsSpoken,    setEditLangsSpoken]    = useState<string[]>([]);
   const [editLandscapes,     setEditLandscapes]     = useState<string[]>([]);
-  const [editCertifications, setEditCertifications] = useState<{ label: string; proof: string }[]>([]);
-  const [customCertPool,    setCustomCertPool]    = useState<{ label: string; proof: string }[]>([]);
+  const [editCertifications, setEditCertifications] = useState<string>("");
+  const [structuredCerts, setStructuredCerts] = useState<any[]>([]);
   const [editProfileSaving,  setEditProfileSaving]  = useState(false);
   const [editProfileError,   setEditProfileError]   = useState("");
 
@@ -361,16 +320,21 @@ export default function GuideProfilePage() {
       if (!tkn) { router.push("/auth/login"); return; }
       setToken(tkn);
       try {
-        const [p, myOffers] = await Promise.all([
+        const [p, myOffers, myCircuits] = await Promise.all([
           apiFetch<GuideProfile>("/guide/profile", { headers: { Authorization: `Bearer ${tkn}` } }),
           apiFetch<Offer[]>("/offers/mine", { headers: { Authorization: `Bearer ${tkn}` } }).catch(() => [] as Offer[]),
+          apiFetch<Circuit[]>("/circuits/mine", { headers: { Authorization: `Bearer ${tkn}` } }).catch(() => [] as Circuit[]),
         ]);
         setProfile(p);
+        apiFetch<GuideOffering[]>("/guide-offerings/mine", { headers: { Authorization: `Bearer ${tkn}` } }).then((g) => setGuideOfferings(g)).catch(() => {});
         const offersWithCover = myOffers.map((o) => {
           const validImages = o.images?.filter((url) => url.startsWith("http")) ?? null;
           return { ...o, images: validImages?.length ? validImages : null, cover_image: o.cover_image ?? validImages?.[0] ?? null };
         });
         setOffers(offersWithCover);
+        setCircuits(myCircuits);
+        // Fetch structured certifications from API
+        apiFetch<any[]>(`/certifications/user/${p.user_id}`).then((c) => setStructuredCerts(c)).catch(() => {});
         // Load network in background
         Promise.all([
           apiFetch<NetUser[]>("/follows/following/profiles", { headers: { Authorization: `Bearer ${tkn}` } }).catch(() => []),
@@ -392,8 +356,8 @@ export default function GuideProfilePage() {
     if (!netSearch.trim() || !token) { setNetResults([]); return; }
     const t = setTimeout(() => {
       setNetLoading(true);
-      apiFetch<any[]>(`/project-owner/public/search?q=${encodeURIComponent(netSearch)}`, { headers: { Authorization: `Bearer ${token}` } })
-        .then((r) => setNetResults(r.map((o) => ({ user_id: o.user_id, full_name: o.full_name, photo: o.photo, _type: "project", sub: o.organization ?? null }))))
+      apiFetch<any[]>(`/providers/public/search?q=${encodeURIComponent(netSearch)}`, { headers: { Authorization: `Bearer ${token}` } })
+        .then((r) => setNetResults(r.map((o) => ({ user_id: o.user_id, full_name: o.full_name, photo: o.photo, _type: "provider", sub: o.organization ?? null }))))
         .catch(() => setNetResults([]))
         .finally(() => setNetLoading(false));
     }, 350);
@@ -645,9 +609,7 @@ export default function GuideProfilePage() {
     setEditSpecialties(profile.skills_activities ?? profile.specialties ?? []);
     setEditLangsSpoken(profile.languages_spoken ?? []);
     setEditLandscapes(profile.skills_landscapes ?? []);
-    const allCertsFromProfile = (profile.certifications ?? []).map((c) => ({ label: c.label, proof: c.proof ?? "" }));
-    setEditCertifications(allCertsFromProfile);
-    setCustomCertPool(allCertsFromProfile.filter((c) => !CERTIFICATIONS_LIST.includes(c.label)));
+    setEditCertifications((profile.certifications ?? []).join("\n"));
     setEditProfileError("");
     setEditProfileOpen(true);
   }
@@ -665,6 +627,8 @@ export default function GuideProfilePage() {
       else if (editProfilePhoto === null) photoUrl = undefined;
       if (editProfileCover?.file) coverUrl = await uploadImage(editProfileCover.file);
       else if (editProfileCover === null) coverUrl = undefined;
+
+      const certs = editCertifications.split("\n").map((s) => s.trim()).filter(Boolean);
 
       const [updated] = await Promise.all([
         apiFetch<GuideProfile>("/guide/profile", {
@@ -689,7 +653,7 @@ export default function GuideProfilePage() {
           body: JSON.stringify({
             years_experience: editProfileForm.years_experience ? Number(editProfileForm.years_experience) : 0,
             landscapes: editLandscapes,
-            certifications: editCertifications,
+            certifications: certs,
           }),
         }).catch(() => {}),
       ]);
@@ -700,7 +664,7 @@ export default function GuideProfilePage() {
         skills_activities: editSpecialties,
         languages_spoken:  editLangsSpoken,
         skills_landscapes: editLandscapes,
-        certifications:    editCertifications,
+        certifications:    certs,
         years_experience:  editProfileForm.years_experience ? Number(editProfileForm.years_experience) : null,
       } : prev);
       setEditProfileOpen(false);
@@ -765,8 +729,8 @@ export default function GuideProfilePage() {
               </div>
               {offer.description && <p className="text-slate-500 text-sm leading-relaxed mb-4 line-clamp-3">{offer.description}</p>}
               <div className="flex flex-wrap gap-2.5 mb-4">
-                <span className="bg-emerald-50 text-emerald-600 border border-emerald-100/60 rounded-xl px-3 py-1 text-[11px] font-extrabold tracking-wider flex items-center gap-1 uppercase">
-                  <Sparkles size={11} className="text-emerald-500 shrink-0" />{typeData.label}
+                <span className="bg-emerald-50 text-primary border border-emerald-100/60 rounded-xl px-3 py-1 text-[11px] font-extrabold tracking-wider flex items-center gap-1 uppercase">
+                  <Sparkles size={11} className="text-primary shrink-0" />{typeData.label}
                 </span>
               </div>
               {offer.sustainability_score !== null ? (
@@ -795,7 +759,7 @@ export default function GuideProfilePage() {
               <p className="text-[11px] font-bold text-slate-400">
                 {new Date(offer.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
               </p>
-              <button onClick={() => openEditModal(offer)}
+              <button onClick={() => router.push(`/offers/${offer.id}`)}
                 className="text-primary hover:text-primary/80 font-extrabold text-xs inline-flex items-center gap-1 hover:translate-x-1 transition-transform duration-200">
                 <span>Voir les détails</span><ArrowRight size={14} strokeWidth={2.5} />
               </button>
@@ -817,13 +781,73 @@ export default function GuideProfilePage() {
     );
   };
 
+  const GuideOfferingCard = ({ offering }: { offering: GuideOffering }) => {
+    const statusLabel = offering.status === "active" ? "Active" : offering.status === "rejected" ? "Refusée" : "En attente";
+    const statusClass = offering.status === "active" ? "bg-emerald-500 text-white border-white/20" : offering.status === "rejected" ? "bg-red-500 text-white border-white/20" : "bg-amber-500 text-white border-white/20";
+    return (
+      <div className="bg-white rounded-3xl border border-slate-100/90 shadow-sm overflow-hidden hover:shadow-md transition-shadow duration-300">
+        <div className="flex flex-col lg:flex-row">
+          <div className="lg:w-2/5 relative min-h-[200px] bg-slate-50 flex items-center justify-center overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-100">
+            <div className="absolute inset-0 bg-gradient-to-br from-teal-500 to-emerald-400 opacity-90" />
+            <span className="material-symbols-outlined text-white/40 relative z-10" style={{ fontSize: 100 }}>hiking</span>
+            <div className={`absolute top-3 left-3 text-[10px] font-black tracking-widest uppercase px-3 py-1 rounded-xl shadow border ${statusClass}`}>
+              {statusLabel}
+            </div>
+            <div className="absolute bottom-3 right-3 bg-white/95 backdrop-blur-sm px-3.5 py-1.5 rounded-xl shadow border border-slate-100 text-right">
+              <span className="text-primary font-extrabold text-lg tracking-tight">{Number(offering.price).toLocaleString()} DT</span>
+              <span className="text-slate-400 text-[10px] font-bold block leading-none">{offering.pricing_unit}</span>
+            </div>
+          </div>
+          <div className="lg:w-3/5 p-6 md:p-8 flex flex-col justify-between">
+            <div>
+              <div className="flex items-start justify-between gap-4 mb-2">
+                <h3 className="text-lg md:text-xl font-extrabold text-slate-800 tracking-tight leading-tight">{offering.title}</h3>
+              </div>
+              {offering.description && <p className="text-slate-500 text-sm leading-relaxed mb-4 line-clamp-3">{offering.description}</p>}
+              <div className="flex flex-wrap gap-2.5 mb-4">
+                <span className="bg-emerald-50 text-primary border border-emerald-100/60 rounded-xl px-3 py-1 text-[11px] font-extrabold tracking-wider flex items-center gap-1 uppercase">
+                  <Sparkles size={11} className="text-primary shrink-0" />Prestation de guide
+                </span>
+                {offering.languages && offering.languages.length > 0 && (
+                  <span className="flex items-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-1">
+                    <Globe size={11} className="text-slate-400" />{offering.languages.join(", ")}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2 text-[11px] font-bold text-slate-500">
+                <span className="flex items-center gap-1"><MapPin size={11} className="text-slate-400" />
+                  {offering.service_zone_type === "point" && "Point fixe"}
+                  {offering.service_zone_type === "radius" && `Rayon ${offering.radius_km ?? "?"} km`}
+                  {offering.service_zone_type === "governorate" && `Gouvernorat ${offering.zone_governorate ?? ""}`}
+                  {offering.service_zone_type === "municipality" && `${offering.zone_municipality ?? ""}, ${offering.zone_governorate ?? ""}`}
+                </span>
+                {offering.min_travelers != null && (
+                  <span className="flex items-center gap-1"><Users size={11} className="text-slate-400" />{offering.min_travelers}-{offering.max_travelers ?? "∞"} pers.</span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-between border-t border-slate-50 pt-4 mt-3">
+              <p className="text-[11px] font-bold text-slate-400">
+                {new Date(offering.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
+              </p>
+              <a href="/dashboard/guide-offerings"
+                className="text-primary hover:text-primary/80 font-extrabold text-xs inline-flex items-center gap-1 hover:translate-x-1 transition-transform duration-200">
+                <span>Gérer</span><ArrowRight size={14} strokeWidth={2.5} />
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
     <>
     {/* ══ MODAL SIGNALEMENT RÉSEAU ═══════════════════════════════════════════ */}
     {netReport && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-        <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl p-6">
+        <div className="modal-content bg-white rounded-3xl w-full max-w-sm shadow-2xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
               <Flag size={16} className="text-red-500" />
@@ -871,7 +895,7 @@ export default function GuideProfilePage() {
       {/* ══ EDIT PROFILE MODAL ═══════════════════════════════════════════════ */}
       {editProfileOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl relative overflow-hidden flex flex-col max-h-[92vh]">
+          <div className="modal-content bg-white rounded-3xl w-full max-w-lg shadow-2xl relative overflow-hidden flex flex-col max-h-[92vh]">
             <button onClick={closeEditProfile}
               className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors">
               <X size={16} />
@@ -1112,74 +1136,24 @@ export default function GuideProfilePage() {
                 <div>
                   <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Certifications</label>
                   <div className="space-y-2">
-                    {(() => {
-                      const allCerts = [
-                        ...CERTIFICATIONS_LIST.map((label) => ({ label, isCustom: false })),
-                        ...customCertPool.map((c) => ({ label: c.label, isCustom: true })),
-                      ];
-                      return allCerts.map(({ label, isCustom }) => {
-                        const active = editCertifications.some((c) => c.label === label);
-                        const certObj = editCertifications.find((c) => c.label === label);
-                        return (
-                          <div key={label} className={`rounded-xl border-2 overflow-hidden transition-all ${active ? "border-primary bg-primary/5" : "border-slate-100 bg-white hover:border-primary/30"}`}>
-                            <button type="button"
-                              onClick={() => {
-                                if (active) {
-                                  setEditCertifications(editCertifications.filter((c) => c.label !== label));
-                                } else {
-                                  const poolEntry = customCertPool.find((c) => c.label === label);
-                                  setEditCertifications([...editCertifications, { label, proof: poolEntry?.proof ?? "" }]);
-                                }
-                              }}
-                              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-left">
-                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${active ? "border-primary bg-primary" : "border-slate-300"}`}>
-                                {active && <Check size={10} className="text-white" />}
-                              </div>
-                              <span className={active ? "text-slate-900" : "text-slate-600"}>{label}</span>
-                              {isCustom && <span className="ml-auto text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">Personnalisé</span>}
-                            </button>
-                            {active && (
-                              <div className="px-4 pb-3 space-y-2">
-                                {isCustom && (
-                                  <div className="relative">
-                                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-base">edit</span>
-                                    <input
-                                      type="text"
-                                      value={label}
-                                      onChange={(e) => {
-                                        const newLabel = e.target.value;
-                                        setEditCertifications(editCertifications.map((c) => c.label === label ? { ...c, label: newLabel } : c));
-                                        setCustomCertPool(customCertPool.map((c) => c.label === label ? { ...c, label: newLabel } : c));
-                                      }}
-                                      placeholder="Nom de la certification"
-                                      className="w-full pl-9 pr-4 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary text-slate-700 placeholder:text-slate-400 font-medium"
-                                    />
-                                  </div>
-                                )}
-                                <ProofInput
-                                  proof={certObj?.proof ?? ""}
-                                  onChange={(v) => {
-                                    setEditCertifications(editCertifications.map((c) => c.label === label ? { ...c, proof: v } : c));
-                                    setCustomCertPool(customCertPool.map((c) => c.label === label ? { ...c, proof: v } : c));
-                                  }}
-                                />
-                              </div>
-                            )}
+                    {CERTIFICATIONS_LIST.map((cert) => {
+                      const certs = editCertifications.split("\n").map((s) => s.trim()).filter(Boolean);
+                      const active = certs.includes(cert);
+                      return (
+                        <button key={cert} type="button"
+                          onClick={() => {
+                            const list = editCertifications.split("\n").map((s) => s.trim()).filter(Boolean);
+                            const updated = active ? list.filter((c) => c !== cert) : [...list, cert];
+                            setEditCertifications(updated.join("\n"));
+                          }}
+                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-sm font-bold text-left transition-all ${active ? "bg-primary/10 border-primary text-slate-900" : "border-slate-100 text-slate-600 hover:border-primary/30 bg-white"}`}>
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${active ? "border-primary bg-primary" : "border-slate-300"}`}>
+                            {active && <Check size={10} className="text-white" />}
                           </div>
-                        );
-                      });
-                    })()}
-                    {/* Ajouter une certification personnalisée */}
-                    <button type="button"
-                      onClick={() => {
-                        const newCert = { label: "", proof: "" };
-                        setCustomCertPool([...customCertPool, newCert]);
-                        setEditCertifications([...editCertifications, newCert]);
-                      }}
-                      className="w-full flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-slate-200 rounded-xl text-xs font-bold text-slate-400 hover:border-primary/40 hover:text-primary transition-all">
-                      <span className="material-symbols-outlined text-base">add</span>
-                      Ajouter une certification personnalisée
-                    </button>
+                          {cert}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -1212,7 +1186,7 @@ export default function GuideProfilePage() {
       {/* ══ PUBLISH OFFER MODAL ══════════════════════════════════════════════ */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="modal-content bg-white rounded-3xl w-full max-w-xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
             <button onClick={closeModal}
               className="absolute top-5 right-5 z-10 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors">
               <X size={16} />
@@ -1305,9 +1279,11 @@ export default function GuideProfilePage() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white placeholder:text-slate-400 mb-2"
                   />
                   {showPublishMap && (
-                    <MapPicker lat={publishMapLat} lng={publishMapLng}
-                      onPick={(lat, lng, address) => { setPublishMapLat(lat); setPublishMapLng(lng); setForm((f) => ({ ...f, meeting_point: address })); }}
-                    />
+                    <div className="overflow-hidden rounded-xl">
+                      <MapPicker lat={publishMapLat} lng={publishMapLng}
+                        onPick={(lat, lng, address) => { setPublishMapLat(lat); setPublishMapLng(lng); setForm((f) => ({ ...f, meeting_point: address })); }}
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -1433,7 +1409,7 @@ export default function GuideProfilePage() {
         const safeIdx = Math.min(sliderIdx, Math.max(sliderImgs.length - 1, 0));
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-3xl w-full max-w-xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="modal-content bg-white rounded-3xl w-full max-w-xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
               <button onClick={closeEditModal}
                 className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center transition-colors">
                 <X size={16} />
@@ -1511,7 +1487,7 @@ export default function GuideProfilePage() {
                     {viewOffer.inclusions && (
                       <div className="bg-emerald-50/60 border border-emerald-100/70 rounded-2xl p-4">
                         <div className="flex items-center gap-2 mb-2">
-                          <span className="material-symbols-outlined text-emerald-600 text-base">check_circle</span>
+                          <span className="material-symbols-outlined text-primary text-base">check_circle</span>
                           <p className="text-[10px] font-black tracking-widest text-emerald-700 uppercase">Inclusions</p>
                         </div>
                         <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-line">{viewOffer.inclusions}</p>
@@ -1622,9 +1598,11 @@ export default function GuideProfilePage() {
                         <input type="text" value={editForm.meeting_point} onChange={(e) => setEditForm((f) => ({ ...f, meeting_point: e.target.value }))}
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white mb-2" />
                         {showEditMap && (
-                          <MapPicker lat={editMapLat} lng={editMapLng}
-                            onPick={(lat, lng, address) => { setEditMapLat(lat); setEditMapLng(lng); setEditForm((f) => ({ ...f, meeting_point: address })); }}
-                          />
+                          <div className="overflow-hidden rounded-xl">
+                            <MapPicker lat={editMapLat} lng={editMapLng}
+                              onPick={(lat, lng, address) => { setEditMapLat(lat); setEditMapLng(lng); setEditForm((f) => ({ ...f, meeting_point: address })); }}
+                            />
+                          </div>
                         )}
                       </div>
 
@@ -1755,7 +1733,7 @@ export default function GuideProfilePage() {
                 <div className="text-center sm:text-left pt-3 sm:pt-0 pb-1">
                   <div className="flex items-center justify-center sm:justify-start gap-2">
                     <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-800">{profile.full_name || "Guide"}</h1>
-                    <ShieldCheck size={20} className="text-emerald-500 fill-emerald-100 hidden sm:block" />
+                    <ShieldCheck size={20} className="text-primary fill-emerald-100 hidden sm:block" />
                   </div>
                   <div className="flex items-center justify-center sm:justify-start gap-1.5 mt-1 text-primary font-semibold text-sm">
                     <span>{roleLabel}</span>
@@ -1766,14 +1744,14 @@ export default function GuideProfilePage() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0 mt-6 md:mt-0 self-center md:self-end">
-                <button onClick={openModal}
-                  className="bg-primary hover:bg-primary/90 active:scale-95 text-white font-bold px-4 py-2.5 rounded-xl inline-flex items-center gap-1.5 hover:shadow-lg transition-all shadow-sm text-sm whitespace-nowrap">
-                  <Plus size={16} strokeWidth={2.5} /><span>Publier une offre</span>
-                </button>
+              <div className="mt-6 md:mt-0 flex flex-row flex-wrap justify-center sm:justify-end gap-3 self-center md:self-end">
+                <a href="/dashboard/guide-offerings"
+                  className="bg-primary hover:bg-primary/90 active:scale-95 text-white font-bold px-5 py-3 rounded-2xl inline-flex items-center gap-2 hover:shadow-lg transition-all shadow-sm text-sm">
+                  <Plus size={18} strokeWidth={2.5} /><span>Gérer mes prestations</span>
+                </a>
                 <button onClick={openEditProfile}
-                  className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold px-4 py-2.5 rounded-xl inline-flex items-center gap-1.5 hover:shadow-sm active:scale-95 transition-all text-sm whitespace-nowrap">
-                  <Edit3 size={15} /><span>Modifier</span>
+                  className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold px-5 py-3 rounded-2xl inline-flex items-center gap-2 hover:shadow-sm active:scale-95 transition-all text-sm">
+                  <Edit3 size={16} /><span>Modifier le profil</span>
                 </button>
               </div>
             </div>
@@ -1857,7 +1835,7 @@ export default function GuideProfilePage() {
                 <>
                   <div className="flex items-center gap-1.5 flex-wrap mb-3">
                     {followers.slice(0, 5).map((f) => {
-                      const path = f._type === "eco_traveler" ? `/profile/ecovoyageur/${f.user_id}` : f._type === "project" ? `/profile/project-owner/${f.user_id}` : `/profile/guide/${f.user_id}`;
+                      const path = f._type === "eco_traveler" ? `/profile/ecovoyageur/${f.user_id}` : f._type === "provider" ? `/profile/provider/${f.user_id}` : `/profile/guide/${f.user_id}`;
                       return (
                         <button key={f.user_id} onClick={() => router.push(path)}
                           className="w-10 h-10 rounded-xl bg-slate-100 border-2 border-white shadow-sm overflow-hidden flex items-center justify-center hover:scale-105 transition-transform"
@@ -1882,7 +1860,11 @@ export default function GuideProfilePage() {
               {[
                 { key: "tout",    label: "Tout",     Icon: LayoutGrid },
                 { key: "offres",  label: "Offres",   Icon: Tag },
+                { key: "circuits", label: "Circuits", Icon: Route },
+                { key: "statistiques", label: "Statistiques", Icon: BarChart3 },
                 { key: "reseau",  label: "Réseau",   Icon: Users },
+                { key: "collaborations", label: "Collabs", Icon: Handshake },
+                { key: "agenda", label: "Agenda", Icon: CalendarDays },
                 { key: "apropos", label: "À propos", Icon: Info },
               ].map(({ key, label, Icon }) => (
                 <button key={key} onClick={() => setActiveTab(key as Tab)}
@@ -1898,20 +1880,55 @@ export default function GuideProfilePage() {
                 <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
                   <Sparkles size={12} className="text-primary" /><span>Offres de guide</span>
                 </h3>
-                {offers.length === 0 ? (
+                {offers.length === 0 && guideOfferings.length === 0 ? (
                   <div className="bg-white rounded-3xl border border-slate-100/90 shadow-sm p-12 text-center">
                     <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                       <span className="material-symbols-outlined text-primary text-3xl">hiking</span>
                     </div>
                     <p className="text-slate-800 font-extrabold text-base mb-1">Aucune offre publiée</p>
-                    <p className="text-slate-400 text-sm mb-5">Publiez votre première expérience guidée.</p>
-                    <button onClick={openModal}
+                    <p className="text-slate-400 text-sm mb-5">Créez vos prestations de guide.</p>
+                    <a href="/dashboard/guide-offerings"
                       className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-2xl text-sm font-bold hover:bg-primary/90 shadow-sm">
-                      <Plus size={16} />Publier une offre
-                    </button>
+                      <Plus size={16} />Créer une prestation
+                    </a>
                   </div>
                 ) : (
-                  offers.map((offer) => <OfferCard key={offer.id} offer={offer} />)
+                  <>
+                    {guideOfferings.length > 0 && guideOfferings.map((g) => <GuideOfferingCard key={g.id} offering={g} />)}
+                    {offers.map((offer) => <OfferCard key={offer.id} offer={offer} />)}
+                  </>
+                )}
+
+                {circuits.length > 0 && (
+                  <div className="space-y-3 mt-8">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
+                        <Route size={12} className="text-primary" /><span>Circuits</span>
+                      </h3>
+                      <span className="text-[10px] font-bold text-slate-400">{circuits.length} circuit{circuits.length > 1 ? "s" : ""}</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {circuits.slice(0, 4).map((c) => (
+                        <a key={c.id} href={`/circuits/${c.id}`} className="block bg-white rounded-2xl border border-slate-100/90 shadow-sm p-4 hover:shadow-md transition-shadow">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <h4 className="font-bold text-slate-800 text-sm truncate">{c.title}</h4>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${c.status === "approved" ? "bg-emerald-100 text-emerald-700" : c.status === "pending" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>
+                              {c.status === "approved" ? "Approuvé" : c.status === "pending" ? "En attente" : "Rejeté"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-slate-400">
+                            {c.difficulty_level && (
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${c.difficulty_level === "easy" ? "bg-emerald-100 text-emerald-700" : c.difficulty_level === "moderate" ? "bg-amber-100 text-amber-700" : c.difficulty_level === "hard" ? "bg-red-100 text-red-700" : "bg-slate-800 text-white"}`}>
+                                {c.difficulty_level === "easy" ? "🟢 Facile" : c.difficulty_level === "moderate" ? "🟡 Modéré" : c.difficulty_level === "hard" ? "🔴 Difficile" : "⚫ Expert"}
+                              </span>
+                            )}
+                            {c.duration_days && <span><Calendar size={11} className="inline mr-0.5" />{c.duration_days}j</span>}
+                            <span className="font-bold text-primary">{Number(c.base_price ?? 0).toLocaleString()} TND</span>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             )}
@@ -1920,18 +1937,72 @@ export default function GuideProfilePage() {
             {activeTab === "offres" && (
               <div className="space-y-5">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-extrabold text-slate-800">Offres disponibles ({offers.length})</h3>
-                  <button onClick={openModal} className="text-primary hover:text-primary/80 text-xs font-extrabold flex items-center gap-1">+ Publier une offre</button>
+                  <h3 className="text-sm font-extrabold text-slate-800">Offres disponibles ({offers.length + guideOfferings.length})</h3>
+                  <a href="/dashboard/guide-offerings" className="text-primary hover:text-primary/80 text-xs font-extrabold flex items-center gap-1">+ Gérer mes prestations</a>
                 </div>
-                {offers.length === 0 ? (
+                {offers.length === 0 && guideOfferings.length === 0 ? (
                   <div className="bg-white rounded-3xl border border-slate-100/90 shadow-sm p-12 text-center">
                     <p className="text-slate-800 font-extrabold text-base">Aucune offre pour l'instant</p>
                     <p className="text-slate-400 text-sm mt-1">Publiez votre première expérience guidée.</p>
                   </div>
                 ) : (
-                  offers.map((offer) => <OfferCard key={offer.id} offer={offer} />)
+                  <>
+                    {guideOfferings.map((g) => <GuideOfferingCard key={g.id} offering={g} />)}
+                    {offers.map((offer) => <OfferCard key={offer.id} offer={offer} />)}
+                  </>
                 )}
               </div>
+            )}
+
+            {/* TAB: CIRCUITS */}
+            {activeTab === "circuits" && (
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-extrabold text-slate-800">Mes circuits ({circuits.length})</h3>
+                  <a href="/dashboard?tab=circuits" className="text-primary hover:text-primary/80 text-xs font-extrabold flex items-center gap-1">+ Créer un circuit</a>
+                </div>
+                {circuits.length === 0 ? (
+                  <div className="bg-white rounded-3xl border border-slate-100/90 shadow-sm p-12 text-center">
+                    <p className="text-slate-800 font-extrabold text-base">Aucun circuit pour l'instant</p>
+                    <p className="text-slate-400 text-sm mt-1">Créez votre premier itinéraire éco-responsable.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {circuits.map((c) => (
+                      <div key={c.id} className="bg-white rounded-3xl border border-slate-100/90 shadow-sm p-5 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="min-w-0 flex-1">
+                            <h4 className="font-extrabold text-slate-800 text-sm truncate">{c.title}</h4>
+                            {c.region && <span className="inline-block mt-0.5 text-[10px] font-bold text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">{c.region}</span>}
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${c.status === "approved" ? "bg-emerald-100 text-emerald-700" : c.status === "pending" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>
+                            {c.status === "approved" ? "Approuvé" : c.status === "pending" ? "En attente" : "Rejeté"}
+                          </span>
+                        </div>
+                        {c.description && <p className="text-xs text-slate-400 line-clamp-2 mb-3">{c.description}</p>}
+                        <div className="flex items-center gap-3 text-xs text-slate-500 mb-3">
+                          {c.difficulty_level && (
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${c.difficulty_level === "easy" ? "bg-emerald-100 text-emerald-700" : c.difficulty_level === "moderate" ? "bg-amber-100 text-amber-700" : c.difficulty_level === "hard" ? "bg-red-100 text-red-700" : "bg-slate-800 text-white"}`}>
+                              {c.difficulty_level === "easy" ? "🟢 Facile" : c.difficulty_level === "moderate" ? "🟡 Modéré" : c.difficulty_level === "hard" ? "🔴 Difficile" : "⚫ Expert"}
+                            </span>
+                          )}
+                          {c.duration_days && <span className="flex items-center gap-1"><Calendar size={12} />{c.duration_days} jour{c.duration_days > 1 ? "s" : ""}</span>}
+                          <span className="font-bold text-primary text-sm">{Number(c.base_price ?? 0).toLocaleString()} {c.currency || "TND"}</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <a href={`/circuits/${c.id}`} className="flex-1 text-center text-xs font-bold text-primary border border-emerald-200 rounded-xl px-3 py-2 hover:bg-emerald-50">Détails</a>
+                          <a href={`/dashboard?tab=circuits`} className="flex-1 text-center text-xs font-bold text-blue-600 border border-blue-200 rounded-xl px-3 py-2 hover:bg-blue-50">Modifier</a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB: STATISTIQUES */}
+            {activeTab === "statistiques" && (
+              <GuideAnalytics token={token} userId={profile?.user_id ?? ""} />
             )}
 
             {/* TAB: AMIS */}
@@ -1951,11 +2022,11 @@ export default function GuideProfilePage() {
                     <div className="mt-3 divide-y divide-slate-50">
                       {netResults.map((r) => (
                         <div key={r.user_id} className="flex items-center justify-between py-3 gap-3">
-                          <button onClick={() => router.push(`/profile/project-owner/${r.user_id}`)} className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 text-left">
+                          <button onClick={() => router.push(`/profile/provider/${r.user_id}`)} className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 text-left">
                             <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center shrink-0">{r.photo ? <img src={r.photo} alt={r.full_name} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-slate-400">business</span>}</div>
                             <div className="min-w-0"><p className="font-extrabold text-slate-800 text-sm truncate">{r.full_name}</p>{r.sub && <p className="text-xs text-slate-400">{r.sub}</p>}</div>
                           </button>
-                          <button onClick={() => router.push(`/profile/project-owner/${r.user_id}`)} className="shrink-0 px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary text-xs font-bold rounded-xl hover:bg-primary hover:text-slate-900 transition-all">Voir</button>
+                          <button onClick={() => router.push(`/profile/provider/${r.user_id}`)} className="shrink-0 px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary text-xs font-bold rounded-xl hover:bg-primary hover:text-slate-900 transition-all">Voir</button>
                         </div>
                       ))}
                     </div>
@@ -1973,12 +2044,12 @@ export default function GuideProfilePage() {
                     <div className="divide-y divide-slate-50" onClick={() => setNetMenuId(null)}>
                       {following.map((f) => (
                         <div key={f.user_id} className="flex items-center justify-between py-3 gap-2">
-                          <button onClick={() => router.push(`/profile/project-owner/${f.user_id}`)} className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 text-left">
+                          <button onClick={() => router.push(`/profile/provider/${f.user_id}`)} className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 text-left">
                             <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center shrink-0">{f.photo ? <img src={f.photo} alt={f.full_name} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-slate-400">business</span>}</div>
                             <div className="min-w-0"><p className="font-extrabold text-slate-800 text-sm truncate">{f.full_name}</p>{f.sub && <p className="text-xs text-slate-400">{f.sub}</p>}</div>
                           </button>
                           <div className="flex items-center gap-1.5 shrink-0">
-                            <button onClick={() => router.push(`/profile/project-owner/${f.user_id}`)} className="px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary text-xs font-bold rounded-xl hover:bg-primary hover:text-slate-900 transition-all">Voir</button>
+                            <button onClick={() => router.push(`/profile/provider/${f.user_id}`)} className="px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary text-xs font-bold rounded-xl hover:bg-primary hover:text-slate-900 transition-all">Voir</button>
                             <div className="relative" onClick={(e) => e.stopPropagation()}>
                               <button onClick={() => setNetMenuId(netMenuId === `fw-${f.user_id}` ? null : `fw-${f.user_id}`)}
                                 className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors">
@@ -2018,8 +2089,8 @@ export default function GuideProfilePage() {
                   {followers.length === 0 ? <p className="text-sm text-slate-400">Aucun abonné pour l'instant.</p> : (
                     <div className="divide-y divide-slate-50" onClick={() => setNetMenuId(null)}>
                       {followers.map((f) => {
-                        const path = f._type === "eco_traveler" ? `/profile/ecovoyageur/${f.user_id}` : f._type === "project" ? `/profile/project-owner/${f.user_id}` : `/profile/guide/${f.user_id}`;
-                        const typeLabel = f._type === "eco_traveler" ? "Éco-Voyageur" : f._type === "project" ? "Prestataire" : "Guide";
+                        const path = f._type === "eco_traveler" ? `/profile/ecovoyageur/${f.user_id}` : f._type === "provider" ? `/profile/provider/${f.user_id}` : `/profile/guide/${f.user_id}`;
+                        const typeLabel = f._type === "eco_traveler" ? "Éco-Voyageur" : f._type === "provider" ? "Propriétaire" : "Guide";
                         return (
                           <div key={f.user_id} className="flex items-center justify-between py-3 gap-2">
                             <button onClick={() => router.push(path)} className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 text-left">
@@ -2066,6 +2137,16 @@ export default function GuideProfilePage() {
               </div>
             )}
 
+            {/* TAB: COLLABORATIONS */}
+            {activeTab === "collaborations" && (
+              <GuideCollaborationsTab userId={profile.user_id} token={token} />
+            )}
+
+            {/* TAB: AGENDA */}
+            {activeTab === "agenda" && (
+              <AgendaManager userId={profile.user_id} />
+            )}
+
             {/* TAB: À PROPOS */}
             {activeTab === "apropos" && (
               <div className="space-y-5">
@@ -2097,7 +2178,7 @@ export default function GuideProfilePage() {
                     {profile.zone && (
                       <div className="flex items-center gap-4 px-6 py-4">
                         <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
-                          <Globe size={16} className="text-emerald-500" />
+                          <Globe size={16} className="text-primary" />
                         </div>
                         <div className="min-w-0">
                           <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-0.5">Zone d'activité</p>
@@ -2129,14 +2210,14 @@ export default function GuideProfilePage() {
                     )}
                     {profile.languages_spoken && profile.languages_spoken.length > 0 && (
                       <div className="flex items-start gap-4 px-6 py-4">
-                        <div className="w-9 h-9 rounded-xl bg-sky-50 flex items-center justify-center shrink-0">
-                          <span className="material-symbols-outlined text-sky-500" style={{ fontSize: 18 }}>translate</span>
+                        <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                          <span className="material-symbols-outlined text-primary" style={{ fontSize: 18 }}>translate</span>
                         </div>
                         <div className="min-w-0">
                           <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-1.5">Langues parlées</p>
                           <div className="flex flex-wrap gap-1.5">
                             {profile.languages_spoken.map((l) => (
-                              <span key={l} className="bg-sky-50 text-sky-700 border border-sky-100 rounded-lg px-2.5 py-1 text-xs font-bold">
+                              <span key={l} className="bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg px-2.5 py-1 text-xs font-bold">
                                 {LANG_LABELS[l] ?? l}
                               </span>
                             ))}
@@ -2194,17 +2275,29 @@ export default function GuideProfilePage() {
                           <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                             <Check size={12} className="text-primary" />
                           </div>
-                          <p className="text-sm font-semibold text-slate-700">{c.label}</p>
-                          {c.proof && (
-                            <button type="button" onClick={() => {
-                              if (c.proof.startsWith("data:")) {
-                                const w = window.open(); w?.document.write(`<img src="${c.proof}" style="max-width:100%">`);
-                              } else { window.open(c.proof, "_blank"); }
-                            }} className="ml-auto text-xs text-primary font-bold flex items-center gap-1 hover:underline">
-                              <span className="material-symbols-outlined text-sm">open_in_new</span>
-                              Justificatif
-                            </button>
-                          )}
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-700">{typeof c === "string" ? c : c.label}</p>
+                            {typeof c !== "string" && c.proof && <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{c.proof}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Certifications structurées (API) */}
+                {structuredCerts.length > 0 && (
+                  <div className="bg-white p-6 rounded-3xl border border-slate-100/80 shadow-sm">
+                    <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-4">Certifications vérifiées</p>
+                    <div className="space-y-2">
+                      {structuredCerts.map((cert) => (
+                        <div key={cert.id} className="flex items-center gap-3 p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
+                          <span className="material-symbols-outlined text-emerald-600 text-lg">verified</span>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-slate-800">{cert.name}</p>
+                            {cert.description && <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{cert.description}</p>}
+                            {cert.issued_by && <p className="text-[10px] text-slate-400 mt-0.5">{cert.issued_by}</p>}
+                          </div>
                         </div>
                       ))}
                     </div>

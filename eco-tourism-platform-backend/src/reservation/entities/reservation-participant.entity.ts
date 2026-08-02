@@ -8,29 +8,36 @@ import {
 } from 'typeorm';
 import { Reservation } from './reservation.entity';
 
+/**
+ * Participant individuel d'une réservation de groupe
+ * Permet de connaître la composition exacte d'un groupe
+ * Un booking peut avoir plusieurs participants (ex: famille de 4 personnes)
+ */
 @Entity('reservation_participants')
 export class ReservationParticipant {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column('uuid')
-  reservation_id!: string;
-
-  @ManyToOne(() => Reservation, (r) => r.participants, { onDelete: 'CASCADE', eager: false })
-  @JoinColumn({ name: 'reservation_id' })
+  @ManyToOne(() => Reservation, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'booking_id' })
   reservation!: Reservation;
 
-  // user_id de l'ami invité
-  @Column('uuid')
-  user_id!: string;
+  @Column()
+  full_name!: string;
 
-  // pending | accepted | declined
-  @Column({ type: 'varchar', default: 'pending' })
-  status!: string;
+  @Column({ type: 'int', nullable: true })
+  age!: number | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  document_type!: string | null;
+  // 'passport' | 'id_card' | 'none'
+
+  @Column({ type: 'varchar', nullable: true })
+  document_number!: string | null;
+
+  @Column({ default: false })
+  is_group_leader!: boolean;
 
   @CreateDateColumn()
-  invited_at!: Date;
-
-  @Column({ type: 'timestamp', nullable: true })
-  responded_at!: Date | null;
+  created_at!: Date;
 }

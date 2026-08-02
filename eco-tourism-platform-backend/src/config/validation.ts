@@ -1,9 +1,7 @@
 import * as Joi from 'joi';
 
 export const validate = (config: Record<string, unknown>) => {
-
   const schema = Joi.object({
-
     PORT: Joi.number().default(3000),
 
     DB_HOST: Joi.string().required(),
@@ -14,7 +12,6 @@ export const validate = (config: Record<string, unknown>) => {
 
     JWT_SECRET: Joi.string().required(),
     JWT_EXPIRES_IN: Joi.string().default('1d'),
-
   });
 
   const { error, value } = schema.validate(config, {

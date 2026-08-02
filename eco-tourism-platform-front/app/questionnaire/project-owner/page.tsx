@@ -172,7 +172,7 @@ export default function ProjectOwnerQuestionnairePage() {
       }
 
       try {
-        const q = await apiFetch<Questionnaire>("/questionnaire/active?type=eco_project");
+        const q = await apiFetch<Questionnaire>("/questionnaire/active?type=provider");
         q.questions.sort((a, b) => a.question_order - b.question_order);
         q.questions.forEach((question) => question.answers.sort((a, b) => a.answer_order - b.answer_order));
         setQuestionnaire(q);
