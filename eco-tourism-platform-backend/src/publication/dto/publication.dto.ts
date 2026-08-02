@@ -43,6 +43,15 @@ export class CreatePublicationDto {
   @IsOptional()
   @IsString()
   region?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
 }
 
 export class UpdatePublicationDto {
@@ -66,4 +75,13 @@ export class UpdatePublicationDto {
   @IsOptional()
   @IsString()
   region?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
 }

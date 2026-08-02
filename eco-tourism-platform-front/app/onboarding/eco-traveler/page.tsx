@@ -68,7 +68,7 @@ const TRAVEL_STYLES = [
 
 const GOALS = [
     { value: "reduce_carbon", label: "Réduire mon impact carbone" },
-    { value: "support_local_projects", label: "Soutenir des projets locaux" },
+    { value: "support_local_venues", label: "Soutenir des établissements locaux" },
     { value: "preserve_biodiversity", label: "Préserver la biodiversité" },
     { value: "avoid_mass_tourism", label: "Voyager hors tourisme de masse" },
     { value: "support_local_crafts", label: "Soutenir l'artisanat local" },
@@ -605,7 +605,7 @@ export default function OnboardingPage() {
                                 type="button"
                                 onClick={handleNext}
                                 disabled={loading}
-                                className="flex items-center gap-2 px-7 py-3 rounded-xl bg-primary text-slate-900 font-extrabold text-sm shadow-lg shadow-primary/30 hover:-translate-y-0.5 active:scale-95 transition-all disabled:opacity-60"
+                                className="flex items-center gap-2 px-7 py-3 rounded-xl bg-primary text-slate-900 font-extrabold text-sm shadow-lg shadow-emerald-500/30 hover:-translate-y-0.5 active:scale-95 transition-all disabled:opacity-60"
                             >
                                 {loading ? "Chargement..." : step === STEPS.length ? "Terminer & Passer le test" : "Continuer"}
                                 {!loading && <ArrowRight className="w-4 h-4" />}

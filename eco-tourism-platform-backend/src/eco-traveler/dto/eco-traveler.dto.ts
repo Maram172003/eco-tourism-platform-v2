@@ -17,7 +17,7 @@ export class InterestDto {
 
   @IsString()
   @IsNotEmpty()
-  level!: string; 
+  level!: string;
 }
 
 export class CompleteProfileDto {

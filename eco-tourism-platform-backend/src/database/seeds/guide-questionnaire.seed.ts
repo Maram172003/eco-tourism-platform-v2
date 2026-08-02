@@ -27,32 +27,47 @@ const QUESTIONS = [
     category: 'environmental',
     order: 1,
     answers: [
-      { text: "Je les laisse explorer librement", score: 1 },
-      { text: "Je leur donne quelques consignes de base", score: 2 },
-      { text: "Je fixe des règles strictes et surveille le groupe", score: 3 },
-      { text: "Je sensibilise, fixe un quota visiteurs et reste sur les sentiers balisés", score: 4 },
+      { text: 'Je les laisse explorer librement', score: 1 },
+      { text: 'Je leur donne quelques consignes de base', score: 2 },
+      { text: 'Je fixe des règles strictes et surveille le groupe', score: 3 },
+      {
+        text: 'Je sensibilise, fixe un quota visiteurs et reste sur les sentiers balisés',
+        score: 4,
+      },
     ],
   },
   {
-    text: "Un client vous demande de visiter un site archéologique non officiel pour éviter les foules. Que faites-vous ?",
+    text: 'Un client vous demande de visiter un site archéologique non officiel pour éviter les foules. Que faites-vous ?',
     category: 'social',
     order: 2,
     answers: [
       { text: "J'accepte si le client insiste", score: 1 },
-      { text: "J'hésite mais je propose une alternative touristique classique", score: 2 },
-      { text: "Je refuse poliment et propose un site officiel équivalent", score: 3 },
-      { text: "Je refuse, explique l'importance de la protection et oriente vers des acteurs locaux certifiés", score: 4 },
+      {
+        text: "J'hésite mais je propose une alternative touristique classique",
+        score: 2,
+      },
+      {
+        text: 'Je refuse poliment et propose un site officiel équivalent',
+        score: 3,
+      },
+      {
+        text: "Je refuse, explique l'importance de la protection et oriente vers des acteurs locaux certifiés",
+        score: 4,
+      },
     ],
   },
   {
-    text: "Comment choisissez-vous les prestataires locaux (hébergement, restauration) pour vos circuits ?",
+    text: 'Comment choisissez-vous les prestataires locaux (hébergement, restauration) pour vos circuits ?',
     category: 'economic',
     order: 3,
     answers: [
-      { text: "Je choisis les moins chers", score: 1 },
-      { text: "Je choisis les plus connus", score: 2 },
-      { text: "Je privilégie les prestataires locaux", score: 3 },
-      { text: "Je sélectionne uniquement des acteurs locaux éco-responsables certifiés", score: 4 },
+      { text: 'Je choisis les moins chers', score: 1 },
+      { text: 'Je choisis les plus connus', score: 2 },
+      { text: 'Je privilégie les prestataires locaux', score: 3 },
+      {
+        text: 'Je sélectionne uniquement des acteurs locaux éco-responsables certifiés',
+        score: 4,
+      },
     ],
   },
   {
@@ -60,32 +75,41 @@ const QUESTIONS = [
     category: 'environmental',
     order: 4,
     answers: [
-      { text: "Je ne dis rien pour éviter le conflit", score: 1 },
-      { text: "Je ramasse moi-même discrètement", score: 2 },
-      { text: "Je lui demande de ramasser ses déchets", score: 3 },
-      { text: "Je lui explique l'impact environnemental et organise un ramassage collectif", score: 4 },
+      { text: 'Je ne dis rien pour éviter le conflit', score: 1 },
+      { text: 'Je ramasse moi-même discrètement', score: 2 },
+      { text: 'Je lui demande de ramasser ses déchets', score: 3 },
+      {
+        text: "Je lui explique l'impact environnemental et organise un ramassage collectif",
+        score: 4,
+      },
     ],
   },
   {
-    text: "Un groupe veut prendre des photos avec des animaux sauvages. Quelle est votre réaction ?",
+    text: 'Un groupe veut prendre des photos avec des animaux sauvages. Quelle est votre réaction ?',
     category: 'environmental',
     order: 5,
     answers: [
       { text: "Je facilite l'accès aux animaux", score: 1 },
-      { text: "Je les laisse approcher à distance raisonnable", score: 2 },
-      { text: "Je les maintiens à distance sécurisée", score: 3 },
-      { text: "J'explique les règles éthiques et propose l'observation sans interférence", score: 4 },
+      { text: 'Je les laisse approcher à distance raisonnable', score: 2 },
+      { text: 'Je les maintiens à distance sécurisée', score: 3 },
+      {
+        text: "J'explique les règles éthiques et propose l'observation sans interférence",
+        score: 4,
+      },
     ],
   },
   {
-    text: "Comment présentez-vous la culture et les traditions locales à vos groupes ?",
+    text: 'Comment présentez-vous la culture et les traditions locales à vos groupes ?',
     category: 'social',
     order: 6,
     answers: [
-      { text: "Je montre les attractions les plus populaires", score: 1 },
-      { text: "Je présente les traditions de manière générale", score: 2 },
-      { text: "Je fais participer des artisans ou habitants locaux", score: 3 },
-      { text: "Je co-construis l'expérience avec la communauté locale et reverse une partie aux associations", score: 4 },
+      { text: 'Je montre les attractions les plus populaires', score: 1 },
+      { text: 'Je présente les traditions de manière générale', score: 2 },
+      { text: 'Je fais participer des artisans ou habitants locaux', score: 3 },
+      {
+        text: "Je co-construis l'expérience avec la communauté locale et reverse une partie aux associations",
+        score: 4,
+      },
     ],
   },
   {
@@ -96,7 +120,10 @@ const QUESTIONS = [
       { text: "Je l'aide à trouver le vendeur", score: 1 },
       { text: "Je déconseille mais ne l'empêche pas", score: 2 },
       { text: "Je refuse de l'accompagner pour cet achat", score: 3 },
-      { text: "Je refuse, explique la loi et oriente vers l'artisanat durable", score: 4 },
+      {
+        text: "Je refuse, explique la loi et oriente vers l'artisanat durable",
+        score: 4,
+      },
     ],
   },
   {
@@ -105,9 +132,12 @@ const QUESTIONS = [
     order: 8,
     answers: [
       { text: "Je n'y pense pas spécifiquement", score: 1 },
-      { text: "Je recueille des avis touristiques", score: 2 },
-      { text: "Je consulte les habitants après chaque circuit", score: 3 },
-      { text: "Je mets en place un suivi régulier avec les communautés et adapte mes circuits", score: 4 },
+      { text: 'Je recueille des avis touristiques', score: 2 },
+      { text: 'Je consulte les habitants après chaque circuit', score: 3 },
+      {
+        text: 'Je mets en place un suivi régulier avec les communautés et adapte mes circuits',
+        score: 4,
+      },
     ],
   },
   {
@@ -116,20 +146,26 @@ const QUESTIONS = [
     order: 9,
     answers: [
       { text: "Je n'ai pas le temps de me former", score: 1 },
-      { text: "Je lis des articles de temps en temps", score: 2 },
-      { text: "Je suis des formations certifiantes ponctuellement", score: 3 },
-      { text: "Je me forme régulièrement et partage mes connaissances avec d'autres guides", score: 4 },
+      { text: 'Je lis des articles de temps en temps', score: 2 },
+      { text: 'Je suis des formations certifiantes ponctuellement', score: 3 },
+      {
+        text: "Je me forme régulièrement et partage mes connaissances avec d'autres guides",
+        score: 4,
+      },
     ],
   },
   {
-    text: "Comment gérez-vous le nombre de visiteurs dans les zones sensibles ?",
+    text: 'Comment gérez-vous le nombre de visiteurs dans les zones sensibles ?',
     category: 'environmental',
     order: 10,
     answers: [
-      { text: "Je ne fixe pas de limite", score: 1 },
-      { text: "Je limite si demandé par les autorités", score: 2 },
-      { text: "Je fixe moi-même une limite raisonnable", score: 3 },
-      { text: "Je respecte strictement la capacité de charge et refuse les groupes supplémentaires", score: 4 },
+      { text: 'Je ne fixe pas de limite', score: 1 },
+      { text: 'Je limite si demandé par les autorités', score: 2 },
+      { text: 'Je fixe moi-même une limite raisonnable', score: 3 },
+      {
+        text: 'Je respecte strictement la capacité de charge et refuse les groupes supplémentaires',
+        score: 4,
+      },
     ],
   },
 ];
@@ -144,9 +180,9 @@ async function seed() {
   console.log('Database connected');
 
   const questionnaireRepo = dataSource.getRepository(Questionnaire);
-  const categoryRepo      = dataSource.getRepository(QuestionCategory);
-  const questionRepo      = dataSource.getRepository(Question);
-  const answerRepo        = dataSource.getRepository(Answer);
+  const categoryRepo = dataSource.getRepository(QuestionCategory);
+  const questionRepo = dataSource.getRepository(Question);
+  const answerRepo = dataSource.getRepository(Answer);
 
   const existing = await questionnaireRepo.findOne({
     where: { target_type: 'guide', is_active: true },
@@ -160,13 +196,21 @@ async function seed() {
 
   // Réutiliser les catégories existantes ou créer si nécessaire
   let categories = await categoryRepo.find({
-    where: [{ name: 'environmental' }, { name: 'social' }, { name: 'economic' }],
+    where: [
+      { name: 'environmental' },
+      { name: 'social' },
+      { name: 'economic' },
+    ],
   });
 
   if (categories.length < 3) {
     const existing = new Set(categories.map((c) => c.name));
-    const toCreate = ['environmental', 'social', 'economic'].filter((n) => !existing.has(n));
-    const newCats = await categoryRepo.save(toCreate.map((name) => categoryRepo.create({ name })));
+    const toCreate = ['environmental', 'social', 'economic'].filter(
+      (n) => !existing.has(n),
+    );
+    const newCats = await categoryRepo.save(
+      toCreate.map((name) => categoryRepo.create({ name })),
+    );
     categories = [...categories, ...newCats];
   }
 
@@ -177,7 +221,8 @@ async function seed() {
       name: 'Questionnaire Guide Éco-Responsable',
       target_type: 'guide',
       version: 1,
-      description: 'Évaluez vos pratiques de guide en matière de tourisme durable et responsable.',
+      description:
+        'Évaluez vos pratiques de guide en matière de tourisme durable et responsable.',
       max_score: QUESTIONS.length * 4,
       is_active: true,
     }),
@@ -187,19 +232,19 @@ async function seed() {
     const question = await questionRepo.save(
       questionRepo.create({
         questionnaire_id: questionnaire.id,
-        category_id:      catMap.get(q.category)!.id,
-        question_text:    q.text,
-        question_order:   q.order,
-        weight:           1,
+        category_id: catMap.get(q.category)!.id,
+        question_text: q.text,
+        question_order: q.order,
+        weight: 1,
       }),
     );
 
     for (let i = 0; i < q.answers.length; i++) {
       await answerRepo.save(
         answerRepo.create({
-          question_id:  question.id,
-          answer_text:  q.answers[i].text,
-          score:        q.answers[i].score,
+          question_id: question.id,
+          answer_text: q.answers[i].text,
+          score: q.answers[i].score,
           answer_order: i,
         }),
       );

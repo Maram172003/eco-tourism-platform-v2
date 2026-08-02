@@ -1,6 +1,11 @@
 import {
-  Column, CreateDateColumn, Entity, JoinColumn,
-  ManyToOne, OneToMany, PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Publication } from '../../publication/entities/publication.entity';
 import { ContributionVote } from './contribution-vote.entity';
@@ -11,7 +16,8 @@ export class PlaceContribution {
 
   @Column('uuid') publication_id: string;
   @ManyToOne(() => Publication, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'publication_id' }) publication: Publication;
+  @JoinColumn({ name: 'publication_id' })
+  publication: Publication;
 
   @Column('uuid') user_id: string;
   @Column() user_role: string;

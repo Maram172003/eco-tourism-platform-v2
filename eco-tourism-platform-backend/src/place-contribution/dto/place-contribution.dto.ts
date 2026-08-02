@@ -1,4 +1,11 @@
-import { IsEnum, IsOptional, IsString, IsArray, IsUUID, MinLength } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsArray,
+  IsUUID,
+  MinLength,
+} from 'class-validator';
 
 export enum ContributionType {
   DESCRIPTION = 'description',
@@ -11,7 +18,9 @@ export class CreateContributionDto {
 
   @IsOptional()
   @IsString()
-  @MinLength(20, { message: 'La description doit faire au moins 20 caractères.' })
+  @MinLength(20, {
+    message: 'La description doit faire au moins 20 caractères.',
+  })
   content?: string;
 
   @IsOptional()

@@ -16,6 +16,17 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     ]);
 
     if (isPublic) {
+      // Public route: try to authenticate if a token is present (optional auth)
+      // but don't fail if no token or invalid token
+      const request = context.switchToHttp().getRequest();
+      const authHeader = request.headers?.authorization;
+      if (authHeader?.startsWith('Bearer ')) {
+        const result = super.canActivate(context);
+        if (result instanceof Promise) {
+          return result.catch(() => true);
+        }
+        return true;
+      }
       return true;
     }
 

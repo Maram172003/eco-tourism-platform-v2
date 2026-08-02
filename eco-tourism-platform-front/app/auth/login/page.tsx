@@ -16,10 +16,28 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
+
+  function validate(): boolean {
+    const errs: { email?: string; password?: string } = {};
+    if (!email.trim()) {
+      errs.email = "L'email est requis.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      errs.email = "Format d'email invalide.";
+    }
+    if (!password) {
+      errs.password = "Le mot de passe est requis.";
+    } else if (password.length < 6) {
+      errs.password = "Le mot de passe doit contenir au moins 6 caractères.";
+    }
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
+    if (!validate()) return;
 
     try {
       setLoading(true);
@@ -30,7 +48,11 @@ function LoginForm() {
       localStorage.setItem("refresh_token", result.refresh_token);
       localStorage.setItem("user", JSON.stringify(result.user));
 
-      router.push(redirectUrl || result.dashboard);
+      // Preserve guest cart through login
+      const guestCart = localStorage.getItem("guest_cart");
+
+      const target = redirectUrl || result.dashboard;
+      router.push(target);
     } catch (err: any) {
       setError(err.message || "Erreur lors de la connexion.");
     } finally {
@@ -108,14 +130,16 @@ function LoginForm() {
                       mail
                     </span>
                     <input
-                      className="w-full pl-12 pr-4 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium text-on-surface placeholder:text-outline/60"
+                      className={`w-full pl-12 pr-4 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium text-on-surface placeholder:text-outline/60 ${fieldErrors.email ? "ring-2 ring-red-400" : ""}`}
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => { setEmail(e.target.value); setFieldErrors((p) => ({ ...p, email: undefined })); }}
                       id="email"
                       placeholder="nom@exemple.com"
                       type="email"
+                      autoComplete="email"
                     />
                   </div>
+                  {fieldErrors.email && <p className="text-xs font-semibold text-red-500 ml-1">{fieldErrors.email}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -139,12 +163,13 @@ function LoginForm() {
                       lock
                     </span>
                     <input
-                      className="w-full pl-12 pr-12 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium text-on-surface placeholder:text-outline/60"
+                      className={`w-full pl-12 pr-12 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary transition-all font-medium text-on-surface placeholder:text-outline/60 ${fieldErrors.password ? "ring-2 ring-red-400" : ""}`}
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => { setPassword(e.target.value); setFieldErrors((p) => ({ ...p, password: undefined })); }}
                       id="password"
                       placeholder="••••••••"
                       type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
                     />
                     <button
                       type="button"
@@ -156,6 +181,7 @@ function LoginForm() {
                       </span>
                     </button>
                   </div>
+                  {fieldErrors.password && <p className="text-xs font-semibold text-red-500 ml-1">{fieldErrors.password}</p>}
 
                   {error && (
                     <p className="text-sm font-semibold text-red-600">{error}</p>
@@ -164,7 +190,7 @@ function LoginForm() {
 
                 <button
                   disabled={loading}
-                  className="w-full py-4 bg-primary text-slate-900 rounded-xl font-extrabold text-lg shadow-lg shadow-primary/30 hover:-translate-y-0.5 active:scale-95 transition-all flex justify-center items-center gap-2 disabled:opacity-60"
+                  className="w-full py-4 bg-primary text-slate-900 rounded-xl font-extrabold text-lg shadow-lg shadow-emerald-500/30 hover:-translate-y-0.5 active:scale-95 transition-all flex justify-center items-center gap-2 disabled:opacity-60"
                   type="submit"
                 >
                   {loading ? "Chargement..." : "Se connecter"}
@@ -184,6 +210,10 @@ function LoginForm() {
 
               <div className="grid gap-4 grid-cols-1">
                 <button onClick={() => {
+                  // Save redirect URL before Google OAuth redirect
+                  if (redirectUrl) {
+                    localStorage.setItem("post_login_redirect", redirectUrl);
+                  }
                   window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/google`;
                   }} className="flex items-center justify-center gap-3 py-3 px-4 border-2 border-surface-container-highest rounded-xl hover:bg-surface-container-low transition-colors font-bold text-sm w-full">
                   <svg className="w-5 h-5" viewBox="0 0 24 24">

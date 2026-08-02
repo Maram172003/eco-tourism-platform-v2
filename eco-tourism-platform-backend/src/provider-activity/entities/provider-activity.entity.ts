@@ -20,15 +20,12 @@ export class ProviderActivity {
   @Column({ type: 'uuid' })
   organization_id!: string;
 
-  // 'primary' | 'secondary'
   @Column({ type: 'varchar' })
-  level!: string;
+  level!: string; // 'primary' | 'secondary'
 
-  // ex: eco_tour | hebergement | activite | restaurant_terroir...
   @Column({ type: 'varchar' })
-  category!: string;
+  category!: string; // eco_tour | hebergement | activite | ...
 
-  // sous-types sélectionnés ex: ["dortoir", "suite", "bungalow"]
   @Column({ type: 'jsonb', nullable: true })
   subtypes!: string[] | null;
 
