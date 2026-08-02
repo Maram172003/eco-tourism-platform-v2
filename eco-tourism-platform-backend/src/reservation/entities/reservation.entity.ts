@@ -8,94 +8,83 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { User } from '../../users/entities/user.entity';
 import { Offer } from '../../offer/entities/offer.entity';
-import { OfferSession } from '../../offer/entities/offer-session.entity';
+import { OfferItem } from '../../offer/entities/offer-item.entity';
+import { OfferItemSession } from '../../offer/entities/offer-item-session.entity';
+import { GuideOffering } from '../../guide/entities/guide-offering.entity';
+import { GuideOfferingSession } from '../../guide/entities/guide-offering-session.entity';
 import { ReservationParticipant } from './reservation-participant.entity';
 
+/**
+ * Réservation effectuée par un éco-voyageur
+ * Lie un voyageur à une offre ou une prestation guide, un item et éventuellement une session
+ * C'est le document central du cycle de réservation
+ * Soit offer/offerItem/session (offres classiques) soit guideOffering/guideOfferingSession (prestations guide)
+ */
 @Entity('reservations')
 export class Reservation {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column('uuid')
-  offer_id!: string;
+  @Column({ unique: true })
+  reservation_ref!: string;
 
-  @ManyToOne(() => Offer, { onDelete: 'CASCADE', eager: false })
-  @JoinColumn({ name: 'offer_id' })
-  offer!: Offer;
-
-  // Séance spécifique (scheduled / recurring — null pour instant_stock / on_request)
   @Column({ type: 'uuid', nullable: true })
-  session_id!: string | null;
+  traveler_id!: string | null;
 
-  @ManyToOne(() => OfferSession, { nullable: true, onDelete: 'SET NULL', eager: false })
+  @ManyToOne(() => User, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'traveler_id' })
+  traveler!: User;
+
+  @Column({ type: 'uuid', nullable: true })
+  offer_id!: string | null;
+
+  @ManyToOne(() => Offer, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'offer_id' })
+  offer!: Offer | null;
+
+  @ManyToOne(() => OfferItem, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'offer_item_id' })
+  offerItem!: OfferItem | null;
+
+  @ManyToOne(() => OfferItemSession, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'session_id' })
-  session!: OfferSession | null;
+  session!: OfferItemSession | null;
 
-  // user_id de l'éco-voyageur organisateur
-  @Column('uuid')
-  organizer_id!: string;
+  @ManyToOne(() => GuideOffering, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'guide_offering_id' })
+  guideOffering!: GuideOffering | null;
 
-  // solo | group
-  @Column({ type: 'varchar', default: 'solo' })
-  reservation_type!: string;
+  @ManyToOne(() => GuideOfferingSession, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'guide_offering_session_id' })
+  guideOfferingSession!: GuideOfferingSession | null;
 
-  // pending | confirmed | cancelled | completed | rejected
-  @Column({ type: 'varchar', default: 'pending' })
+  @Column({ default: 'pending' })
   status!: string;
 
-  // Date souhaitée (pour on_request) ou date de la séance choisie
-  @Column({ type: 'date', nullable: true })
-  reservation_date!: Date | null;
+  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  total_price!: number;
 
-  // Pour hébergement : check-in / check-out
-  @Column({ type: 'date', nullable: true })
-  arrival_date!: Date | null;
+  @Column({ default: 'TND' })
+  currency!: string;
 
-  @Column({ type: 'date', nullable: true })
-  departure_date!: Date | null;
+  @Column({ type: 'text', nullable: true })
+  special_requests!: string | null;
 
-  // Créneau horaire pour activités / restaurants
   @Column({ type: 'varchar', nullable: true })
-  experience_time!: string | null;
+  confirmation_mode!: string | null;
 
-  // Sous-type(s) choisi(s) par le voyageur (offres multi-subtypes)
-  @Column({ type: 'jsonb', nullable: true })
-  chosen_subtypes!: string[] | null;
-
-  // Champs spécifiques à la réservation (allergies, urgence, notes, motivation...)
-  @Column({ type: 'jsonb', nullable: true })
-  reservation_details!: Record<string, unknown> | null;
-
-  @Column({ type: 'int', default: 1 })
-  participant_count!: number;
-
-  // Prix par personne au moment de la réservation
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
-  price_per_person!: number | null;
-
-  // total = price_per_person * participant_count
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
-  total_price!: number | null;
-
-  // Montant de l'acompte (deposit_percentage de l'offre * total_price / 100)
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
-  deposit_amount!: number | null;
-
-  @Column({ type: 'boolean', default: false })
-  deposit_paid!: boolean;
-
-  // unpaid | deposit_paid | fully_paid
-  @Column({ type: 'varchar', default: 'unpaid' })
-  payment_status!: string;
+  @Column({ type: 'timestamp', nullable: true })
+  cancelled_at!: Date | null;
 
   @Column({ type: 'text', nullable: true })
-  notes!: string | null;
+  cancel_reason!: string | null;
 
-  @Column({ type: 'text', nullable: true })
-  cancellation_reason!: string | null;
-
-  @OneToMany(() => ReservationParticipant, (p) => p.reservation, { cascade: true })
+  @OneToMany(() => ReservationParticipant, (p) => p.reservation)
   participants!: ReservationParticipant[];
 
   @CreateDateColumn()

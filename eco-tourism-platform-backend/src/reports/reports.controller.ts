@@ -10,9 +10,17 @@ import { Role } from '../common/enums/roles.enum';
 export class ReportsController {
   constructor(private readonly service: ReportsService) {}
 
-  @Roles(Role.ECO_TRAVELER, Role.GUIDE, Role.PROJECT)
+  @Roles(Role.ECO_TRAVELER, Role.GUIDE, Role.PROVIDER)
   @Post()
-  create(@Req() req: any, @Body() body: { reported_id: string; reason: string }) {
-    return this.service.createReport(req.user.sub, req.user.role, body.reported_id, body.reason ?? '');
+  create(
+    @Req() req: any,
+    @Body() body: { reported_id: string; reason: string },
+  ) {
+    return this.service.createReport(
+      req.user.sub,
+      req.user.role,
+      body.reported_id,
+      body.reason ?? '',
+    );
   }
 }

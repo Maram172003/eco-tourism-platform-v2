@@ -1,6 +1,10 @@
 import {
-  Column, CreateDateColumn, Entity, JoinColumn,
-  ManyToOne, PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
 import { PlaceContribution } from './place-contribution.entity';
 
@@ -10,11 +14,14 @@ export class ContributionVote {
 
   @Column('uuid') contribution_id: string;
   @ManyToOne(() => PlaceContribution, (c) => c.votes, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'contribution_id' }) contribution: PlaceContribution;
+  @JoinColumn({ name: 'contribution_id' })
+  contribution: PlaceContribution;
 
   @Column('uuid') user_id: string;
 
-  @Column({ type: 'int', nullable: true, default: null }) image_index: number | null;
+  @Column({ type: 'int', nullable: true, default: null }) image_index:
+    | number
+    | null;
 
   @CreateDateColumn() created_at: Date;
 }

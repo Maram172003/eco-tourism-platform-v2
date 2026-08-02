@@ -1,9 +1,18 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Not, Or, Repository } from 'typeorm';
+import { In, Not, Or, Repository } from 'typeorm';
 import { EcoTraveler } from './entities/eco-traveler.entity';
 import { Friendship } from './entities/friendship.entity';
 import { Publication } from '../publication/entities/publication.entity';
+import { TripPlan } from '../trip-plan/entities/trip-plan.entity';
+import { Reservation } from '../reservation/entities/reservation.entity';
+import { CircuitReservation } from '../circuit/entities/circuit-reservation.entity';
+import { Review } from '../review/entities/review.entity';
 import {
   CompleteProfileDto,
   UpdateGoalsDto,
@@ -22,16 +31,38 @@ export class EcoTravelerService {
     private readonly pubRepo: Repository<Publication>,
     @InjectRepository(Friendship)
     private readonly friendRepo: Repository<Friendship>,
+    @InjectRepository(TripPlan)
+    private readonly tripPlanRepo: Repository<TripPlan>,
+    @InjectRepository(Reservation)
+    private readonly reservationRepo: Repository<Reservation>,
+    @InjectRepository(CircuitReservation)
+    private readonly circuitResRepo: Repository<CircuitReservation>,
+    @InjectRepository(Review)
+    private readonly reviewRepo: Repository<Review>,
     private readonly mongoService: EcoTravelerMongoService,
-  ) { }
+  ) {}
 
   async getProfile(userId: string) {
-    // Les 4 requêtes partent en parallèle
-    const [sqlProfile, mongoPrefs, mongoEngagement, pubCount] = await Promise.all([
+    const [
+      sqlProfile,
+      mongoPrefs,
+      mongoEngagement,
+      pubCount,
+      tripPlanCount,
+      reservationCount,
+      circuitResCount,
+    ] = await Promise.all([
       this.repo.findOne({ where: { user_id: userId } }),
       this.mongoService.getPreferences(userId),
       this.mongoService.getEngagement(userId),
       this.pubRepo.count({ where: { author_id: userId } }),
+      this.tripPlanRepo.count({
+        where: { ecoTraveler: { id: userId } as any },
+      }),
+      this.reservationRepo.count({
+        where: { traveler: { id: userId } as any },
+      }),
+      this.circuitResRepo.count({ where: { user: { id: userId } as any } }),
     ]);
 
     // Recalcule et sauvegarde la completion + score_partages si nécessaire
@@ -53,7 +84,10 @@ export class EcoTravelerService {
 
       if (dirty) {
         await this.repo.save(sqlProfile);
-        await this.mongoService.updateScore(userId, sqlProfile.sustainability_score ?? 0);
+        await this.mongoService.updateScore(
+          userId,
+          sqlProfile.sustainability_score ?? 0,
+        );
       }
     }
 
@@ -89,8 +123,10 @@ export class EcoTravelerService {
       // (durability_score déjà dans SQL comme sustainability_score → pas répété)
       badges: mongoEngagement?.badges ?? [],
       feedback_given: mongoEngagement?.feedback_given ?? 0,
-      plans_shared: mongoEngagement?.plans_shared ?? 0,
-      reservations_made: mongoEngagement?.reservations_made ?? 0,
+      plans_shared: tripPlanCount || (mongoEngagement?.plans_shared ?? 0),
+      reservations_made:
+        reservationCount + circuitResCount ||
+        (mongoEngagement?.reservations_made ?? 0),
     };
   }
 
@@ -178,15 +214,15 @@ export class EcoTravelerService {
   }
 
   /**
-  * Appelé après le questionnaire.
-  * Stocke le score brut du QCM puis recalcule le score final pondéré.
-  *
-  * Formule spec AFRATIM :
-  *   score_final = (questionnaire * 20%)
-  *               + (reservations  * 40%)   ← Sprint 4
-  *               + (feedbacks     * 20%)   ← Sprint 8
-  *               + (partages      * 20%)   ← Sprint 7
-  */
+   * Appelé après le questionnaire.
+   * Stocke le score brut du QCM puis recalcule le score final pondéré.
+   *
+   * Formule spec AFRATIM :
+   *   score_final = (questionnaire * 20%)
+   *               + (reservations  * 40%)   ← Sprint 4
+   *               + (feedbacks     * 20%)   ← Sprint 8
+   *               + (partages      * 20%)   ← Sprint 7
+   */
   async updateQuestionnaireScore(userId: string, scoreQuestionnaire: number) {
     const profile = await this.findOrFail(userId);
 
@@ -213,7 +249,7 @@ export class EcoTravelerService {
     userId: string,
     component: 'reservations' | 'feedbacks' | 'partages',
     value: number,
-   ) {
+  ) {
     const profile = await this.findOrFail(userId);
 
     if (component === 'reservations') profile.score_reservations = value;
@@ -230,10 +266,43 @@ export class EcoTravelerService {
     return saved;
   }
 
+  /**
+   * Recalcule la composante 'réservations' (40%) du score de durabilité
+   * à partir des réservations actives (offres, prestations guide, circuits).
+   * Appelé à chaque création / confirmation / annulation / expiration.
+   */
+  async recomputeReservationsScore(userId: string): Promise<void> {
+    const activeStatuses = Not(In(['cancelled', 'expired', 'rejected']));
+    const [reservationCount, circuitCount] = await Promise.all([
+      this.reservationRepo.count({
+        where: { traveler: { id: userId } as any, status: activeStatuses },
+      }),
+      this.circuitResRepo.count({
+        where: { user: { id: userId } as any, status: activeStatuses },
+      }),
+    ]);
+    const score = Math.min((reservationCount + circuitCount) * 25, 100);
+    await this.updateScoreComponent(userId, 'reservations', score);
+  }
+
+  /**
+   * Recalcule la composante 'feedbacks' (20%) du score de durabilité
+   * à partir des avis publiés. Appelé à chaque création d'avis.
+   */
+  async recomputeFeedbacksScore(userId: string): Promise<void> {
+    const count = await this.reviewRepo.count({
+      where: { author_id: userId },
+    });
+    const score = Math.min(count * 20, 100);
+    await this.updateScoreComponent(userId, 'feedbacks', score);
+  }
+
   private async findOrFail(userId: string) {
     const profile = await this.repo.findOne({ where: { user_id: userId } });
     if (!profile) {
-      throw new NotFoundException("Profil introuvable. Complétez d'abord votre profil de base.");
+      throw new NotFoundException(
+        "Profil introuvable. Complétez d'abord votre profil de base.",
+      );
     }
     return profile;
   }
@@ -246,12 +315,12 @@ export class EcoTravelerService {
    *   Partages       20%
    */
   private calculateFinalScore(p: Partial<EcoTraveler>): number {
-    const q = p.score_questionnaire ?? 0;  // 20%
-    const r = p.score_reservations ?? 0;  // 40%
-    const f = p.score_feedbacks ?? 0;  // 20%
-    const s = p.score_partages ?? 0;  // 20%
+    const q = p.score_questionnaire ?? 0; // 20%
+    const r = p.score_reservations ?? 0; // 40%
+    const f = p.score_feedbacks ?? 0; // 20%
+    const s = p.score_partages ?? 0; // 20%
 
-    return Math.round(q * 0.20 + r * 0.40 + f * 0.20 + s * 0.20);
+    return Math.round(q * 0.2 + r * 0.4 + f * 0.2 + s * 0.2);
   }
 
   /**
@@ -268,7 +337,13 @@ export class EcoTravelerService {
       .createQueryBuilder('t')
       .where('LOWER(t.full_name) LIKE :q', { q: `%${q.toLowerCase()}%` })
       .andWhere('t.user_id != :me', { me: currentUserId })
-      .select(['t.user_id', 't.full_name', 't.photo', 't.country', 't.sustainability_score'])
+      .select([
+        't.user_id',
+        't.full_name',
+        't.photo',
+        't.country',
+        't.sustainability_score',
+      ])
       .limit(20)
       .getMany();
     return results;
@@ -292,7 +367,11 @@ export class EcoTravelerService {
       ],
     });
 
-    let friendStatus: 'none' | 'pending_sent' | 'pending_received' | 'accepted' = 'none';
+    let friendStatus:
+      | 'none'
+      | 'pending_sent'
+      | 'pending_received'
+      | 'accepted' = 'none';
     let friendshipId: string | null = null;
     if (friendship) {
       friendshipId = friendship.id;
@@ -323,7 +402,8 @@ export class EcoTravelerService {
   // ── Friendships ──────────────────────────────────────────────────────────────
 
   async sendFriendRequest(requesterId: string, receiverId: string) {
-    if (requesterId === receiverId) throw new BadRequestException('Action invalide.');
+    if (requesterId === receiverId)
+      throw new BadRequestException('Action invalide.');
     const existing = await this.friendRepo.findOne({
       where: [
         { requester_id: requesterId, receiver_id: receiverId },
@@ -331,7 +411,11 @@ export class EcoTravelerService {
       ],
     });
     if (existing) throw new BadRequestException('Une relation existe déjà.');
-    const req = this.friendRepo.create({ requester_id: requesterId, receiver_id: receiverId, status: 'pending' });
+    const req = this.friendRepo.create({
+      requester_id: requesterId,
+      receiver_id: receiverId,
+      status: 'pending',
+    });
     return this.friendRepo.save(req);
   }
 
@@ -346,7 +430,8 @@ export class EcoTravelerService {
   async removeFriendship(userId: string, friendshipId: string) {
     const f = await this.friendRepo.findOne({ where: { id: friendshipId } });
     if (!f) throw new NotFoundException('Relation introuvable.');
-    if (f.requester_id !== userId && f.receiver_id !== userId) throw new ForbiddenException('Accès refusé.');
+    if (f.requester_id !== userId && f.receiver_id !== userId)
+      throw new ForbiddenException('Accès refusé.');
     await this.friendRepo.remove(f);
     return { message: 'Supprimé.' };
   }
@@ -359,15 +444,26 @@ export class EcoTravelerService {
       ],
     });
     if (!rows.length) return [];
-    const friendIds = rows.map((r) => (r.requester_id === userId ? r.receiver_id : r.requester_id));
+    const friendIds = rows.map((r) =>
+      r.requester_id === userId ? r.receiver_id : r.requester_id,
+    );
     const profiles = await this.repo
       .createQueryBuilder('t')
       .where('t.user_id IN (:...ids)', { ids: friendIds })
-      .select(['t.user_id', 't.full_name', 't.photo', 't.country', 't.sustainability_score'])
+      .select([
+        't.user_id',
+        't.full_name',
+        't.photo',
+        't.country',
+        't.sustainability_score',
+      ])
       .getMany();
     return profiles.map((p) => ({
       ...p,
-      friendship_id: rows.find((r) => r.requester_id === p.user_id || r.receiver_id === p.user_id)?.id ?? null,
+      friendship_id:
+        rows.find(
+          (r) => r.requester_id === p.user_id || r.receiver_id === p.user_id,
+        )?.id ?? null,
     }));
   }
 
@@ -379,7 +475,9 @@ export class EcoTravelerService {
       ],
     });
     if (!rows.length) return [];
-    const friendIds = rows.map((r) => (r.requester_id === targetId ? r.receiver_id : r.requester_id));
+    const friendIds = rows.map((r) =>
+      r.requester_id === targetId ? r.receiver_id : r.requester_id,
+    );
     return this.repo
       .createQueryBuilder('t')
       .where('t.user_id IN (:...ids)', { ids: friendIds })
@@ -402,12 +500,17 @@ export class EcoTravelerService {
     return rows.map((r) => ({
       id: r.id,
       created_at: r.created_at,
-      sender: profiles.find((p) => p.user_id === r.requester_id) ?? { user_id: r.requester_id, full_name: 'Utilisateur', photo: null },
+      sender: profiles.find((p) => p.user_id === r.requester_id) ?? {
+        user_id: r.requester_id,
+        full_name: 'Utilisateur',
+        photo: null,
+      },
     }));
   }
 
   async blockUser(blockerId: string, targetId: string) {
-    if (blockerId === targetId) throw new BadRequestException('Action invalide.');
+    if (blockerId === targetId)
+      throw new BadRequestException('Action invalide.');
     // Remove any existing friendship first
     const existing = await this.friendRepo.findOne({
       where: [
@@ -417,14 +520,23 @@ export class EcoTravelerService {
     });
     if (existing) await this.friendRepo.remove(existing);
     // Save block as a special friendship record
-    const block = this.friendRepo.create({ requester_id: blockerId, receiver_id: targetId, status: 'blocked' });
+    const block = this.friendRepo.create({
+      requester_id: blockerId,
+      receiver_id: targetId,
+      status: 'blocked',
+    });
     return this.friendRepo.save(block);
   }
 
   async reportUser(reporterId: string, targetId: string, reason: string) {
-    if (reporterId === targetId) throw new BadRequestException('Action invalide.');
+    if (reporterId === targetId)
+      throw new BadRequestException('Action invalide.');
     // Store as a special record for admin review
-    const report = this.friendRepo.create({ requester_id: reporterId, receiver_id: targetId, status: `report:${reason.substring(0, 100)}` });
+    const report = this.friendRepo.create({
+      requester_id: reporterId,
+      receiver_id: targetId,
+      status: `report:${reason.substring(0, 100)}`,
+    });
     return this.friendRepo.save(report);
   }
 
@@ -432,7 +544,8 @@ export class EcoTravelerService {
     let score = 0;
 
     const identityFields = [p.full_name, p.country, p.language];
-    score += (identityFields.filter(Boolean).length / identityFields.length) * 30;
+    score +=
+      (identityFields.filter(Boolean).length / identityFields.length) * 30;
 
     if (p.traveler_types?.length) score += 10;
     if (p.motivations?.length || p.sustainability_values?.length) score += 10;

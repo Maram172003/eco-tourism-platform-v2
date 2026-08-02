@@ -1,14 +1,24 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { Publication } from './entities/publication.entity';
 import { PublicationLike } from './entities/publication-like.entity';
 import { PublicationComment } from './entities/publication-comment.entity';
 import { CommentLike } from './entities/comment-like.entity';
-import { CreatePublicationDto, UpdatePublicationDto } from './dto/publication.dto';
+import { PlaceContribution } from '../place-contribution/entities/place-contribution.entity';
+import {
+  CreatePublicationDto,
+  UpdatePublicationDto,
+} from './dto/publication.dto';
 import { EcoTravelerService } from '../eco-traveler/eco-traveler.service';
 import { EcoTravelerMongoService } from '../eco-traveler/eco-traveler-mongo.service';
 import { EcoTraveler } from '../eco-traveler/entities/eco-traveler.entity';
+import { Guide } from '../guide/entities/guide.entity';
 import { Provider } from '../provider/entities/provider.entity';
 
 const AMBASSADOR_BADGE = 'Ambassadeur Éco-Voyage';
@@ -26,25 +36,44 @@ export class PublicationService {
     private readonly commentLikeRepo: Repository<CommentLike>,
     @InjectRepository(EcoTraveler)
     private readonly ecoRepo: Repository<EcoTraveler>,
+    @InjectRepository(Guide)
+    private readonly guideRepo: Repository<Guide>,
     @InjectRepository(Provider)
     private readonly providerRepo: Repository<Provider>,
+    @InjectRepository(PlaceContribution)
+    private readonly contribRepo: Repository<PlaceContribution>,
     private readonly ecoTravelerService: EcoTravelerService,
     private readonly ecoTravelerMongoService: EcoTravelerMongoService,
   ) {}
 
   // ─── CRUD ─────────────────────────────────────────────────────────────────
 
-  async create(authorId: string, dto: CreatePublicationDto): Promise<Publication> {
+  async create(
+    authorId: string,
+    dto: CreatePublicationDto,
+  ): Promise<Publication> {
     let status = 'approved';
     if (dto.type === 'place') {
-      const hasAmbassador = await this.ecoTravelerMongoService.hasBadge(authorId, AMBASSADOR_BADGE);
+      const hasAmbassador = await this.ecoTravelerMongoService.hasBadge(
+        authorId,
+        AMBASSADOR_BADGE,
+      );
       status = hasAmbassador ? 'approved' : 'pending';
     }
     const pub = this.repo.create({
-      author_id: authorId, type: dto.type, title: dto.title,
-      description: dto.description ?? null, images: dto.images?.length ? dto.images : null,
-      latitude: dto.latitude ?? null, longitude: dto.longitude ?? null,
-      place_name: dto.place_name ?? null, region: dto.region ?? null, status,
+      author_id: authorId,
+      type: dto.type,
+      title: dto.title,
+      description: dto.description ?? null,
+      images: dto.images?.length ? dto.images : null,
+      latitude: dto.latitude ?? null,
+      longitude: dto.longitude ?? null,
+      place_name: dto.place_name ?? null,
+      region: dto.region ?? null,
+      category: dto.category ?? null,
+      tags: dto.tags?.length ? dto.tags : null,
+      popularity_score: 0,
+      status,
     });
     const saved = await this.repo.save(pub);
     await this.syncPartagesScore(authorId);
@@ -52,35 +81,56 @@ export class PublicationService {
   }
 
   async findByAuthor(authorId: string): Promise<Publication[]> {
-    return this.repo.find({ where: { author_id: authorId }, order: { created_at: 'DESC' } });
+    return this.repo.find({
+      where: { author_id: authorId },
+      order: { created_at: 'DESC' },
+    });
   }
 
   async findPublicByAuthor(authorId: string): Promise<Publication[]> {
-    return this.repo.find({ where: { author_id: authorId, status: 'approved' }, order: { created_at: 'DESC' } });
+    return this.repo.find({
+      where: { author_id: authorId, status: 'approved' },
+      order: { created_at: 'DESC' },
+    });
   }
 
-  async findAllExperiences(): Promise<Publication[]> {
-    return this.repo.find({ where: { type: 'experience', status: 'approved' }, order: { created_at: 'DESC' }, take: 12 });
+  async findAllExperiences(region?: string): Promise<Publication[]> {
+    const where: any = { type: 'experience', status: 'approved' };
+    if (region) where.region = region;
+    return this.repo.find({ where, order: { created_at: 'DESC' }, take: 12 });
   }
 
-  async update(authorId: string, pubId: string, dto: UpdatePublicationDto): Promise<Publication> {
+  async update(
+    authorId: string,
+    pubId: string,
+    dto: UpdatePublicationDto,
+  ): Promise<Publication> {
     const pub = await this.findOrFail(pubId);
-    if (pub.author_id !== authorId) throw new ForbiddenException('Accès refusé.');
+    if (pub.author_id !== authorId)
+      throw new ForbiddenException('Accès refusé.');
     if (dto.title !== undefined) pub.title = dto.title;
     if (dto.description !== undefined) pub.description = dto.description;
-    if (dto.images !== undefined) pub.images = dto.images.length ? dto.images : null;
+    if (dto.images !== undefined)
+      pub.images = dto.images.length ? dto.images : null;
     if (dto.place_name !== undefined) pub.place_name = dto.place_name;
     if (dto.region !== undefined) pub.region = dto.region;
+    if (dto.category !== undefined) pub.category = dto.category;
+    if (dto.tags !== undefined) pub.tags = dto.tags.length ? dto.tags : null;
     return this.repo.save(pub);
   }
 
   async remove(authorId: string, pubId: string): Promise<{ message: string }> {
     const pub = await this.findOrFail(pubId);
-    if (pub.author_id !== authorId) throw new ForbiddenException('Accès refusé.');
+    if (pub.author_id !== authorId)
+      throw new ForbiddenException('Accès refusé.');
     await this.likeRepo.delete({ publication_id: pubId });
-    const comments = await this.commentRepo.find({ where: { publication_id: pubId } });
+    const comments = await this.commentRepo.find({
+      where: { publication_id: pubId },
+    });
     if (comments.length) {
-      await this.commentLikeRepo.delete({ comment_id: comments.map(c => c.id) as any });
+      await this.commentLikeRepo.delete({
+        comment_id: comments.map((c) => c.id) as any,
+      });
       await this.commentRepo.delete({ publication_id: pubId });
     }
     await this.repo.remove(pub);
@@ -92,13 +142,24 @@ export class PublicationService {
 
   async toggleLike(pubId: string, userId: string, userRole: string) {
     await this.findOrFail(pubId);
-    const existing = await this.likeRepo.findOne({ where: { publication_id: pubId, user_id: userId } });
+    const existing = await this.likeRepo.findOne({
+      where: { publication_id: pubId, user_id: userId },
+    });
     if (existing) {
       await this.likeRepo.remove(existing);
     } else {
-      await this.likeRepo.save(this.likeRepo.create({ publication_id: pubId, user_id: userId, user_role: userRole }));
+      await this.likeRepo.save(
+        this.likeRepo.create({
+          publication_id: pubId,
+          user_id: userId,
+          user_role: userRole,
+        }),
+      );
     }
-    const count = await this.likeRepo.count({ where: { publication_id: pubId } });
+    const count = await this.likeRepo.count({
+      where: { publication_id: pubId },
+    });
+    await this.recalculatePopularity(pubId);
     return { liked: !existing, count };
   }
 
@@ -106,46 +167,98 @@ export class PublicationService {
     const [likes, commentsCount, likeRecord] = await Promise.all([
       this.likeRepo.count({ where: { publication_id: pubId } }),
       this.commentRepo.count({ where: { publication_id: pubId } }),
-      viewerId ? this.likeRepo.findOne({ where: { publication_id: pubId, user_id: viewerId } }) : Promise.resolve(null),
+      viewerId
+        ? this.likeRepo.findOne({
+            where: { publication_id: pubId, user_id: viewerId },
+          })
+        : Promise.resolve(null),
     ]);
     return { likes, commentsCount, liked: !!likeRecord };
   }
 
   async getBatchInteractions(pubIds: string[], viewerId?: string) {
-    const result: Record<string, { likes: number; commentsCount: number; liked: boolean }> = {};
-    await Promise.all(pubIds.map(async (id) => { result[id] = await this.getInteractions(id, viewerId); }));
+    const result: Record<
+      string,
+      { likes: number; commentsCount: number; liked: boolean }
+    > = {};
+    await Promise.all(
+      pubIds.map(async (id) => {
+        result[id] = await this.getInteractions(id, viewerId);
+      }),
+    );
     return result;
   }
 
   async getLikers(pubId: string) {
-    const rows = await this.likeRepo.find({ where: { publication_id: pubId }, order: { created_at: 'DESC' } });
-    return Promise.all(rows.map(async (l) => ({ ...(await this.getAuthorInfo(l.user_id, l.user_role)), liked_at: l.created_at })));
+    const rows = await this.likeRepo.find({
+      where: { publication_id: pubId },
+      order: { created_at: 'DESC' },
+    });
+    return Promise.all(
+      rows.map(async (l) => ({
+        ...(await this.getAuthorInfo(l.user_id, l.user_role)),
+        liked_at: l.created_at,
+      })),
+    );
   }
 
   // ─── Comments ─────────────────────────────────────────────────────────────
 
-  async addComment(pubId: string, authorId: string, authorRole: string, content: string) {
+  async addComment(
+    pubId: string,
+    authorId: string,
+    authorRole: string,
+    content: string,
+  ) {
     await this.findOrFail(pubId);
     const comment = await this.commentRepo.save(
-      this.commentRepo.create({ publication_id: pubId, author_id: authorId, author_role: authorRole, content, parent_id: null }),
+      this.commentRepo.create({
+        publication_id: pubId,
+        author_id: authorId,
+        author_role: authorRole,
+        content,
+        parent_id: null,
+      }),
     );
+    await this.recalculatePopularity(pubId);
     const author = await this.getAuthorInfo(authorId, authorRole);
-    return { ...comment, author, likes_count: 0, liked_by_viewer: false, replies: [] };
+    return {
+      ...comment,
+      author,
+      likes_count: 0,
+      liked_by_viewer: false,
+      replies: [],
+    };
   }
 
-  async addReply(commentId: string, authorId: string, authorRole: string, content: string) {
+  async addReply(
+    commentId: string,
+    authorId: string,
+    authorRole: string,
+    content: string,
+  ) {
     const parent = await this.commentRepo.findOne({ where: { id: commentId } });
     if (!parent) throw new NotFoundException('Commentaire introuvable.');
-    if (parent.parent_id) throw new BadRequestException('Impossible de répondre à une réponse.');
+    if (parent.parent_id)
+      throw new BadRequestException('Impossible de répondre à une réponse.');
     const reply = await this.commentRepo.save(
-      this.commentRepo.create({ publication_id: parent.publication_id, author_id: authorId, author_role: authorRole, content, parent_id: commentId }),
+      this.commentRepo.create({
+        publication_id: parent.publication_id,
+        author_id: authorId,
+        author_role: authorRole,
+        content,
+        parent_id: commentId,
+      }),
     );
     const author = await this.getAuthorInfo(authorId, authorRole);
     return { ...reply, author, likes_count: 0, liked_by_viewer: false };
   }
 
   async getComments(pubId: string, viewerId?: string) {
-    const allComments = await this.commentRepo.find({ where: { publication_id: pubId }, order: { created_at: 'ASC' } });
+    const allComments = await this.commentRepo.find({
+      where: { publication_id: pubId },
+      order: { created_at: 'ASC' },
+    });
     if (!allComments.length) return [];
 
     // Batch-load all comment likes for this publication
@@ -161,28 +274,45 @@ export class PublicationService {
     const likeCountMap = new Map<string, number>();
     const viewerLikedMap = new Map<string, boolean>();
     for (const like of allLikes) {
-      likeCountMap.set(like.comment_id, (likeCountMap.get(like.comment_id) ?? 0) + 1);
-      if (viewerId && like.user_id === viewerId) viewerLikedMap.set(like.comment_id, true);
+      likeCountMap.set(
+        like.comment_id,
+        (likeCountMap.get(like.comment_id) ?? 0) + 1,
+      );
+      if (viewerId && like.user_id === viewerId)
+        viewerLikedMap.set(like.comment_id, true);
     }
 
     // Batch-load unique authors
     const authorMap = new Map<string, any>();
-    const uniqueAuthors = [...new Set(allComments.map((c) => `${c.author_id}:${c.author_role}`))];
-    await Promise.all(uniqueAuthors.map(async (key) => {
-      const [userId, role] = key.split(':');
-      authorMap.set(key, await this.getAuthorInfo(userId, role));
-    }));
+    const uniqueAuthors = [
+      ...new Set(allComments.map((c) => `${c.author_id}:${c.author_role}`)),
+    ];
+    await Promise.all(
+      uniqueAuthors.map(async (key) => {
+        const [userId, role] = key.split(':');
+        authorMap.set(key, await this.getAuthorInfo(userId, role));
+      }),
+    );
 
     const enrich = (c: PublicationComment, includeReplies = false) => ({
       ...c,
-      author: authorMap.get(`${c.author_id}:${c.author_role}`) ?? { user_id: c.author_id, full_name: 'Utilisateur', photo: null, role: c.author_role },
+      author: authorMap.get(`${c.author_id}:${c.author_role}`) ?? {
+        user_id: c.author_id,
+        full_name: 'Utilisateur',
+        photo: null,
+        role: c.author_role,
+      },
       likes_count: likeCountMap.get(c.id) ?? 0,
       liked_by_viewer: viewerLikedMap.get(c.id) ?? false,
       ...(includeReplies ? { replies: [] as any[] } : {}),
     });
 
-    const topLevel = allComments.filter((c) => !c.parent_id).map((c) => enrich(c, true));
-    const replies   = allComments.filter((c) => !!c.parent_id).map((c) => enrich(c, false));
+    const topLevel = allComments
+      .filter((c) => !c.parent_id)
+      .map((c) => enrich(c, true));
+    const replies = allComments
+      .filter((c) => !!c.parent_id)
+      .map((c) => enrich(c, false));
 
     for (const reply of replies) {
       const parent = topLevel.find((c) => c.id === reply.parent_id);
@@ -193,33 +323,150 @@ export class PublicationService {
   }
 
   async deleteComment(commentId: string, userId: string) {
-    const comment = await this.commentRepo.findOne({ where: { id: commentId } });
+    const comment = await this.commentRepo.findOne({
+      where: { id: commentId },
+    });
     if (!comment) throw new NotFoundException('Commentaire introuvable.');
-    if (comment.author_id !== userId) throw new ForbiddenException('Accès refusé.');
+    if (comment.author_id !== userId)
+      throw new ForbiddenException('Accès refusé.');
     // Delete likes and replies first
     await this.commentLikeRepo.delete({ comment_id: commentId });
-    const replies = await this.commentRepo.find({ where: { parent_id: commentId } });
+    const replies = await this.commentRepo.find({
+      where: { parent_id: commentId },
+    });
     if (replies.length) {
-      await this.commentLikeRepo.delete({ comment_id: replies.map((r) => r.id) as any });
+      await this.commentLikeRepo.delete({
+        comment_id: replies.map((r) => r.id) as any,
+      });
       await this.commentRepo.delete({ parent_id: commentId });
     }
     await this.commentRepo.remove(comment);
-    return { message: 'Commentaire supprimé.', replies_deleted: replies.length };
+    return {
+      message: 'Commentaire supprimé.',
+      replies_deleted: replies.length,
+    };
   }
 
   // ─── Comment Likes ────────────────────────────────────────────────────────
 
   async toggleCommentLike(commentId: string, userId: string, userRole: string) {
-    const comment = await this.commentRepo.findOne({ where: { id: commentId } });
+    const comment = await this.commentRepo.findOne({
+      where: { id: commentId },
+    });
     if (!comment) throw new NotFoundException('Commentaire introuvable.');
-    const existing = await this.commentLikeRepo.findOne({ where: { comment_id: commentId, user_id: userId } });
+    const existing = await this.commentLikeRepo.findOne({
+      where: { comment_id: commentId, user_id: userId },
+    });
     if (existing) {
       await this.commentLikeRepo.remove(existing);
     } else {
-      await this.commentLikeRepo.save(this.commentLikeRepo.create({ comment_id: commentId, user_id: userId, user_role: userRole }));
+      await this.commentLikeRepo.save(
+        this.commentLikeRepo.create({
+          comment_id: commentId,
+          user_id: userId,
+          user_role: userRole,
+        }),
+      );
     }
-    const count = await this.commentLikeRepo.count({ where: { comment_id: commentId } });
+    const count = await this.commentLikeRepo.count({
+      where: { comment_id: commentId },
+    });
     return { liked: !existing, count };
+  }
+
+  // ─── Popularité ────────────────────────────────────────────────────────────
+
+  async recalculatePopularity(pubId: string): Promise<void> {
+    const [likes, comments, contributions] = await Promise.all([
+      this.likeRepo.count({ where: { publication_id: pubId } }),
+      this.commentRepo.count({ where: { publication_id: pubId } }),
+      this.contribRepo.count({ where: { publication_id: pubId } }),
+    ]);
+    const score = likes + comments * 2 + contributions * 3;
+    await this.repo.update(pubId, { popularity_score: score });
+  }
+
+  async findTrending(limit = 20): Promise<Publication[]> {
+    return this.repo.find({
+      where: { type: 'place', status: 'approved' },
+      order: { popularity_score: 'DESC', created_at: 'DESC' },
+      take: limit,
+    });
+  }
+
+  async findOne(id: string): Promise<Publication> {
+    return this.findOrFail(id);
+  }
+
+  async findByCategory(category: string, limit = 20): Promise<Publication[]> {
+    return this.repo.find({
+      where: { type: 'place', status: 'approved', category },
+      order: { popularity_score: 'DESC' },
+      take: limit,
+    });
+  }
+
+  async findAllPlaces(
+    limit = 50,
+    offset = 0,
+    region?: string,
+  ): Promise<Publication[]> {
+    const where: any = { type: 'place', status: 'approved' };
+    if (region) where.region = region;
+    return this.repo.find({
+      where,
+      order: { popularity_score: 'DESC', created_at: 'DESC' },
+      take: limit,
+      skip: offset,
+    });
+  }
+
+  async getHeatmapData(): Promise<any[]> {
+    const places = (await this.repo.find({
+      where: {
+        type: 'place',
+        status: 'approved',
+        latitude: In([null] as any),
+        longitude: In([null] as any),
+      },
+    })) as any[];
+    // Actually get places with lat/lng
+    const raw = await this.repo
+      .createQueryBuilder('p')
+      .leftJoin(PublicationLike, 'pl', 'pl.publication_id = p.id')
+      .leftJoin(PublicationComment, 'pc', 'pc.publication_id = p.id')
+      .leftJoin(PlaceContribution, 'pc2', 'pc2.publication_id = p.id')
+      .select([
+        'p.id',
+        'p.title',
+        'p.latitude',
+        'p.longitude',
+        'COUNT(DISTINCT pl.id) AS likes',
+        'COUNT(DISTINCT pc.id) AS comments',
+        'COUNT(DISTINCT pc2.id) AS contributions',
+        'p.popularity_score',
+      ])
+      .where('p.type = :type', { type: 'place' })
+      .andWhere('p.status = :status', { status: 'approved' })
+      .andWhere('p.latitude IS NOT NULL')
+      .andWhere('p.longitude IS NOT NULL')
+      .groupBy('p.id')
+      .getRawMany();
+
+    return raw.map((r: any) => ({
+      id: r.p_id,
+      title: r.p_title,
+      lat: Number(r.p_latitude),
+      lng: Number(r.p_longitude),
+      weight:
+        (Number(r.likes) || 0) +
+        (Number(r.comments) || 0) * 2 +
+        (Number(r.contributions) || 0) * 3,
+      likes: Number(r.likes) || 0,
+      comments: Number(r.comments) || 0,
+      contributions: Number(r.contributions) || 0,
+      popularity_score: Number(r.p_popularity_score) || 0,
+    }));
   }
 
   // ─── Private helpers ──────────────────────────────────────────────────────
@@ -231,17 +478,30 @@ export class PublicationService {
   }
 
   private async getAuthorInfo(userId: string, role: string) {
+    const r = role === 'provider' ? 'provider' : role;
     let entity: any = null;
-    if (role === 'eco_traveler') entity = await this.ecoRepo.findOne({ where: { user_id: userId } });
+    if (r === 'eco_traveler')
+      entity = await this.ecoRepo.findOne({ where: { user_id: userId } });
+    else if (r === 'guide')
+      entity = await this.guideRepo.findOne({ where: { user_id: userId } });
     else entity = await this.providerRepo.findOne({ where: { user_id: userId } });
-    return { user_id: userId, full_name: entity?.full_name ?? 'Utilisateur', photo: entity?.photo ?? null, role };
+    return {
+      user_id: userId,
+      full_name: entity?.full_name ?? 'Utilisateur',
+      photo: entity?.photo ?? null,
+      role: r,
+    };
   }
 
   private async syncPartagesScore(authorId: string): Promise<void> {
     try {
       const count = await this.repo.count({ where: { author_id: authorId } });
       const score = Math.min(count * 20, 100);
-      await this.ecoTravelerService.updateScoreComponent(authorId, 'partages', score);
-    } catch { }
+      await this.ecoTravelerService.updateScoreComponent(
+        authorId,
+        'partages',
+        score,
+      );
+    } catch {}
   }
 }

@@ -15,7 +15,7 @@ export class GuideSkills {
   landscapes!: string[];
 
   @Prop({
-    type: [{ label: String, proof: String }],
+    type: [{ label: String, proof: { type: String, default: '' } }],
     default: [],
   })
   certifications!: { label: string; proof: string }[];

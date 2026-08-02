@@ -1,42 +1,47 @@
-
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
-import { AuthMethod } from "../../common/enums/auth-method.enum";
-import { Role } from "../../common/enums/roles.enum";
-import { UserStatus } from "../../common/enums/user-status.enum";
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { AuthMethod } from '../../common/enums/auth-method.enum';
+import { Role } from '../../common/enums/roles.enum';
+import { UserStatus } from '../../common/enums/user-status.enum';
 
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
-  id !: string;
+  id!: string;
 
   @Column({ unique: true })
-  email !: string;
+  email!: string;
 
   @Column()
-  password !: string;
+  password!: string;
 
   @Column({
     type: 'enum',
     enum: AuthMethod,
     default: AuthMethod.EMAIL,
   })
-  auth_method !: AuthMethod;
+  auth_method!: AuthMethod;
 
   @Column({
     type: 'enum',
     enum: Role,
   })
-  role !: Role;
+  role!: Role;
 
   @Column({
     type: 'enum',
     enum: UserStatus,
     default: UserStatus.PENDING,
   })
-  status !: UserStatus;
+  status!: UserStatus;
 
   @Column({ type: 'timestamp', nullable: true })
-  email_verified_at !: Date | null;
+  email_verified_at!: Date | null;
 
   @CreateDateColumn()
   created_at!: Date;
