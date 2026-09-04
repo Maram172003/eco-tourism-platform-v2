@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Leaf, ArrowRight, ArrowLeft, Check, Plus, X } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import dynamic from "next/dynamic";
+import { getConsistentSession } from "@/lib/auth";
+import { monTableauDeBord } from "@/lib/dashboard-path";
 
 const MultiLocationPicker = dynamic(
   () => import("@/components/map/MultiLocationPicker"),
@@ -681,8 +683,9 @@ export default function GuideOnboardingPage() {
   });
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) { router.push("/auth/login"); return; }
+    // Le jeton doit désigner le compte affiché, sinon l'onboarding écrirait
+    // dans le profil d'une session restée ouverte dans un autre onglet.
+    if (!getConsistentSession()) { router.push("/auth/login"); return; }
     try {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
       if (user.email) setData((prev) => ({ ...prev, email: user.email }));
@@ -752,7 +755,7 @@ export default function GuideOnboardingPage() {
           }),
         });
         await apiFetch("/guide/onboarded", { method: "POST", headers });
-        router.push("/dashboard");
+        router.push(monTableauDeBord());
         return;
       }
       setStep((s) => s + 1);

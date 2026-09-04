@@ -10,7 +10,7 @@ import {
   Plus, Edit3, ShieldCheck, MapPin, Calendar, Phone, Building2, Globe, Leaf, ArrowLeft,
   LayoutGrid, Tag, Info, Sparkles, Users, Mail, MessageCircle,
   ArrowRight, Send, X, Clock, ChevronLeft, ChevronRight, Check, Search, UserPlus,
-  MoreVertical, UserX, ShieldBan, Flag, Route, Trash2,
+  MoreVertical, UserX, ShieldBan, Flag, Route, Trash2, Loader2,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { logoutUser } from "@/lib/auth";
@@ -31,6 +31,9 @@ import { PUBLIC_RECOMMANDE, DOMAINES } from "@/lib/guideOfferConfig";
 import { Bool, PrestSubBlock, InviteButton, SectionLockedBanner, TRANSPORT_ECO_SUBTYPES, TRANSPORT_STD_SUBTYPES, HEBERGEMENT_PREST_SUBTYPES, RESTAURANT_PREST_SUBTYPES, RepasBlock, AutreServiceBlock, type RepasBlockData, type AutreServiceBlockData } from "@/components/GuideOfferModal";
 import { HebergBlock, HebergData, EMPTY_HEBERG } from "@/components/guide/offer/ProviderServiceBlock";
 import TaxonomyTagPicker from "@/components/common/TaxonomyTagPicker";
+import { OFFER_SUSTAINABILITY_STEPS, CIRCUIT_SUSTAINABILITY_STEPS, getOfferSustainabilityLevel, getCircuitSustainabilityLevel } from "@/lib/constants/sustainability";
+import SustainabilityBadge from "@/components/common/SustainabilityBadge";
+import BadgeLabel from "@/components/common/BadgeLabel";
 
 const MapPicker = dynamic(
   () => import("@/components/map/MapPicker"),
@@ -187,6 +190,28 @@ type OrgActivity = {
   certifications: Array<{ name: string; document_url?: string }>;
 };
 
+// Le back ne stocke qu'un seul champ `document_url` par certification, qu'il
+// s'agisse d'un lien ou d'un scan encodé. À la relecture il faut donc router la
+// valeur vers le bon champ du formulaire, sinon une image téléversée revient
+// dans la case « URL » sous forme de longue chaîne base64 illisible.
+function certificationToForm(name: string, documentUrl?: string | null) {
+  const doc = documentUrl ?? "";
+  const isEmbeddedImage = doc.startsWith("data:");
+  return { name, image: isEmbeddedImage ? doc : "", url: isEmbeddedImage ? "" : doc };
+}
+
+// Clés sous lesquelles le back range les photos d'une activité : un groupe par
+// sous-type, ou la catégorie elle-même quand l'activité n'a pas de sous-type.
+function orgActivityPhotoKeys(act: OrgActivity): string[] {
+  const subtypes = (act.subtypes ?? []).filter(Boolean);
+  const keys = subtypes.length > 0 ? subtypes : [act.category];
+  // Conserve aussi les groupes déjà présents en base mais absents des sous-types.
+  for (const key of Object.keys(act.photos ?? {})) {
+    if (!keys.includes(key)) keys.push(key);
+  }
+  return keys;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const OFFER_TYPES = [
@@ -334,58 +359,8 @@ function compressImage(file: File, maxPx = 900, quality = 0.8): Promise<string> 
 
 // ─── Offer sustainability questionnaire ───────────────────────────────────────
 
-const OFFER_SUSTAINABILITY_STEPS = [
-  {
-    category: "Impact Écologique", emoji: "🌿",
-    description: "Empreinte environnementale de l'activité proposée",
-    questions: [
-      { id: "oq1", text: "L'activité se déroule-t-elle dans un milieu naturel préservé ?", options: [{ label: "Oui, site protégé", value: 10 }, { label: "Partiellement", value: 5 }, { label: "Non", value: 0 }] },
-      { id: "oq2", text: "Des mesures réduisent-elles l'empreinte carbone (transport, matériel éco…) ?", options: [{ label: "Oui", value: 10 }, { label: "Partiellement", value: 5 }, { label: "Non", value: 0 }] },
-      { id: "oq3", text: "Les déchets générés par l'activité sont-ils gérés de manière responsable ?", options: [{ label: "Aucun déchet / gestion complète", value: 10 }, { label: "Gestion partielle", value: 5 }, { label: "Non géré", value: 0 }] },
-    ],
-  },
-  {
-    category: "Valorisation Locale", emoji: "🤝",
-    description: "Intégration des ressources et acteurs locaux dans l'offre",
-    questions: [
-      { id: "oq4", text: "Faites-vous appel à des guides, artisans ou intervenants locaux ?", options: [{ label: "Oui, systématiquement", value: 10 }, { label: "Parfois", value: 5 }, { label: "Non", value: 0 }] },
-      { id: "oq5", text: "Valorisez-vous le patrimoine culturel ou naturel local dans votre offre ?", options: [{ label: "Oui", value: 8 }, { label: "Partiellement", value: 4 }, { label: "Non", value: 0 }] },
-      { id: "oq6", text: "Les achats liés à l'offre (matériel, nourriture) sont-ils effectués localement ?", options: [{ label: "Oui, majoritairement", value: 7 }, { label: "Partiellement", value: 3 }, { label: "Non", value: 0 }] },
-    ],
-  },
-  {
-    category: "Sensibilisation", emoji: "📚",
-    description: "Actions d'éducation et de sensibilisation auprès des participants",
-    questions: [
-      { id: "oq7", text: "Sensibilisez-vous les participants à l'environnement et à la biodiversité ?", options: [{ label: "Oui, activement", value: 10 }, { label: "Partiellement", value: 5 }, { label: "Non", value: 0 }] },
-      { id: "oq8", text: "Fournissez-vous des conseils sur les bonnes pratiques éco-responsables ?", options: [{ label: "Oui", value: 10 }, { label: "Non", value: 0 }] },
-    ],
-  },
-  {
-    category: "Accessibilité", emoji: "♿",
-    description: "Ouverture de l'offre à tous les publics",
-    questions: [
-      { id: "oq9", text: "Votre offre est-elle accessible aux personnes à mobilité réduite ?", options: [{ label: "Oui", value: 8 }, { label: "Partiellement", value: 4 }, { label: "Non", value: 0 }] },
-      { id: "oq10", text: "Proposez-vous des tarifs adaptés (familles, étudiants, groupes…) ?", options: [{ label: "Oui", value: 7 }, { label: "Non", value: 0 }] },
-    ],
-  },
-  {
-    category: "Pratiques Responsables", emoji: "🏅",
-    description: "Engagement et encadrement éthique de l'activité",
-    questions: [
-      { id: "oq11", text: "Limitez-vous la taille des groupes pour protéger l'environnement ?", options: [{ label: "Oui", value: 5 }, { label: "Non", value: 0 }] },
-      { id: "oq12", text: "Avez-vous une politique d'annulation éco-responsable ?", options: [{ label: "Oui", value: 5 }, { label: "Non", value: 0 }] },
-    ],
-  },
-];
 
-function getOfferSustainabilityLevel(score: number) {
-  if (score >= 86) return { label: "Offre Ambassadrice Éco Voyage", color: "text-primary",      bg: "bg-primary/10",   emoji: "⭐" };
-  if (score >= 71) return { label: "Offre Éco-Responsable",         color: "text-emerald-600", bg: "bg-emerald-50",   emoji: "🌿" };
-  if (score >= 51) return { label: "Offre Engagée",                 color: "text-teal-600",    bg: "bg-teal-50",      emoji: "🤝" };
-  if (score >= 31) return { label: "Offre Sensibilisée",            color: "text-blue-600",    bg: "bg-blue-50",      emoji: "💡" };
-  return              { label: "Offre Conventionnelle",              color: "text-slate-500",   bg: "bg-slate-100",    emoji: "📋" };
-}
+
 
 function getActivitySustainabilityLevel(score: number) {
   if (score >= 86) return { label: "Activité Ambassadrice", color: "text-primary",      bg: "bg-primary/10",   emoji: "⭐" };
@@ -447,6 +422,8 @@ type MyCollab = {
   circuit_cover?: string | null;
   circuit_status?: string | null;
   circuit_nb_jours?: number | null;
+  circuit_sustainability_score?: number | null;
+  offer_sustainability_score?: number | null;
   circuit_description?: string | null;
   circuit_nb_etapes?: number | null;
   circuit_etapes_preview?: { jour: number | null; titre: string | null; destination: string | null; categorie: string | null; subtypes: string[]; etape_mode?: string | null; expertises?: string[]; heure_debut?: string | null; heure_fin?: string | null }[];
@@ -539,6 +516,7 @@ type Circuit = {
   title: string;
   description: string;
   nb_jours: number;
+  sustainability_score?: number | null;
   cover_image: string | null;
   etapes: CircuitEtape[];
   availability?: any;
@@ -1073,7 +1051,17 @@ function EditActivityFields({ categoryValue, subtypeValues, setSubtypes, dynFiel
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ProviderProfilePage() {
+/**
+ * Page de profil du prestataire. Montée telle quelle dans le tableau de bord
+ * (`embedded`), elle n'affiche que l'onglet demandé — les formulaires d'offre
+ * et de circuit viennent avec.
+ */
+export default function ProviderProfilePage({ embedded = false, forcedTab, openEditOnMount = false }: {
+  embedded?: boolean;
+  forcedTab?: Tab;
+  /** Page Paramètres : n'affiche que le formulaire de modification, en flux. */
+  openEditOnMount?: boolean;
+} = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -1085,7 +1073,9 @@ export default function ProviderProfilePage() {
   const [activityFilter, setActivityFilter] = useState<string | null>(null);
   const [token,     setToken]     = useState("");
   const [loading,   setLoading]   = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>("tout");
+  // L'onglet imposé s'applique dès le premier rendu : passer par un effet
+  // affichait d'abord « tout » — soit le profil entier — avant de basculer.
+  const [activeTab, setActiveTab] = useState<Tab>(forcedTab ?? "tout");
   const [collaborations, setCollaborations] = useState<MyCollab[]>([]);
   const [collabLoading, setCollabLoading] = useState(false);
   const [openCollab, setOpenCollab] = useState<MyCollab | null>(null);
@@ -1195,6 +1185,15 @@ export default function ProviderProfilePage() {
   const [actDeleting,    setActDeleting]    = useState(false);
   const [actEditImages,  setActEditImages]  = useState<{ src: string; file?: File }[]>([]);
   const [actEditCoverIdx,setActEditCoverIdx]= useState(0);
+
+  // ── OrgActivity detail modal (inline cards) edit state ──────────────────
+  const [orgActEditFields,  setOrgActEditFields]  = useState<Record<string, any>>({});
+  const [orgActEditYears,   setOrgActEditYears]   = useState<number | null>(null);
+  const [orgActEditSaving,  setOrgActEditSaving]  = useState(false);
+  const [orgActEditError,   setOrgActEditError]   = useState("");
+  // Photos éditables, groupées par sous-type (le back stocke photos: { [sous-type]: string[] })
+  const [orgActEditPhotos,  setOrgActEditPhotos]  = useState<Record<string, { src: string; file?: File }[]>>({});
+  const [orgActDeleting,    setOrgActDeleting]    = useState(false);
 
   // ── Activity type detail / edit modal (profile-level) ───────────────────
   const [actTypeOpen,          setActTypeOpen]          = useState(false);
@@ -1356,6 +1355,9 @@ export default function ProviderProfilePage() {
 
   // ── Offer sustainability questionnaire ───────────────────────────────────
   const [oqOpen,    setOqOpen]    = useState(false);
+  // Un seul questionnaire pour l'offre et le circuit : mêmes étapes, même
+  // rendu, seuls le barème et le point d'enregistrement changent.
+  const [oqKind,    setOqKind]    = useState<"offer" | "circuit">("offer");
   const [oqOfferId, setOqOfferId] = useState("");
   const [oqStep,    setOqStep]    = useState(0);
   const [oqAnswers, setOqAnswers] = useState<Record<string, number>>({});
@@ -1368,6 +1370,8 @@ export default function ProviderProfilePage() {
   const [editOrgLogo,       setEditOrgLogo]       = useState<{file?: File; preview: string} | null>(null);
   const [editProfileSaving, setEditProfileSaving] = useState(false);
   const [editProfileError,  setEditProfileError]  = useState("");
+  /** Mode Paramètres : on confirme sans refermer, le formulaire EST la page. */
+  const [editProfileSaved, setEditProfileSaved] = useState(false);
   const [editStep,          setEditStep]          = useState(1);
   const [editData,          setEditData]          = useState<{
     personal_name: string; personal_role: string; personal_bio: string;
@@ -1401,11 +1405,12 @@ export default function ProviderProfilePage() {
 
   // Lire le tab depuis l'URL (?tab=collaborations)
   useEffect(() => {
+    if (forcedTab) { setActiveTab(forcedTab); return; }
     const tab = searchParams.get("tab");
     if (tab && ["tout","offres","activites","circuits","reseau","apropos","collaborations"].includes(tab)) {
       setActiveTab(tab as Tab);
     }
-  }, [searchParams]);
+  }, [searchParams, forcedTab]);
 
   useEffect(() => {
     async function init() {
@@ -1624,7 +1629,8 @@ export default function ProviderProfilePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [circuitAvail.type, JSON.stringify(circuitAvail.dates)]);
 
-  function openCircuitModal(circuit?: Circuit) {
+  async function openCircuitModal(circuit?: Circuit) {
+    if (await blockIfNotApproved()) return;
     setCircuitEtapeStatusMap(new Map());
     setPendingKicks([]);
     setEditingCollabSchedule(null);
@@ -1793,7 +1799,14 @@ export default function ProviderProfilePage() {
       entity_photos: isGuidage ? {} : finalEntityPhotos,
       etape_mode: isCircuitHeberg ? "service" : etapeMode,
       guidage_data: isGuidage ? etapeGuidageData : undefined,
-      author_type: isGuidage ? "guide" : etapeAuthorType,
+      // Un collaborateur sélectionné signifie que l'étape n'est pas assurée par
+      // soi-même. Le toggle n'apparaît pas quand la catégorie sort des activités
+      // déclarées (hébergement de circuit) : author_type restait « self ».
+      author_type: isGuidage
+        ? "guide"
+        : etapeCollabSelected
+          ? (etapeCollabSelected.type === "guide" ? "guide" : "provider")
+          : etapeAuthorType,
       collaborator_id: etapeCollabSelected?.user_id ?? null,
       collaborator_name: etapeCollabSelected?.name ?? null,
       collaborator_type: isGuidage ? "guide" : (etapeCollabSelected?.type ?? null),
@@ -1854,19 +1867,32 @@ export default function ProviderProfilePage() {
         setCircuits((prev) => [{ ...created, created_at: typeof created.created_at === 'string' ? created.created_at : new Date(created.created_at).toISOString() }, ...prev]);
         savedCircuitId = created.id;
       }
-      // Inviter automatiquement les collaborateurs des étapes non-self
-      const etapesWithCollab = circuitEtapes.filter((e) => e.author_type && e.author_type !== "self" && e.collaborator_id);
-      for (const etape of etapesWithCollab) {
+      // Inviter automatiquement les collaborateurs non-self.
+      // L'hébergement vit hors de circuitEtapes : sans cela, le prestataire
+      // choisi ne recevait jamais son invitation. Il est repéré par la clé
+      // « hebergement », qu'attend CircuitDetailView pour afficher son
+      // formulaire de contribution.
+      const hasCollab = (e: CircuitEtape | null): e is CircuitEtape =>
+        !!e && !!e.author_type && e.author_type !== "self" && !!e.collaborator_id;
+
+      const collabTargets: { etape: CircuitEtape; section: string; etapeKey: string }[] = [
+        ...circuitEtapes.filter(hasCollab).map((e) => ({ etape: e, section: e.categorie, etapeKey: e.id })),
+        ...(hasCollab(circuitHebergEtape)
+          ? [{ etape: circuitHebergEtape, section: "hebergement", etapeKey: "hebergement" }]
+          : []),
+      ];
+
+      for (const { etape, section, etapeKey } of collabTargets) {
         try {
           await apiFetch(`/circuits/${savedCircuitId}/collaborations`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({
-              etape_id: etape.id,
+              etape_id: etapeKey,
               invited_user_id: etape.collaborator_id,
               invited_user_type: etape.collaborator_type ?? etape.author_type,
               invited_user_name: etape.collaborator_name,
-              section: etape.categorie,
+              section,
             }),
           });
         } catch { /* invite non bloquante */ }
@@ -1935,7 +1961,37 @@ export default function ProviderProfilePage() {
 
   // ── Publish modal ──────────────────────────────────────────────────────────
 
-  function openModal() {
+  // Tant que l'administrateur n'a pas validé le profil, aucun formulaire de
+  // création ne s'ouvre : le back refuserait de toute façon, et surtout ces
+  // formulaires permettent d'inviter des collaborateurs — il serait illogique
+  // qu'un compte non approuvé sollicite d'autres professionnels.
+
+  // Le statut est relu au moment du clic : le profil chargé à l'ouverture de la
+  // page peut dater d'avant la décision de l'administrateur, et l'utilisateur
+  // resterait bloqué jusqu'à un rechargement manuel.
+  async function blockIfNotApproved(): Promise<boolean> {
+    let status = profile?.status;
+    try {
+      const fresh = await apiFetch<ProviderProfile>("/providers/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      status = fresh?.status;
+      setProfile((prev) => (prev ? { ...prev, ...fresh } : fresh));
+    } catch {
+      // Serveur injoignable : on s'en tient au dernier statut connu.
+    }
+
+    if (status === "active") return false;
+    alert(
+      status === "rejected"
+        ? "Votre profil a été refusé. Contactez l'équipe Éco-Voyage pour le régulariser."
+        : "Votre profil doit être validé par un administrateur avant de créer une offre ou un circuit. La validation intervient sous 48h.",
+    );
+    return true;
+  }
+
+  async function openModal() {
+    if (await blockIfNotApproved()) return;
     setModalOpen(true);
   }
 
@@ -2106,10 +2162,14 @@ export default function ProviderProfilePage() {
         });
       } else {
         // ── MODE CRÉATION : POST nouvelle offre ─────────────────────────────
+        // _finalize ne vaut que pour la mise à jour : il fait passer un brouillon
+        // en attente de publication selon l'état des collaborations. Une offre
+        // qui vient d'être créée n'en a aucune, et CreateOfferDto rejette ce champ.
+        const { _finalize, ...createPayload } = payload;
         finalOffer = await apiFetch<Offer>("/offers", {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ organization_id: org?.id || undefined, ...payload }),
+          body: JSON.stringify({ organization_id: org?.id || undefined, ...createPayload }),
         });
       }
 
@@ -2595,17 +2655,39 @@ export default function ProviderProfilePage() {
     const score = Object.values(oqAnswers).reduce((s, v) => s + v, 0);
     setOqSaving(true);
     try {
-      const updated = await apiFetch<Offer>(`/offers/${oqOfferId}/sustainability`, {
+      const endpoint = oqKind === "circuit"
+        ? `/circuits/${oqOfferId}/sustainability`
+        : `/offers/${oqOfferId}/sustainability`;
+      const updated = await apiFetch<{ sustainability_score: number | null }>(endpoint, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}` },
         body: JSON.stringify({ score }),
       });
-      setOffers((prev) => prev.map((o) => o.id === oqOfferId ? { ...o, sustainability_score: updated.sustainability_score } : o));
-      if (viewOffer?.id === oqOfferId) setViewOffer((v) => v ? { ...v, sustainability_score: updated.sustainability_score } : v);
+
+      if (oqKind === "circuit") {
+        setCircuits((prev) => prev.map((c) => c.id === oqOfferId
+          ? { ...c, sustainability_score: updated.sustainability_score } : c));
+      } else {
+        setOffers((prev) => prev.map((o) => o.id === oqOfferId
+          ? { ...o, sustainability_score: updated.sustainability_score } : o));
+        if (viewOffer?.id === oqOfferId) {
+          setViewOffer((v) => v ? { ...v, sustainability_score: updated.sustainability_score } : v);
+        }
+      }
+      setOqOpen(false);
     } catch {}
     finally {
       setOqSaving(false);
     }
+  }
+
+  /** Ouvre le questionnaire, pour une offre ou pour un circuit. */
+  function openSustainabilityQuestionnaire(kind: "offer" | "circuit", id: string) {
+    setOqKind(kind);
+    setOqOfferId(id);
+    setOqStep(0);
+    setOqAnswers({});
+    setOqOpen(true);
   }
 
   // ── Activity CRUD handlers ────────────────────────────────────────────────
@@ -2637,15 +2719,20 @@ export default function ProviderProfilePage() {
       if (actImages.length > 0) {
         try {
           const urls = await Promise.all(actImages.map((img) => uploadImage(img.file)));
-          const coverUrl = urls[actCoverIdx] ?? urls[0];
+          // La photo de couverture est simplement la première du groupe : on
+          // réordonne plutôt que d'envoyer un champ `photo` que le back ne connaît pas.
+          const ordered = [urls[actCoverIdx], ...urls.filter((_, i) => i !== actCoverIdx)].filter(Boolean);
           const subtypeKey = actSelSubtypes[0] ?? actSelCategory;
           const patchedAct = await apiFetch<OrgActivity>(`/provider-activities/${created.id}`, {
             method: "PATCH",
             headers: { Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ photos: { [subtypeKey]: urls }, photo: coverUrl }),
+            body: JSON.stringify({ photos: { [subtypeKey]: ordered } }),
           });
           finalActivity = patchedAct;
-        } catch {}
+        } catch (imgErr: any) {
+          // L'activité est créée, mais sans ses images : on le dit au lieu de l'ignorer.
+          setActFormError(imgErr?.message ?? "Activité créée, mais l'envoi des images a échoué.");
+        }
       }
       setOrgActivities((prev) => [finalActivity, ...prev]);
       setActImages((prev) => { prev.forEach((i) => URL.revokeObjectURL(i.preview)); return []; });
@@ -2723,6 +2810,77 @@ export default function ProviderProfilePage() {
     }
   }
 
+  // Prépare le mode édition : champs, années, et photos existantes par sous-type.
+  function openOrgActivityEdit(act: OrgActivity) {
+    setOrgActEditFields({ ...(act.fields ?? {}) });
+    setOrgActEditYears(act.years_experience ?? null);
+    setOrgActEditPhotos(
+      Object.fromEntries(
+        orgActivityPhotoKeys(act).map((key) => [
+          key,
+          ((act.photos ?? {})[key] ?? []).filter(Boolean).map((src) => ({ src })),
+        ]),
+      ),
+    );
+    setOrgActEditError("");
+    setActDetailMode("edit");
+  }
+
+  async function saveOrgActivity() {
+    if (!viewOrgActivity) return;
+    setOrgActEditSaving(true);
+    setOrgActEditError("");
+    try {
+      // Les nouvelles images sont d'abord téléversées, les anciennes conservées telles quelles.
+      const photos: Record<string, string[]> = {};
+      for (const [key, imgs] of Object.entries(orgActEditPhotos)) {
+        const urls = await Promise.all(
+          imgs.map((img) => (img.file ? uploadImage(img.file) : Promise.resolve(img.src))),
+        );
+        photos[key] = urls.filter(Boolean);
+      }
+
+      const updated = await apiFetch<OrgActivity>(`/provider-activities/${viewOrgActivity.id}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ years_experience: orgActEditYears, fields: orgActEditFields, photos }),
+      });
+      setOrgActivities((prev) => prev.map((a) => a.id === updated.id ? updated : a));
+      setViewOrgActivity(updated);
+      setOrgActEditPhotos({});
+      setActDetailMode("view");
+    } catch (e: any) {
+      setOrgActEditError(e.message ?? "Erreur lors de la sauvegarde.");
+    } finally {
+      setOrgActEditSaving(false);
+    }
+  }
+
+  async function deleteOrgActivity() {
+    if (!viewOrgActivity) return;
+    const isPrimary = viewOrgActivity.level === "primary";
+    const warning = isPrimary
+      ? "Supprimer votre activité principale ? Votre profil n'affichera plus d'activité principale tant que vous n'en aurez pas déclaré une autre."
+      : "Supprimer cette activité secondaire ? Cette action est irréversible.";
+    if (!confirm(warning)) return;
+
+    setOrgActDeleting(true);
+    setOrgActEditError("");
+    try {
+      await apiFetch(`/provider-activities/${viewOrgActivity.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setOrgActivities((prev) => prev.filter((a) => a.id !== viewOrgActivity.id));
+      setViewOrgActivity(null);
+      setActDetailMode("view");
+    } catch (e: any) {
+      setOrgActEditError(e.message ?? "Erreur lors de la suppression.");
+    } finally {
+      setOrgActDeleting(false);
+    }
+  }
+
   async function submitActivityQuestionnaire() {
     const score = Object.values(aqAnswers).reduce((s, v) => s + v, 0);
     setAqSaving(true);
@@ -2749,6 +2907,23 @@ export default function ProviderProfilePage() {
     setActTypeSaveError("");
     setActTypeMode("view");
     setActTypeOpen(true);
+  }
+
+  async function deleteActivityType(value: string, level: "primary" | "secondary") {
+    if (!profile) return;
+    if (level === "primary") return; // l'activité principale ne peut pas être supprimée
+    if (!confirm("Supprimer cette activité secondaire ? Cette action est irréversible.")) return;
+    try {
+      const updated = (profile.secondary_activity_types ?? []).filter((v) => v !== value);
+      const patched = await apiFetch<ProviderProfile>("/providers/me", {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ secondary_activity_types: updated }),
+      });
+      setProfile(patched);
+    } catch (e: any) {
+      alert(e.message ?? "Erreur lors de la suppression.");
+    }
   }
 
   async function saveActivityType() {
@@ -2781,6 +2956,15 @@ export default function ProviderProfilePage() {
 
   // ── Edit profile modal ─────────────────────────────────────────────────────
 
+  // Le formulaire ne peut s'ouvrir qu'une fois le profil chargé : il pré-remplit
+  // ses champs à partir de celui-ci.
+  const editDejaOuvert = useRef(false);
+  useEffect(() => {
+    if (!openEditOnMount || editDejaOuvert.current || !profile) return;
+    editDejaOuvert.current = true;
+    openEditProfile();
+  }, [openEditOnMount, profile]);
+
   function openEditProfile() {
     if (!profile) return;
 
@@ -2802,7 +2986,7 @@ export default function ProviderProfilePage() {
       personal_name:           profile.full_name    ?? "",
       personal_role:           profile.position     ?? "",
       personal_bio:            profile.personal_bio ?? "",
-      personal_certifications: (profile.personal_certifications ?? []).map((c) => ({ name: c.name, image: "", url: c.document_url ?? "" })),
+      personal_certifications: (profile.personal_certifications ?? []).map((c) => certificationToForm(c.name, c.document_url)),
       languages_spoken:        normLangs,
       // Organization
       commercial_name:    org?.name        ?? profile.organization ?? "",
@@ -2810,7 +2994,7 @@ export default function ProviderProfilePage() {
       history:            org?.history     ?? profile.history     ?? "",
       photos:             org?.photos      ?? profile.photos      ?? [],
       video_urls:         org?.videos      ?? [],
-      org_certifications: (org?.certifications ?? []).map((c: any) => ({ name: c.name ?? c, image: "", url: c.document_url ?? "" })),
+      org_certifications: (org?.certifications ?? []).map((c: any) => certificationToForm(c.name ?? c, c.document_url)),
       // Step 2
       governorate:     org?.region   ?? profile.region   ?? "",
       city:            org?.zone     ?? "",
@@ -2852,7 +3036,21 @@ export default function ProviderProfilePage() {
     setEditProfileOpen(true);
   }
 
+  /**
+   * Fin d'édition. En mode Paramètres le formulaire occupe toute la page :
+   * le refermer laisserait un écran vide, on affiche donc une confirmation.
+   */
+  function terminerEdition() {
+    if (openEditOnMount) {
+      setEditProfileSaved(true);
+      setTimeout(() => setEditProfileSaved(false), 4000);
+      return;
+    }
+    setEditProfileOpen(false);
+  }
+
   function closeEditProfile() {
+    if (openEditOnMount) { setEditProfileError(""); return; }
     setEditProfileOpen(false);
     setEditProfileError("");
   }
@@ -2915,7 +3113,10 @@ export default function ProviderProfilePage() {
         const orgPhotos = editData.photos.filter(Boolean);
         const orgVideos = editData.video_urls.filter(Boolean);
         const orgCerts  = editData.org_certifications.filter((c) => c.name.trim()).map((c) => ({ name: c.name.trim(), document_url: c.url || c.image || undefined }));
-        await apiFetch(`/organizations/${org.id}`, {
+        // `PATCH /organizations/:id` n'existe pas côté API : seul `/me` est exposé.
+        // L'ancien appel renvoyait 404, avalé par un `.catch()` — l'organisation
+        // n'était donc jamais enregistrée.
+        await apiFetch(`/organizations/me`, {
           method: "PATCH",
           headers: { Authorization: `Bearer ${token}` },
           body: JSON.stringify({
@@ -2939,7 +3140,7 @@ export default function ProviderProfilePage() {
             videos:    orgVideos.length ? orgVideos   : undefined,
             certifications: orgCerts.length ? orgCerts : undefined,
           }),
-        }).catch(() => {});
+        });
         setOrg((prev) => prev ? { ...prev, logo: logoUrl ?? prev.logo } : prev);
       }
 
@@ -2985,7 +3186,7 @@ export default function ProviderProfilePage() {
         }).catch(() => {});
       }
 
-      setEditProfileOpen(false);
+      terminerEdition();
     } catch (err: any) {
       setEditProfileError(err.message || "Erreur lors de la sauvegarde.");
     } finally {
@@ -2997,7 +3198,7 @@ export default function ProviderProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className={`flex items-center justify-center ${embedded ? "py-24" : "min-h-screen bg-slate-50"}`}>
         <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
       </div>
     );
@@ -3081,7 +3282,7 @@ export default function ProviderProfilePage() {
               <MapPin size={12} /><span>{profile.region}</span>
             </div>
           )}
-          {profile?.sustainability_score !== null && profile?.sustainability_score !== undefined ? (
+          {profile?.sustainability_score !== null && profile?.sustainability_score !== undefined && (
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Durabilité</span>
@@ -3091,22 +3292,38 @@ export default function ProviderProfilePage() {
                 <div className="h-full bg-primary rounded-full" style={{ width: `${profile.sustainability_score}%` }} />
               </div>
             </div>
-          ) : (
-            <div className="border border-dashed border-primary/40 rounded-xl py-1.5 px-3 mb-3 text-center text-[11px] font-bold text-primary/70">
-              🌿 Évaluer la durabilité
-            </div>
           )}
-          <div className="flex items-center justify-between border-t border-slate-50 pt-3">
-            <p className="text-[11px] font-bold text-slate-400">
-              {isPrimary ? "Activité principale" : "Activité secondaire"}
-            </p>
-            <button
-              onClick={() => openActTypeModal(value, level)}
-              className="text-primary hover:text-primary/80 font-extrabold text-xs inline-flex items-center gap-1 hover:translate-x-1 transition-transform duration-200"
-            >
-              <span>Voir les détails</span>
-              <ArrowRight size={14} strokeWidth={2.5} />
-            </button>
+          <div className="border-t border-slate-50 pt-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-bold text-slate-400">
+                {isPrimary ? "Activité principale" : "Activité secondaire"}
+              </p>
+              <button
+                onClick={() => openActTypeModal(value, level)}
+                className="text-primary hover:text-primary/80 font-extrabold text-xs inline-flex items-center gap-1 hover:translate-x-1 transition-transform duration-200"
+              >
+                <span>Voir les détails</span>
+                <ArrowRight size={14} strokeWidth={2.5} />
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { openActTypeModal(value, level); setActTypeMode("edit"); }}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-slate-200 text-slate-600 hover:border-primary/50 hover:text-primary hover:bg-primary/5 text-xs font-bold transition-all"
+              >
+                <Edit3 size={12} />
+                Modifier
+              </button>
+              {!isPrimary && (
+                <button
+                  onClick={() => deleteActivityType(value, level)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-slate-200 text-slate-500 hover:border-red-300 hover:text-red-500 hover:bg-red-50 text-xs font-bold transition-all"
+                >
+                  <Trash2 size={12} />
+                  Supprimer
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -3191,21 +3408,10 @@ export default function ProviderProfilePage() {
               </div>
             </div>
             {offer.sustainability_score !== null ? (
-              <div className="mt-3 mb-1">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Durabilité</span>
-                  <span className="text-[10px] font-black text-primary">{offer.sustainability_score}/100</span>
-                </div>
-                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${offer.sustainability_score}%` }} />
-                </div>
-                <span className={`mt-1 inline-block text-[10px] font-bold ${getOfferSustainabilityLevel(offer.sustainability_score).color}`}>
-                  {getOfferSustainabilityLevel(offer.sustainability_score).emoji} {getOfferSustainabilityLevel(offer.sustainability_score).label}
-                </span>
-              </div>
+              <SustainabilityBadge score={offer.sustainability_score} kind="offer" className="mt-3 mb-1" />
             ) : (
               <button
-                onClick={(e) => { e.stopPropagation(); setOqOfferId(offer.id); setOqStep(0); setOqAnswers({}); setOqOpen(true); }}
+                onClick={(e) => { e.stopPropagation(); openSustainabilityQuestionnaire("offer", offer.id); }}
                 className="mt-3 w-full border border-dashed border-primary/40 text-primary text-[11px] font-bold py-1.5 rounded-xl hover:bg-primary/5 transition-colors"
               >
                 🌿 Évaluer la durabilité
@@ -4521,8 +4727,10 @@ export default function ProviderProfilePage() {
                             className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-slate-300" />
                         </div>}
 
-                  {/* Carte — cachée si le collaborateur gère la localisation */}
-                  {(!showCollabSearch || isCircuitHebergSlot) ? (
+                  {/* Carte — cachée dès qu'un collaborateur prend la localisation en charge.
+                      Pour l'hébergement de circuit, la recherche de collaborateur est
+                      proposée d'emblée : seule la sélection effective fait foi. */}
+                  {(isCircuitHebergSlot ? !etapeCollabSelected : !showCollabSearch) ? (
                     <div>
                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">
                         Localisation sur la carte *
@@ -5439,7 +5647,8 @@ export default function ProviderProfilePage() {
               </div>
             </div>
 
-            {/* Body */}
+            {/* Body — mode vue */}
+            {actDetailMode !== "edit" && (
             <div className="overflow-y-auto flex-1 p-5 space-y-6">
 
               {/* Header */}
@@ -5563,6 +5772,161 @@ export default function ProviderProfilePage() {
                 </div>
               )}
             </div>
+            )}
+
+            {/* Body — mode édition */}
+            {actDetailMode === "edit" && (
+              <div className="overflow-y-auto flex-1 p-5 space-y-5">
+                {/* Années d'expérience */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Années d&apos;expérience</label>
+                  <input
+                    type="number" min={0}
+                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary/50 text-slate-900 text-sm font-medium"
+                    value={orgActEditYears ?? ""}
+                    onChange={(e) => setOrgActEditYears(e.target.value ? Number(e.target.value) : null)}
+                    placeholder="0"
+                  />
+                </div>
+
+                {/* Champs dynamiques par sous-type */}
+                {subtypeValues.map((sv) => {
+                  const stConfig = SUBTYPE_FIELDS[sv];
+                  if (!stConfig) return null;
+                  const stLabel = cat?.subtypes.find((s) => s.value === sv)?.label ?? stConfig.label;
+                  return (
+                    <div key={sv} className="rounded-2xl border border-slate-100 overflow-hidden">
+                      <div className="bg-primary/5 border-b border-primary/10 px-4 py-2.5 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-primary" style={{ fontSize: 16 }}>{meta.categoryIcon}</span>
+                        <span className="text-sm font-extrabold text-primary">{stLabel}</span>
+                      </div>
+                      <div className="p-4 space-y-4">
+                        {stConfig.sections.map((sec: { section: string; fields: FieldConfig[] }) => {
+                          const editableFields = sec.fields.filter((f: FieldConfig) =>
+                            !f.dependsOn || orgActEditFields[f.dependsOn.field] === f.dependsOn.value
+                          );
+                          if (!editableFields.length) return null;
+                          return (
+                            <div key={sec.section}>
+                              <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-3">{sec.section}</p>
+                              <div className="space-y-3">
+                                {editableFields.map((field: FieldConfig) => (
+                                  <EditDynField
+                                    key={field.key}
+                                    field={field}
+                                    value={orgActEditFields[field.key]}
+                                    onChange={(val) => setOrgActEditFields((prev) => ({ ...prev, [field.key]: val }))}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Photos — un groupe par sous-type */}
+                {orgActivityPhotoKeys(act).map((photoKey) => {
+                  const imgs = orgActEditPhotos[photoKey] ?? [];
+                  const keyLabel = cat?.subtypes.find((s) => s.value === photoKey)?.label
+                    ?? SUBTYPE_FIELDS[photoKey]?.label
+                    ?? meta.label;
+                  return (
+                    <div key={photoKey} className="space-y-2">
+                      <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">
+                        Photos — {keyLabel}
+                      </label>
+                      {imgs.length > 0 && (
+                        <div className="grid grid-cols-4 gap-2">
+                          {imgs.map((img, i) => (
+                            <div key={i} className="relative group aspect-square rounded-xl overflow-hidden border border-slate-200">
+                              <img src={img.src} alt="" className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => setOrgActEditPhotos((prev) => ({
+                                  ...prev,
+                                  [photoKey]: (prev[photoKey] ?? []).filter((_, idx) => idx !== i),
+                                }))}
+                                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X size={10} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <label
+                        htmlFor={`org-act-photos-${photoKey}`}
+                        className="flex flex-col items-center justify-center gap-1 w-full h-16 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all bg-slate-50/70"
+                      >
+                        <span className="material-symbols-outlined text-slate-300 text-xl">add_photo_alternate</span>
+                        <p className="text-xs font-semibold text-slate-400">Ajouter des photos</p>
+                        <input
+                          id={`org-act-photos-${photoKey}`}
+                          type="file" accept="image/*" multiple className="hidden"
+                          onChange={(e) => {
+                            const files = Array.from(e.target.files ?? []);
+                            if (!files.length) return;
+                            setOrgActEditPhotos((prev) => ({
+                              ...prev,
+                              [photoKey]: [...(prev[photoKey] ?? []), ...files.map((f) => ({ src: URL.createObjectURL(f), file: f }))],
+                            }));
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    </div>
+                  );
+                })}
+
+                {orgActEditError && (
+                  <p className="text-xs text-red-500 font-bold text-center bg-red-50 rounded-xl py-2 px-4">{orgActEditError}</p>
+                )}
+              </div>
+            )}
+
+            {/* Footer — Fermer + Gérer / (Supprimer + Enregistrer en mode Gérer) */}
+            <div className="shrink-0 px-5 pb-5 pt-4 border-t border-slate-100 flex items-center gap-3">
+              <button
+                onClick={() => { setViewOrgActivity(null); setActDetailMode("view"); setOrgActEditError(""); }}
+                className="flex-1 py-3 rounded-2xl border border-slate-200 text-slate-600 bg-white hover:bg-slate-50 text-sm font-bold transition-colors"
+              >
+                Fermer
+              </button>
+              {/* La suppression n'est proposée qu'en mode Gérer, pour éviter
+                  un geste destructeur à portée de clic depuis la simple vue. */}
+              {actDetailMode === "edit" && (
+                <button
+                  onClick={deleteOrgActivity}
+                  disabled={orgActDeleting}
+                  title="Supprimer cette activité"
+                  className="shrink-0 flex items-center justify-center gap-1.5 px-4 py-3 rounded-2xl border border-slate-200 text-slate-500 hover:border-red-300 hover:text-red-500 hover:bg-red-50 text-sm font-bold transition-all disabled:opacity-50"
+                >
+                  {orgActDeleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                  {orgActDeleting ? "Suppression…" : "Supprimer"}
+                </button>
+              )}
+              {actDetailMode !== "edit" ? (
+                <button
+                  onClick={() => openOrgActivityEdit(act)}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary hover:bg-primary/90 text-slate-900 font-extrabold text-sm transition-all"
+                >
+                  <Edit3 size={15} />Gérer
+                </button>
+              ) : (
+                <button
+                  onClick={saveOrgActivity}
+                  disabled={orgActEditSaving}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary hover:bg-primary/90 text-slate-900 font-extrabold text-sm transition-all disabled:opacity-50"
+                >
+                  {orgActEditSaving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                  Enregistrer
+                </button>
+              )}
+            </div>
+
           </div>
         </div>
       );
@@ -5797,10 +6161,10 @@ export default function ProviderProfilePage() {
         </div>
       </div>
     )}
-    <div className="min-h-screen bg-slate-50/70 pb-20" onClick={() => setNetMenuId(null)}>
+    <div className={embedded ? "pb-4" : "min-h-screen bg-slate-50/70 pb-20"} onClick={() => setNetMenuId(null)}>
 
       {/* ══ TOP NAV ══════════════════════════════════════════════════════════ */}
-      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-3">
+      <div className={`sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-3${embedded ? " hidden" : ""}`}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <button
             onClick={() => router.push("/dashboard/provider")}
@@ -5821,10 +6185,15 @@ export default function ProviderProfilePage() {
         const set = (patch: Partial<typeof editData>) => setEditData((d) => ({ ...d, ...patch }));
 
         return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl relative overflow-hidden flex flex-col max-h-[92vh]">
+        <div className={openEditOnMount ? "w-full" : "fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"}>
+          <div className={`bg-white rounded-3xl w-full relative overflow-hidden flex flex-col ${openEditOnMount ? "border border-slate-100" : "max-w-2xl shadow-2xl max-h-[92vh]"}`}>
+            {editProfileSaved && (
+              <div className="mx-6 mt-5 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-2.5 text-xs font-bold text-emerald-700 flex items-center gap-2">
+                <Check size={14} />Modifications enregistrées.
+              </div>
+            )}
             <button onClick={closeEditProfile}
-              className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors">
+              className={`absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors${openEditOnMount ? " hidden" : ""}`}>
               <X size={16} />
             </button>
 
@@ -6208,9 +6577,12 @@ export default function ProviderProfilePage() {
 
             {/* Footer */}
             <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between gap-3 shrink-0">
+              {/* À l'étape 1 ce bouton n'est qu'« Annuler » : inutile en mode Paramètres.
+                  Aux étapes suivantes il sert de « Retour » et reste indispensable. */}
               <button type="button"
                 onClick={editStep === 1 ? closeEditProfile : () => setEditStep((s) => s - 1)}
-                className="px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors">
+                className={`px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors${
+                  openEditOnMount && editStep === 1 ? " invisible" : ""}`}>
                 {editStep === 1 ? "Annuler" : "← Retour"}
               </button>
               {editStep < 3 ? (
@@ -8402,10 +8774,10 @@ export default function ProviderProfilePage() {
         );
       })()}
 
-      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 pt-6">
+      <div className={openEditOnMount ? "hidden" : embedded ? "w-full" : "w-full max-w-6xl mx-auto px-4 sm:px-6 pt-6"}>
 
         {/* ══ PROFILE HEADER CARD ═══════════════════════════════════════════ */}
-        <div className="relative w-full overflow-hidden bg-white shadow-sm rounded-3xl border border-slate-100/80 mb-6">
+        <div className={`relative w-full overflow-hidden bg-white shadow-sm rounded-3xl border border-slate-100/80 mb-6${embedded ? " hidden" : ""}`}>
           {profile.cover_photo
             ? <div className="relative h-48 md:h-64 lg:h-72 w-full overflow-hidden"><img src={profile.cover_photo} alt="" className="w-full h-full object-cover" /></div>
             : <BotanicalCover />
@@ -8420,10 +8792,7 @@ export default function ProviderProfilePage() {
                     <AvatarImg />
                   </div>
                 </div>
-                <div className="bg-primary text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-md uppercase tracking-wider border border-white">
-                  <span className="material-symbols-outlined text-yellow-300" style={{ fontSize: 10 }}>star</span>
-                  {scoreLabel(profile.sustainability_score)}
-                </div>
+                <BadgeLabel role="provider" />
               </div>
 
               {/* Name + buttons row */}
@@ -8464,7 +8833,7 @@ export default function ProviderProfilePage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
           {/* ── LEFT SIDEBAR ──────────────────────────────────────────────── */}
-          <div className="lg:col-span-4 lg:sticky lg:top-6 space-y-6">
+          <div className={`lg:col-span-4 lg:sticky lg:top-6 space-y-6${embedded ? " hidden" : ""}`}>
 
             <div className="bg-white p-6 rounded-3xl border border-slate-100/80 shadow-sm">
               <div className="flex items-center gap-2.5 mb-5">
@@ -8647,8 +9016,8 @@ export default function ProviderProfilePage() {
           </div>
 
           {/* ── RIGHT COLUMN ──────────────────────────────────────────────── */}
-          <div className="lg:col-span-8 space-y-6">
-            <div className="bg-slate-100 p-1.5 rounded-2xl flex flex-wrap gap-1 border border-slate-200/50">
+          <div className={`space-y-6${embedded ? " col-span-full" : " lg:col-span-8"}`}>
+            <div className={`bg-slate-100 p-1.5 rounded-2xl flex-wrap gap-1 border border-slate-200/50${embedded ? " hidden" : " flex"}`}>
               {[
                 { key: "tout",           label: "Tout",           Icon: LayoutGrid },
                 { key: "offres",         label: "Offres",         Icon: Tag },
@@ -8715,6 +9084,26 @@ export default function ProviderProfilePage() {
                                       <span className="flex items-center gap-1 text-[10px] font-black tracking-widest uppercase text-slate-500 bg-slate-100 px-2.5 py-1 rounded-xl"><MapPin size={10} />{circuit.etapes.length} étape{circuit.etapes.length > 1 ? "s" : ""}</span>
                                       {catLabels.slice(0, 3).map((l) => (<span key={l} className="text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-100 px-2 py-1 rounded-xl">{l}</span>))}
                                     </div>
+                                    {circuit.sustainability_score !== null && circuit.sustainability_score !== undefined ? (
+                                      (() => {
+                                        const lvl = getCircuitSustainabilityLevel(circuit.sustainability_score!);
+                                        return (
+                                          <div className={`mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl ${lvl.bg} ${lvl.color}`}>
+                                            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{lvl.icon}</span>
+                                            <span className="text-[11px] font-extrabold">{lvl.label}</span>
+                                            <span className="text-[11px] font-bold opacity-70">{circuit.sustainability_score}/100</span>
+                                          </div>
+                                        );
+                                      })()
+                                    ) : (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); openSustainabilityQuestionnaire("circuit", circuit.id); }}
+                                        className="mt-3 w-full border border-dashed border-primary/40 text-primary text-[11px] font-bold py-1.5 rounded-xl hover:bg-primary/5 transition-colors flex items-center justify-center gap-1.5"
+                                      >
+                                        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>eco</span>
+                                        Évaluer la durabilité
+                                      </button>
+                                    )}
                                     <div className="mt-3 space-y-1">
                                       {circuit.etapes.slice(0, 3).map((etape) => {
                                         const cat = PROVIDER_SCHEMA.find((c) => c.value === etape.categorie);
@@ -8803,6 +9192,7 @@ export default function ProviderProfilePage() {
                                     {c.circuit_description && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{c.circuit_description}</p>}
                                     <div className="flex flex-wrap gap-2 mt-3">
                                       {c.circuit_nb_jours && <span className="flex items-center gap-1 text-[10px] font-black tracking-widest uppercase text-primary bg-primary/10 px-2.5 py-1 rounded-xl"><Calendar size={10} />{c.circuit_nb_jours} jour{c.circuit_nb_jours > 1 ? "s" : ""}</span>}
+                                      <SustainabilityBadge score={c.source_type === "circuit" ? c.circuit_sustainability_score : c.offer_sustainability_score} kind={c.source_type === "circuit" ? "circuit" : "offer"} />
                                       {c.circuit_nb_etapes != null && c.circuit_nb_etapes > 0 && <span className="flex items-center gap-1 text-[10px] font-black tracking-widest uppercase text-slate-500 bg-slate-100 px-2.5 py-1 rounded-xl"><MapPin size={10} />{c.circuit_nb_etapes} étape{c.circuit_nb_etapes > 1 ? "s" : ""}</span>}
                                     </div>
                                     {(c.circuit_etapes_preview ?? []).length > 0 && (
@@ -8840,7 +9230,10 @@ export default function ProviderProfilePage() {
                                       <h3 className="text-lg md:text-xl font-extrabold text-slate-800 tracking-tight leading-tight mb-2">{displayTitle}</h3>
                                       {c.offer_description && <p className="text-slate-500 text-sm leading-relaxed mb-3 line-clamp-2">{c.offer_description}</p>}
                                       {c.message && <p className="text-slate-400 text-xs leading-relaxed mb-3 line-clamp-2 italic border-l-2 border-slate-200 pl-3">&ldquo;{c.message}&rdquo;</p>}
-                                      <div className="flex flex-wrap gap-2.5 mb-4"><span className={`flex items-center gap-1.5 text-[11px] font-extrabold tracking-wider px-3 py-1 rounded-xl text-white bg-gradient-to-r ${sm.grad} uppercase`}><span className="material-symbols-outlined text-sm">{sm.icon}</span>{sm.label}</span></div>
+                                      <div className="flex flex-wrap items-center gap-2.5 mb-4">
+                                        <span className={`flex items-center gap-1.5 text-[11px] font-extrabold tracking-wider px-3 py-1 rounded-xl text-white bg-gradient-to-r ${sm.grad} uppercase`}><span className="material-symbols-outlined text-sm">{sm.icon}</span>{sm.label}</span>
+                                        <SustainabilityBadge score={c.offer_sustainability_score} kind="offer" />
+                                      </div>
                                     </div>
                                     <div className="flex items-center justify-between border-t border-slate-50 pt-4 mt-3">
                                       <p className="text-[11px] font-bold text-slate-400">{new Date(c.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}</p>
@@ -8918,10 +9311,9 @@ export default function ProviderProfilePage() {
                                     {subtypeLabels.map((label) => <span key={label} className="bg-primary/10 text-primary text-[10px] font-bold px-2.5 py-1 rounded-full">{label}</span>)}
                                   </div>
                                 )}
-                                <div className="border border-dashed border-primary/40 rounded-xl py-1.5 px-3 mb-3 text-center text-[11px] font-bold text-primary/70">🌿 Évaluer la durabilité</div>
                                 <div className="flex items-center justify-between border-t border-slate-50 pt-3">
                                   <p className="text-[11px] font-bold text-slate-400">{isPrimary ? "Activité principale" : "Activité secondaire"}</p>
-                                  <button onClick={() => { setViewOrgActivity(act); setOrgActSliderIdx(0); }}
+                                  <button onClick={() => { setViewOrgActivity(act); setOrgActSliderIdx(0); setActDetailMode("view"); }}
                                     className="text-primary hover:text-primary/80 font-extrabold text-xs inline-flex items-center gap-1 hover:translate-x-1 transition-transform duration-200">
                                     <span>Voir les détails</span><ArrowRight size={14} strokeWidth={2.5} />
                                   </button>
@@ -9005,10 +9397,9 @@ export default function ProviderProfilePage() {
                                   {subtypeLabels.map((label) => <span key={label} className="bg-primary/10 text-primary text-[10px] font-bold px-2.5 py-1 rounded-full">{label}</span>)}
                                 </div>
                               )}
-                              <div className="border border-dashed border-primary/40 rounded-xl py-1.5 px-3 mb-3 text-center text-[11px] font-bold text-primary/70">🌿 Évaluer la durabilité</div>
                               <div className="flex items-center justify-between border-t border-slate-50 pt-3">
                                 <p className="text-[11px] font-bold text-slate-400">{isPrimary ? "Activité principale" : "Activité secondaire"}</p>
-                                <button onClick={() => { setViewOrgActivity(act); setOrgActSliderIdx(0); }}
+                                <button onClick={() => { setViewOrgActivity(act); setOrgActSliderIdx(0); setActDetailMode("view"); }}
                                   className="text-primary hover:text-primary/80 font-extrabold text-xs inline-flex items-center gap-1 hover:translate-x-1 transition-transform duration-200">
                                   <span>Voir les détails</span><ArrowRight size={14} strokeWidth={2.5} />
                                 </button>
@@ -9114,6 +9505,26 @@ export default function ProviderProfilePage() {
                                   <span key={l} className="text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-100 px-2 py-1 rounded-xl">{l}</span>
                                 ))}
                               </div>
+                              {circuit.sustainability_score !== null && circuit.sustainability_score !== undefined ? (
+                                (() => {
+                                  const lvl = getCircuitSustainabilityLevel(circuit.sustainability_score!);
+                                  return (
+                                    <div className={`mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl ${lvl.bg} ${lvl.color}`}>
+                                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{lvl.icon}</span>
+                                      <span className="text-[11px] font-extrabold">{lvl.label}</span>
+                                      <span className="text-[11px] font-bold opacity-70">{circuit.sustainability_score}/100</span>
+                                    </div>
+                                  );
+                                })()
+                              ) : (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); openSustainabilityQuestionnaire("circuit", circuit.id); }}
+                                  className="mt-3 w-full border border-dashed border-primary/40 text-primary text-[11px] font-bold py-1.5 rounded-xl hover:bg-primary/5 transition-colors flex items-center justify-center gap-1.5"
+                                >
+                                  <span className="material-symbols-outlined" style={{ fontSize: 14 }}>eco</span>
+                                  Évaluer la durabilité
+                                </button>
+                              )}
                               {/* Étapes preview */}
                               <div className="mt-3 space-y-1">
                                 {circuit.etapes.slice(0, 3).map((etape, i) => {
@@ -9729,9 +10140,6 @@ export default function ProviderProfilePage() {
                                   )}
                                 </div>
                               )}
-                              <div className="border border-dashed border-primary/40 rounded-xl py-1.5 px-3 mb-3 text-center text-[11px] font-bold text-primary/70">
-                                🌿 Évaluer la durabilité
-                              </div>
                               <div className="flex items-center justify-between border-t border-slate-50 pt-3">
                                 <p className="text-[11px] font-bold text-slate-400">
                                   {isPrimary ? "Activité principale" : "Activité secondaire"}
@@ -9972,6 +10380,7 @@ export default function ProviderProfilePage() {
                                 )}
                                 <div className={`absolute top-2 left-2 text-[10px] font-black tracking-widest uppercase px-2.5 py-1 rounded-xl shadow border flex items-center gap-1 ${st.cls}`}>
                                   <span className="material-symbols-outlined text-xs">{st.icon}</span>{st.label}
+                                  <SustainabilityBadge score={c.source_type === "circuit" ? c.circuit_sustainability_score : c.offer_sustainability_score} kind={c.source_type === "circuit" ? "circuit" : "offer"} />
                                 </div>
                               </div>
                               <div className="flex-1 flex flex-col justify-between p-6 md:p-8">
@@ -9987,6 +10396,7 @@ export default function ProviderProfilePage() {
                                     <span className={`flex items-center gap-1.5 text-[11px] font-extrabold tracking-wider px-3 py-1 rounded-xl text-white bg-gradient-to-r ${sm.grad} uppercase`}>
                                       <span className="material-symbols-outlined text-sm">{sm.icon}</span>{sm.label}
                                     </span>
+                                    <SustainabilityBadge score={c.offer_sustainability_score} kind="offer" />
                                   </div>
                                 </div>
                                 <div className="flex items-center justify-between border-t border-slate-50 pt-4 mt-3">
@@ -10459,33 +10869,36 @@ export default function ProviderProfilePage() {
     {/* ══ OFFER SUSTAINABILITY QUESTIONNAIRE ═══════════════════════════════ */}
     {oqOpen && (() => {
       const oqScore = Object.values(oqAnswers).reduce((s, v) => s + v, 0);
-      const oqCurrentStep = OFFER_SUSTAINABILITY_STEPS[oqStep];
+      const oqSteps = oqKind === "circuit" ? CIRCUIT_SUSTAINABILITY_STEPS : OFFER_SUSTAINABILITY_STEPS;
+      const oqCurrentStep = oqSteps[oqStep];
       const oqStepAnswered = oqCurrentStep ? oqCurrentStep.questions.every((q) => q.id in oqAnswers) : false;
       return (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-7 pt-7 pb-5 border-b border-slate-100 shrink-0">
-              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1">Évaluation de durabilité — Offre</p>
+              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1">Évaluation de durabilité — {oqKind === "circuit" ? "Circuit" : "Offre"}</p>
               <h2 className="text-xl font-extrabold text-slate-800 flex items-center gap-2">
-                {oqStep < OFFER_SUSTAINABILITY_STEPS.length ? <>{OFFER_SUSTAINABILITY_STEPS[oqStep].emoji} {OFFER_SUSTAINABILITY_STEPS[oqStep].category}</> : "🎯 Résultat"}
+                {oqStep < oqSteps.length
+                  ? <><span className="material-symbols-outlined align-middle text-primary" style={{ fontSize: 22 }}>{oqSteps[oqStep].icon}</span> {oqSteps[oqStep].category}</>
+                  : <><span className="material-symbols-outlined align-middle text-primary" style={{ fontSize: 22 }}>flag</span> Résultat</>}
               </h2>
-              {oqStep < OFFER_SUSTAINABILITY_STEPS.length && (
-                <p className="text-sm text-slate-500 mt-1">{OFFER_SUSTAINABILITY_STEPS[oqStep].description}</p>
+              {oqStep < oqSteps.length && (
+                <p className="text-sm text-slate-500 mt-1">{oqSteps[oqStep].description}</p>
               )}
               <div className="flex gap-1.5 mt-4">
-                {OFFER_SUSTAINABILITY_STEPS.map((_, i) => (
+                {oqSteps.map((_, i) => (
                   <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i < oqStep ? "bg-primary" : i === oqStep ? "bg-primary/60" : "bg-slate-100"}`} />
                 ))}
               </div>
               <p className="text-[10px] font-bold text-slate-400 mt-1.5">
-                {oqStep < OFFER_SUSTAINABILITY_STEPS.length ? `Étape ${oqStep + 1} / ${OFFER_SUSTAINABILITY_STEPS.length}` : "Toutes les étapes complétées"}
+                {oqStep < oqSteps.length ? `Étape ${oqStep + 1} / ${oqSteps.length}` : "Toutes les étapes complétées"}
               </p>
             </div>
 
             <div className="overflow-y-auto flex-1 px-7 py-5">
-              {oqStep < OFFER_SUSTAINABILITY_STEPS.length ? (
+              {oqStep < oqSteps.length ? (
                 <div className="space-y-5">
-                  {OFFER_SUSTAINABILITY_STEPS[oqStep].questions.map((q) => (
+                  {oqSteps[oqStep].questions.map((q) => (
                     <div key={q.id}>
                       <p className="text-sm font-bold text-slate-700 mb-2">{q.text}</p>
                       <div className="space-y-2">
@@ -10506,7 +10919,7 @@ export default function ProviderProfilePage() {
                     )}
                     <button
                       onClick={() => {
-                        if (oqStep === OFFER_SUSTAINABILITY_STEPS.length - 1) {
+                        if (oqStep === oqSteps.length - 1) {
                           setOqStep((s) => s + 1);
                           submitOfferQuestionnaire();
                         } else {
@@ -10516,7 +10929,7 @@ export default function ProviderProfilePage() {
                       disabled={!oqStepAnswered}
                       className={`flex-1 py-3 font-extrabold rounded-xl flex items-center justify-center gap-2 transition-all ${oqStepAnswered ? "bg-primary text-slate-900 hover:bg-primary/90" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
                     >
-                      {oqStep === OFFER_SUSTAINABILITY_STEPS.length - 1 ? "Voir mon score" : "Suivant"}
+                      {oqStep === oqSteps.length - 1 ? "Voir mon score" : "Suivant"}
                       <ChevronRight size={16} />
                     </button>
                   </div>
@@ -10543,7 +10956,7 @@ export default function ProviderProfilePage() {
                         </div>
 
                         <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${level.bg} mb-3`}>
-                          <span className="text-base">{level.emoji}</span>
+                          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{level.icon}</span>
                           <span className={`font-extrabold text-sm ${level.color}`}>{level.label}</span>
                         </div>
 
@@ -10556,12 +10969,12 @@ export default function ProviderProfilePage() {
                         </p>
 
                         <div className="space-y-2 mb-6 text-left">
-                          {OFFER_SUSTAINABILITY_STEPS.map((step) => {
+                          {oqSteps.map((step) => {
                             const catScore = step.questions.reduce((sum, q) => sum + (oqAnswers[q.id] ?? 0), 0);
                             const catMax   = step.questions.reduce((sum, q) => sum + Math.max(...q.options.map((o) => o.value)), 0);
                             return (
                               <div key={step.category} className="flex items-center gap-3">
-                                <span className="text-base w-6 shrink-0">{step.emoji}</span>
+                                <span className="material-symbols-outlined w-6 shrink-0 text-primary" style={{ fontSize: 18 }}>{step.icon ?? "eco"}</span>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex justify-between mb-0.5">
                                     <span className="text-xs font-bold text-slate-600 truncate">{step.category}</span>

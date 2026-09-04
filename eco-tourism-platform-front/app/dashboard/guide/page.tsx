@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { Leaf } from "lucide-react";
 import { logoutUser } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
+import BadgeGrid from "@/components/common/BadgeGrid";
 import GuideOfferModal from "@/components/GuideOfferModal";
+import GuideProfilePage from "@/app/profile/guide/page";
+import BadgeChip from "@/components/common/BadgeChip";
 
 type DashNotif = {
   id: string;
@@ -42,6 +45,7 @@ type GuideProfile = {
   languages_spoken: string[] | null;
   years_experience: number | null;
   status: string;
+  rejection_reason?: string | null;
   sustainability_score: number | null;
   score_questionnaire: number | null;
   score_reservations: number;
@@ -54,13 +58,6 @@ type GuideProfile = {
   feedback_received: number;
   reservations_handled: number;
 };
-
-const BADGE_CONFIG = [
-  { label: "Guide Éco-Certifié", icon: "verified", description: "Onboarding complété" },
-  { label: "Guide Ambassadeur Éco-Voyage", icon: "stars", description: "Score ≥ 80%" },
-  { label: "Guide Expert", icon: "psychology", description: "10 réservations gérées" },
-  { label: "Formateur Durable", icon: "school", description: "5 évaluations reçues" },
-];
 
 function getScoreLabel(score: number | null) {
   if (score === null) return "—";
@@ -119,7 +116,41 @@ export default function GuideDashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<GuideProfile | null>(null);
+
+  // Le formulaire d'offre permet d'inviter des collaborateurs : il reste fermé
+  // tant que l'administrateur n'a pas validé le profil.
+  async function blockIfNotApproved(): Promise<boolean> {
+    let status = profile?.status;
+    try {
+      const token = localStorage.getItem("access_token") || "";
+      const fresh = await apiFetch<GuideProfile>("/guide/profile", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      status = fresh?.status;
+      setProfile((prev) => (prev ? { ...prev, ...fresh } : fresh));
+    } catch {
+      // Serveur injoignable : on s'en tient au dernier statut connu.
+    }
+
+    if (status === "active") return false;
+    alert(
+      status === "rejected"
+        ? "Votre profil a été refusé. Contactez l'équipe Éco-Voyage pour le régulariser."
+        : "Votre profil doit être validé par un administrateur avant de créer une offre. La validation intervient sous 48h.",
+    );
+    return true;
+  }
   const [activeItem, setActiveItem] = useState("Tableau de bord");
+
+  // ?section=Offres — arriver directement sur une section depuis une autre page.
+  // Lu dans un effet, pas dans l'initialiseur d'état : ce composant est aussi
+  // pré-rendu côté serveur, où `window` n'existe pas. React conserve alors la
+  // valeur du serveur lors de l'hydratation et ne rejoue pas l'initialiseur —
+  // la section demandée était donc ignorée à l'arrivée.
+  useEffect(() => {
+    const s = new URLSearchParams(window.location.search).get("section");
+    if (s === "Offres" || s === "Circuits") setActiveItem(s);
+  }, []);
   const [showScoreDetail, setShowScoreDetail] = useState(false);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [showCreateOffer, setShowCreateOffer] = useState(false);
@@ -130,10 +161,10 @@ export default function GuideDashboardPage() {
   const notifRef = useRef<HTMLDivElement>(null);
 
   const navItems = [
-    { label: "Tableau de bord", icon: "dashboard",      href: "/dashboard/guide" },
+    { label: "Tableau de bord", icon: "dashboard",      section: true as const },
     { label: "Explorer",        icon: "explore",         href: "/explorer" },
-    { label: "Offres",          icon: "storefront",      href: "/profile/guide?tab=offres" },
-    { label: "Circuits",        icon: "route",           href: "/profile/guide?tab=circuits" },
+    { label: "Offres",          icon: "storefront",      section: true as const },
+    { label: "Circuits",        icon: "route",           section: true as const },
     { label: "Réservations",    icon: "event_available", href: "/reservations" },
     { label: "Avis",            icon: "star",            href: "/profile/guide?tab=apropos" },
     { label: "Paramètres",      icon: "settings",        href: "/dashboard/profile" },
@@ -201,6 +232,14 @@ export default function GuideDashboardPage() {
     const who        = n.data?.inviter_name ?? n.data?.invited_user_name ?? "Quelqu'un";
     const sourceOf   = isCircuit ? "du circuit" : "de l'offre";
     switch (n.type) {
+      case "profile_rejected": {
+        const deadline = n.data?.disable_at
+          ? new Date(n.data.disable_at).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" })
+          : null;
+        return { title: "Profil refusé", icon: "gpp_bad",
+          body: `Votre profil n'a pas été validé${n.data?.reason ? ` — motif : ${n.data.reason}` : ""}. `
+            + `Votre compte sera désactivé${deadline ? ` le ${deadline}` : ` sous ${n.data?.grace_hours ?? 24}h`}.` };
+      }
       case "collaboration_invite":
         return { title: "Invitation à collaborer", icon: "handshake",
           body: `${who} vous invite à compléter la section « ${section} » ${sourceOf} « ${resource} »` };
@@ -269,7 +308,6 @@ export default function GuideDashboardPage() {
 
   const score = profile?.sustainability_score ?? null;
   const scoreWidth = score !== null ? `${score}%` : "0%";
-  const obtainedBadgeLabels = new Set((profile?.badges ?? []).map((b) => b.label));
 
   return (
     <div className="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen">
@@ -287,7 +325,23 @@ export default function GuideDashboardPage() {
               {navItems.map((item) => (
                 <button
                   key={item.label}
-                  onClick={() => router.push(item.href)}
+                  onClick={() => {
+                    // Les entrées « section » restent dans le tableau de bord ;
+                    // les autres continuent de naviguer.
+                    if ("section" in item) {
+                      setActiveItem(item.label);
+                      // L'adresse suit la section affichée : sans cela, un
+                      // ?section= hérité contredirait l'écran au rechargement.
+                      const url = item.label === "Tableau de bord"
+                        ? window.location.pathname
+                        : `${window.location.pathname}?section=${item.label}`;
+                      window.history.replaceState(null, "", url);
+                      // La section s'affiche en haut, pas à la position héritée.
+                      window.scrollTo({ top: 0 });
+                      return;
+                    }
+                    router.push(item.href!);
+                  }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                     activeItem === item.label
                       ? "bg-primary/10 text-primary font-bold"
@@ -335,14 +389,9 @@ export default function GuideDashboardPage() {
           <header className="h-24 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-primary/10 px-10 flex items-center justify-between sticky top-0 z-10">
             <div className="flex items-center gap-12 shrink-0">
               <h2 className="text-2xl font-bold whitespace-nowrap">
-                Bonjour, {profile?.full_name || user?.full_name || "Guide"} 👋
+                Bonjour, {profile?.full_name || user?.full_name || "Guide"}
               </h2>
-              <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-full px-5 py-2 gap-2 whitespace-nowrap">
-                <span className="material-symbols-outlined text-primary text-base">verified_user</span>
-                <span className="text-sm font-semibold">
-                  {score !== null ? getScoreLabel(score) : "Guide — Évaluation en attente"}
-                </span>
-              </div>
+              <BadgeChip role="guide" fallback={score !== null ? getScoreLabel(score) : "Guide — Évaluation en attente"} />
             </div>
 
             <div className="flex items-center gap-6 flex-1 justify-end">
@@ -504,6 +553,7 @@ export default function GuideDashboardPage() {
 
           <div className="p-8">
 
+            {activeItem === "Tableau de bord" && (<>
             {/* Bannière questionnaire non complété */}
             {score === null && (
               <div className="mb-6 p-5 bg-primary/10 border border-primary/20 rounded-2xl flex items-center justify-between">
@@ -520,6 +570,34 @@ export default function GuideDashboardPage() {
                 >
                   Commencer →
                 </button>
+              </div>
+            )}
+
+            {/* Validation en attente — publication d'offres et de circuits bloquée */}
+            {profile?.status === "pending" && profile?.full_name && (
+              <div className="mb-6 p-5 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3">
+                <span className="material-symbols-outlined text-amber-500 text-2xl">schedule</span>
+                <div>
+                  <p className="font-bold text-amber-800">Profil en attente de validation</p>
+                  <p className="text-sm text-amber-600 font-medium">
+                    L&apos;équipe Éco-Voyage va examiner votre profil sous 48h. Vous pourrez publier vos offres et vos circuits dès qu&apos;il sera validé.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Profil refusé par l'administration */}
+            {profile?.status === "rejected" && (
+              <div className="mb-6 p-5 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3">
+                <span className="material-symbols-outlined text-red-500 text-2xl">cancel</span>
+                <div>
+                  <p className="font-bold text-red-800">Profil refusé</p>
+                  <p className="text-sm text-red-600 font-medium">
+                    {profile?.rejection_reason
+                      ? profile.rejection_reason
+                      : "Contactez l'équipe Éco-Voyage pour connaître le motif et régulariser votre profil."}
+                  </p>
+                </div>
               </div>
             )}
 
@@ -591,7 +669,7 @@ export default function GuideDashboardPage() {
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-bold">Mes Offres</h3>
                 <button
-                  onClick={() => setShowCreateOffer(true)}
+                  onClick={async () => { if (!(await blockIfNotApproved())) setShowCreateOffer(true); }}
                   className="flex items-center gap-2 px-5 py-2.5 bg-primary text-slate-900 font-bold rounded-xl text-sm shadow-lg shadow-primary/20 hover:-translate-y-0.5 transition-all"
                 >
                   <span className="material-symbols-outlined text-lg">add</span>
@@ -605,7 +683,7 @@ export default function GuideDashboardPage() {
                   <p className="text-slate-700 font-bold mb-1">Aucune offre publiée</p>
                   <p className="text-slate-400 text-sm mb-5">Créez votre première expérience guidée et proposez-la aux voyageurs.</p>
                   <button
-                    onClick={() => setShowCreateOffer(true)}
+                    onClick={async () => { if (!(await blockIfNotApproved())) setShowCreateOffer(true); }}
                     className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-slate-900 rounded-xl text-sm font-bold hover:bg-primary/90 shadow-sm"
                   >
                     <span className="material-symbols-outlined text-lg">add</span>
@@ -740,57 +818,25 @@ export default function GuideDashboardPage() {
               <div>
                 <h3 className="text-xl font-bold mb-6">Mes Badges</h3>
                 <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-primary/10">
-                  <div className="grid grid-cols-2 gap-4">
-                    {BADGE_CONFIG.map((config) => {
-                      const obtained = obtainedBadgeLabels.has(config.label);
-                      const obtainedData = profile?.badges.find((b) => b.label === config.label);
-                      return (
-                        <div
-                          key={config.label}
-                          title={obtained && obtainedData
-                            ? `Obtenu le ${new Date(obtainedData.obtained_at).toLocaleDateString("fr-FR")}`
-                            : config.description}
-                          className={`flex flex-col items-center text-center p-4 rounded-xl border-2 transition-all
-                            ${obtained
-                              ? "bg-slate-50 dark:bg-slate-800 border-primary/20"
-                              : "bg-slate-100/50 dark:bg-slate-800/50 border-dashed border-slate-200 dark:border-slate-700"
-                            }`}
-                        >
-                          <div className="size-16 flex items-center justify-center mb-2">
-                            <span
-                              className={`material-symbols-outlined text-4xl transition-all ${obtained ? "text-primary" : "text-slate-300"}`}
-                              style={obtained ? { fontVariationSettings: '"FILL" 1' } : {}}
-                            >
-                              {config.icon}
-                            </span>
-                          </div>
-                          <p className={`text-xs font-bold ${obtained ? "text-slate-700" : "text-slate-300"}`}>{config.label}</p>
-                          <p className={`text-[10px] font-bold uppercase mt-1 ${obtained ? "text-green-500" : "text-slate-300"}`}>
-                            {obtained ? "Débloqué" : "Verrouillé"}
-                          </p>
-                          {!obtained && <p className="text-[9px] text-slate-300 mt-1 italic">{config.description}</p>}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <BadgeGrid role="guide" details={false} />
+                  <a href="/dashboard/profile?onglet=badges" className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline">Voir le détail des paliers →</a>
 
-                  <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 grid grid-cols-3 gap-2 text-center">
-                    <div>
-                      <p className="text-lg font-extrabold text-slate-800 dark:text-slate-100">{profile?.feedback_received ?? 0}</p>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase">Avis</p>
-                    </div>
-                    <div>
-                      <p className="text-lg font-extrabold text-slate-800 dark:text-slate-100">{profile?.years_experience ?? 0}</p>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase">Années</p>
-                    </div>
-                    <div>
-                      <p className="text-lg font-extrabold text-slate-800 dark:text-slate-100">{profile?.reservations_handled ?? 0}</p>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase">Circuits</p>
-                    </div>
-                  </div>
+                  
                 </div>
               </div>
             </div>
+            </>)}
+
+            {/* ── Offres et Circuits : l'interface du profil, montée ici ──
+                 Les formulaires viennent avec, sans être dupliqués. */}
+            {activeItem === "Offres" && (
+              <GuideProfilePage embedded forcedTab="offres" />
+            )}
+
+            {activeItem === "Circuits" && (
+              <GuideProfilePage embedded forcedTab="circuits" />
+            )}
+
           </div>
         </main>
       </div>

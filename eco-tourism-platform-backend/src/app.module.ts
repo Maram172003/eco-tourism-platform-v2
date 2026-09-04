@@ -28,10 +28,13 @@ import { GuideModule } from './guide/guide.module';
 import { CircuitModule } from './circuit/circuit.module';
 import { NotificationModule } from './notifications/notification.module';
 import { PlaceContributionModule } from './place-contribution/place-contribution.module';
+import { BadgeModule } from './badge/badge.module';
 import { ProjectOwnerModule } from './project-owner/project-owner.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{
       ttl: 60000,
       limit: 100,
@@ -61,6 +64,7 @@ import { ProjectOwnerModule } from './project-owner/project-owner.module';
     CircuitModule,
     NotificationModule,
     PlaceContributionModule,
+    BadgeModule,
     ProjectOwnerModule,
   ],
   providers: [GoogleStrategy, {

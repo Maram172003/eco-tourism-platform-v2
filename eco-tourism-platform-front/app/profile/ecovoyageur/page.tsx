@@ -14,6 +14,9 @@ import { logoutUser } from "@/lib/auth";
 import MessagerieWidget from "@/components/MessagerieWidget";
 import PubInteractions from "@/components/PubInteractions";
 import PlaceContributions, { type TopPhotoData, type TopDescData } from "@/components/PlaceContributions";
+import { MACRO_CATEGORIES, TAXONOMY_TAGS as ALL_TAXONOMY_TAGS } from "@/lib/constants/taxonomy-tags";
+import { monTableauDeBord } from "@/lib/dashboard-path";
+import BadgeLabel from "@/components/common/BadgeLabel";
 
 const MapPicker = dynamic(
   () => import("@/components/map/MapPicker"),
@@ -115,18 +118,10 @@ const TRAVELER_TYPES = [
   { value: "photo",     label: "Photographes" },
 ];
 
-const UNIVERS = [
-  { value: "nature",                 label: "Nature" },
-  { value: "histoire_archeologie",   label: "Histoire & Archéologie" },
-  { value: "aventure_sport",         label: "Aventure & Sport" },
-  { value: "gastronomie",            label: "Gastronomie" },
-  { value: "artisanat",              label: "Artisanat" },
-  { value: "decouverte_urbaine",     label: "Découverte urbaine" },
-  { value: "culture_patrimoine",     label: "Culture & Patrimoine" },
-  { value: "bien_etre",              label: "Bien-être" },
-  { value: "transport_experientiel", label: "Transport expérientiel" },
-  { value: "volontariat",            label: "Volontariat" },
-];
+// Les 11 univers proviennent de la taxonomie commune : ainsi « Hébergement »
+// n'est plus oublié ici, et toute macro ajoutée plus tard apparaît d'office.
+const UNIVERS = MACRO_CATEGORIES.map((c) => ({ value: c.slug, label: c.label }));
+
 
 const SUSTAINABILITY_VALUES = [
   { value: "support_local_economy",   label: "Économie locale" },
@@ -138,103 +133,22 @@ const SUSTAINABILITY_VALUES = [
   { value: "avoid_mass_tourism",      label: "Éviter le tourisme de masse" },
 ];
 
-const TAXONOMY_TAGS: Record<string, { value: string; label: string }[]> = {
-  nature: [
-    { value: "faune", label: "Faune" }, { value: "flore", label: "Flore" },
-    { value: "biodiversite", label: "Biodiversité" }, { value: "ornithologie", label: "Ornithologie & oiseaux" },
-    { value: "geologie", label: "Géologie" }, { value: "botanique", label: "Botanique" },
-    { value: "ecologie_marine", label: "Écologie marine" }, { value: "zones_humides", label: "Zones humides" },
-    { value: "forets_maquis", label: "Forêts & maquis" }, { value: "desert_dunes", label: "Désert & dunes" },
-    { value: "oasis", label: "Oasis" }, { value: "parcs_naturels", label: "Parcs naturels" },
-    { value: "astronomie", label: "Astronomie & ciel nocturne" }, { value: "photographie_nature", label: "Photographie nature" },
-    { value: "conservation_protection", label: "Conservation & protection" }, { value: "observation_faune", label: "Observation faune & mammifères" },
-    { value: "safari_desert", label: "Safari désert" }, { value: "circuit_nature", label: "Circuit nature" },
-    { value: "circuit_montagne", label: "Circuit montagne" }, { value: "tour_cotier", label: "Tour côtier" },
-  ],
-  histoire_archeologie: [
-    { value: "periode_punique", label: "Période punique" }, { value: "periode_romaine", label: "Période romaine" },
-    { value: "periode_byzantine", label: "Période byzantine" }, { value: "periode_arabe_medievale", label: "Période arabe & médiévale" },
-    { value: "periode_ottomane", label: "Période ottomane" }, { value: "periode_coloniale", label: "Période coloniale" },
-    { value: "prehistoire", label: "Préhistoire" }, { value: "fouilles_archeologiques", label: "Fouilles archéologiques" },
-    { value: "mosaiques_antiques", label: "Mosaïques antiques" }, { value: "thermes_romains", label: "Thermes romains" },
-    { value: "amphitheatres", label: "Amphithéâtres" }, { value: "necropoles", label: "Nécropoles" },
-    { value: "ksour_greniers_berberes", label: "Ksour & greniers berbères" }, { value: "routes_commerciales", label: "Routes commerciales" },
-    { value: "carthage_civilisation_punique", label: "Carthage & civilisation punique" }, { value: "circuit_historique", label: "Circuit historique" },
-  ],
-  aventure_sport: [
-    { value: "randonnee_pedestre", label: "Randonnée pédestre" }, { value: "trek_multi_jours", label: "Trek multi-jours" },
-    { value: "escalade", label: "Escalade" }, { value: "via_ferrata", label: "Via ferrata" },
-    { value: "speleologie", label: "Spéléologie" }, { value: "canyoning", label: "Canyoning" },
-    { value: "vtt_cyclisme", label: "VTT & cyclisme" }, { value: "kayak_canoe", label: "Kayak & canoë" },
-    { value: "surf_windsurf", label: "Surf & windsurf" }, { value: "plongee_sous_marine", label: "Plongée sous-marine" },
-    { value: "snorkeling", label: "Snorkeling" }, { value: "quad_4x4", label: "Quad & 4x4" },
-    { value: "bivouac", label: "Bivouac" }, { value: "equitation", label: "Équitation" },
-    { value: "tir_arc", label: "Tir à l'arc" }, { value: "peche_traditionnelle", label: "Pêche traditionnelle" },
-  ],
-  gastronomie: [
-    { value: "cuisine_tunisienne_traditionnelle", label: "Cuisine tunisienne traditionnelle" }, { value: "cuisine_berbere", label: "Cuisine berbère" },
-    { value: "cuisine_cotiere_fruits_mer", label: "Cuisine côtière & fruits de mer" }, { value: "street_food", label: "Street food" },
-    { value: "epices_condiments", label: "Épices & condiments" }, { value: "huile_olive_oleiculture", label: "Huile d'olive & oléiculture" },
-    { value: "dattes_palmeraies", label: "Dattes & palmeraies" }, { value: "marches_locaux", label: "Marchés locaux" },
-    { value: "cours_cuisine", label: "Cours de cuisine" }, { value: "degustation_thes", label: "Dégustation de thés" },
-    { value: "vins_viticulture", label: "Vins & viticulture" }, { value: "boulangerie_traditionnelle", label: "Boulangerie traditionnelle" },
-    { value: "miel_apiculture", label: "Miel & apiculture" }, { value: "restaurant_traditionnel", label: "Restaurant traditionnel" },
-    { value: "cafe_salon_the", label: "Café & salon de thé" }, { value: "ferme_restaurant", label: "Ferme-restaurant" },
-    { value: "food_truck", label: "Food truck" }, { value: "table_hotes", label: "Table d'hôtes" },
-    { value: "degustation_produits", label: "Dégustation de produits" }, { value: "diner_panoramique", label: "Dîner panoramique" },
-    { value: "visite_ferme", label: "Visite ferme" }, { value: "cueillette", label: "Cueillette" },
-    { value: "atelier_fromage_yaourt", label: "Atelier fromage & yaourt" }, { value: "jardinage", label: "Jardinage & plantation" },
-    { value: "elevage_responsable", label: "Élevage responsable" },
-  ],
-  artisanat: [
-    { value: "poterie_ceramique", label: "Poterie & céramique" }, { value: "tissage_tapis", label: "Tissage & tapis" },
-    { value: "broderie", label: "Broderie" }, { value: "bijoux_berberes", label: "Bijoux berbères" },
-    { value: "bijoux_argent", label: "Bijoux en argent" }, { value: "maroquinerie_cuir", label: "Maroquinerie & cuir" },
-    { value: "sculpture_bois", label: "Sculpture sur bois" }, { value: "thuya_marqueterie", label: "Thuya & marqueterie" },
-    { value: "vannerie_alfa", label: "Vannerie & alfa" }, { value: "calligraphie", label: "Calligraphie arabe" },
-    { value: "enluminure", label: "Enluminure" }, { value: "teinture_naturelle", label: "Teinture naturelle" },
-    { value: "dinanderie", label: "Dinanderie" }, { value: "savon_artisanal", label: "Savon artisanal" },
-    { value: "couture_caftan", label: "Couture & caftan" }, { value: "tannerie", label: "Tannerie" },
-    { value: "parfumerie_naturelle", label: "Parfumerie naturelle" }, { value: "peinture_traditionnelle", label: "Peinture traditionnelle" },
-  ],
-  decouverte_urbaine: [
-    { value: "architecture_moderne", label: "Architecture moderne" }, { value: "street_art_graffiti", label: "Street art & graffiti" },
-    { value: "quartiers_historiques", label: "Quartiers historiques" }, { value: "vie_de_quartier", label: "Vie de quartier" },
-    { value: "marches_urbains", label: "Marchés urbains" }, { value: "cafes_culture_locale", label: "Cafés & culture locale" },
-    { value: "gastronomie_urbaine", label: "Gastronomie urbaine" }, { value: "transport_local", label: "Transport local" },
-    { value: "scene_artistique", label: "Scène artistique" }, { value: "musique_nuits_locales", label: "Musique & nuits locales" },
-    { value: "shopping_alternatif", label: "Shopping alternatif" }, { value: "communautes_locales", label: "Communautés locales" },
-    { value: "parcs_espaces_verts", label: "Parcs & espaces verts" }, { value: "port_activites_maritimes", label: "Port & activités maritimes" },
-  ],
-  culture_patrimoine: [
-    { value: "architecture_islamique", label: "Architecture islamique" }, { value: "architecture_romaine", label: "Architecture romaine" },
-    { value: "architecture_coloniale", label: "Architecture coloniale" }, { value: "musees", label: "Musées" },
-    { value: "medinas", label: "Médinas" }, { value: "traditions_locales", label: "Traditions locales" },
-    { value: "costumes_bijoux", label: "Costumes & bijoux" }, { value: "musique_traditionnelle", label: "Musique traditionnelle" },
-    { value: "danse_folklorique", label: "Danse folklorique" }, { value: "litterature_poesie", label: "Littérature & poésie" },
-    { value: "fetes_festivals", label: "Fêtes & festivals" }, { value: "contes_legendes", label: "Contes & légendes" },
-    { value: "religion_spiritualite", label: "Religion & spiritualité" }, { value: "berbere_amazigh", label: "Berbère & amazigh" },
-    { value: "art_contemporain", label: "Art contemporain" }, { value: "soiree_culturelle", label: "Soirée culturelle" },
-    { value: "spectacle_traditionnel", label: "Spectacle traditionnel" }, { value: "atelier_musical", label: "Atelier musical" },
-    { value: "visite_medina", label: "Visite médina guidée" }, { value: "visite_musee", label: "Visite musée" },
-  ],
-  bien_etre: [
-    { value: "hammam_traditionnel", label: "Hammam traditionnel" }, { value: "massage_naturel", label: "Massage naturel" },
-    { value: "retraite_yoga", label: "Retraite yoga" }, { value: "meditation", label: "Méditation" },
-    { value: "bain_thermal", label: "Bain thermal" }, { value: "therapie_plantes", label: "Thérapie par les plantes" },
-    { value: "gommage_savon_noir", label: "Gommage & savon noir" }, { value: "yoga", label: "Yoga" },
-  ],
-  transport_experientiel: [
-    { value: "location_velo", label: "Balade à vélo" }, { value: "caleche", label: "Calèche" },
-    { value: "bateau_traditionnel", label: "Bateau traditionnel" }, { value: "tuk_tuk", label: "Tuk-tuk" },
-    { value: "dromadaire", label: "Balade à dromadaire" }, { value: "transfert_partage", label: "Transfert partagé & covoiturage local" },
-  ],
-  volontariat: [
-    { value: "plantation_arbres", label: "Plantation d'arbres" }, { value: "nettoyage_plage", label: "Nettoyage plage" },
-    { value: "nettoyage_foret", label: "Nettoyage forêt" }, { value: "education_environnementale", label: "Éducation environnementale" },
-    { value: "jardin_communautaire", label: "Jardin communautaire" }, { value: "sensibilisation_ecoles", label: "Sensibilisation dans les écoles" },
-  ],
-};
+// « Hébergement » reste un univers que l'on peut cocher, mais ses sous-types
+// (Dortoir, Suite, Chambre standard…) ne sont pas des centres d'intérêt : on ne
+// les propose donc jamais à la sélection. L'univers seul suffit à recevoir des
+// recommandations d'hébergement, le moteur faisant la correspondance par macro.
+const INTEREST_MACROS = MACRO_CATEGORIES.filter((c) => c.slug !== "hebergement");
+
+// Activités groupées par univers, dérivées de la même source que les offres et
+// les circuits — plus de liste recopiée à la main qui finit par diverger.
+const TAXONOMY_TAGS: Record<string, { value: string; label: string }[]> =
+  INTEREST_MACROS.reduce((acc, macro) => {
+    acc[macro.slug] = ALL_TAXONOMY_TAGS
+      .filter((tag) => tag.macro === macro.slug)
+      .map((tag) => ({ value: tag.slug, label: tag.label }));
+    return acc;
+  }, {} as Record<string, { value: string; label: string }[]>);
+
 
 const LANDSCAPES = [
   { value: "mountain",    label: "Montagne" },
@@ -293,7 +207,15 @@ function BotanicalCover() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function EcoTravelerProfilePage() {
+/**
+ * Page de profil de l'éco-voyageur. Montée dans la page Paramètres
+ * (`embedded` + `openEditOnMount`) pour y fournir son formulaire.
+ */
+export default function EcoTravelerProfilePage({ embedded = false, forcedTab, openEditOnMount = false }: {
+  embedded?: boolean;
+  forcedTab?: Tab;
+  openEditOnMount?: boolean;
+} = {}) {
   const router = useRouter();
 
   const [profile,       setProfile]       = useState<EcoTravelerProfile | null>(null);
@@ -304,7 +226,7 @@ export default function EcoTravelerProfilePage() {
   const [topDescs,      setTopDescs]      = useState<Record<string, TopDescData  | null>>({});
   const [token,        setToken]        = useState("");
   const [loading,      setLoading]      = useState(true);
-  const [activeTab,    setActiveTab]    = useState<Tab>("tout");
+  const [activeTab,    setActiveTab]    = useState<Tab>(forcedTab ?? "tout");
 
   // ── Add publication modal ────────────────────────────────────────────────
   const [addPubOpen,   setAddPubOpen]   = useState(false);
@@ -372,6 +294,8 @@ export default function EcoTravelerProfilePage() {
   const [editGoals,         setEditGoals]         = useState<string[]>([]);
   const [editProfileSaving, setEditProfileSaving] = useState(false);
   const [editProfileError,  setEditProfileError]  = useState("");
+  /** Mode Paramètres : on confirme sans refermer, le formulaire EST la page. */
+  const [editProfileSaved, setEditProfileSaved] = useState(false);
 
   // ── Init ─────────────────────────────────────────────────────────────────
 
@@ -396,7 +320,7 @@ export default function EcoTravelerProfilePage() {
           apiFetch<FollowUser[]>("/follows/followers/profiles", { headers: { Authorization: `Bearer ${tkn}` } }).catch(() => []),
         ]).then(([f, r, fwing, fwers]) => { setFriends(f); setFriendRequests(r); setFollowings(fwing as FollowUser[]); setFollowers(fwers as FollowUser[]); setSocialLoaded(true); });
       } catch {
-        router.push("/dashboard");
+        router.push(monTableauDeBord());
       } finally {
         setLoading(false);
       }
@@ -595,6 +519,13 @@ export default function EcoTravelerProfilePage() {
 
   // ── Edit profile ─────────────────────────────────────────────────────────
 
+  const editDejaOuvert = useRef(false);
+  useEffect(() => {
+    if (!openEditOnMount || editDejaOuvert.current || !profile) return;
+    editDejaOuvert.current = true;
+    openEditProfile();
+  }, [openEditOnMount, profile]);
+
   function openEditProfile() {
     if (!profile) return;
     setEditProfileForm({
@@ -616,7 +547,23 @@ export default function EcoTravelerProfilePage() {
     setEditProfileOpen(true);
   }
 
-  function closeEditProfile() { setEditProfileOpen(false); setEditProfileError(""); }
+  /**
+   * Fin d'édition. En mode Paramètres le formulaire occupe toute la page :
+   * le refermer laisserait un écran vide, on affiche donc une confirmation.
+   */
+  function terminerEdition() {
+    if (openEditOnMount) {
+      setEditProfileSaved(true);
+      setTimeout(() => setEditProfileSaved(false), 4000);
+      return;
+    }
+    setEditProfileOpen(false);
+  }
+
+  function closeEditProfile() {
+    if (openEditOnMount) { setEditProfileError(""); return; }
+    setEditProfileOpen(false); setEditProfileError("");
+  }
 
   async function handleSaveProfile(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -630,6 +577,8 @@ export default function EcoTravelerProfilePage() {
       if (editProfileCover?.file) coverUrl = await uploadImage(editProfileCover.file);
       else if (editProfileCover === null) coverUrl = undefined;
 
+      // Les quatre PATCH ne sont plus silencieux : un échec doit remonter,
+      // sinon l'écran affiche « enregistré » alors que rien n'a été gardé.
       const [updated] = await Promise.all([
         apiFetch<EcoTravelerProfile>("/eco-traveler/profile", {
           method: "POST", headers: { Authorization: `Bearer ${token}` },
@@ -645,19 +594,19 @@ export default function EcoTravelerProfilePage() {
         apiFetch("/eco-traveler/traveler-types", {
           method: "PATCH", headers: { Authorization: `Bearer ${token}` },
           body: JSON.stringify({ traveler_types: editTravTypes }),
-        }).catch(() => {}),
+        }),
         apiFetch("/eco-traveler/motivations", {
           method: "PATCH", headers: { Authorization: `Bearer ${token}` },
           body: JSON.stringify({ motivations: editMotivations, sustainability_values: editSustValues }),
-        }).catch(() => {}),
+        }),
         apiFetch("/eco-traveler/interests", {
           method: "PATCH", headers: { Authorization: `Bearer ${token}` },
           body: JSON.stringify({ interests: editInterests, landscapes: editLandscapes }),
-        }).catch(() => {}),
+        }),
         apiFetch("/eco-traveler/goals", {
           method: "PATCH", headers: { Authorization: `Bearer ${token}` },
           body: JSON.stringify({ sustainability_goals: editGoals }),
-        }).catch(() => {}),
+        }),
       ]);
 
       setProfile((prev) => prev ? {
@@ -670,7 +619,7 @@ export default function EcoTravelerProfilePage() {
         landscapes: editLandscapes,
         sustainability_goals: editGoals,
       } : prev);
-      setEditProfileOpen(false);
+      terminerEdition();
     } catch (err: any) {
       setEditProfileError(err.message || "Erreur lors de la sauvegarde.");
     } finally { setEditProfileSaving(false); }
@@ -958,9 +907,9 @@ export default function EcoTravelerProfilePage() {
       )}
 
       {/* ══ TOP NAV ══════════════════════════════════════════════════════════ */}
-      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-3">
+      <div className={`sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-3${embedded ? " hidden" : ""}`}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <button onClick={() => router.push("/dashboard")}
+          <button onClick={() => router.push(monTableauDeBord())}
             className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-all">
             <ArrowLeft size={16} />Retour
           </button>
@@ -973,10 +922,15 @@ export default function EcoTravelerProfilePage() {
 
       {/* ══ EDIT PROFILE MODAL ═══════════════════════════════════════════════ */}
       {editProfileOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl relative overflow-hidden flex flex-col max-h-[92vh]">
+        <div className={openEditOnMount ? "w-full" : "fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"}>
+          <div className={`bg-white rounded-3xl w-full relative overflow-hidden flex flex-col ${openEditOnMount ? "border border-slate-100" : "max-w-lg shadow-2xl max-h-[92vh]"}`}>
+            {editProfileSaved && (
+              <div className="mx-6 mt-5 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-2.5 text-xs font-bold text-emerald-700 flex items-center gap-2">
+                <Check size={14} />Modifications enregistrées.
+              </div>
+            )}
             <button onClick={closeEditProfile}
-              className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors">
+              className={`absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors${openEditOnMount ? " hidden" : ""}`}>
               <X size={16} />
             </button>
             <div className="px-8 pt-8 pb-5 border-b border-slate-100 shrink-0">
@@ -1195,29 +1149,50 @@ export default function EcoTravelerProfilePage() {
                       </button>
                     )}
                   </div>
-                  {/* Tags filtrés par univers sélectionnés */}
+                  {/* Activités regroupées sous leur univers */}
                   {(() => {
-                    const cats = editMotivations.length > 0 ? editMotivations : Object.keys(TAXONOMY_TAGS);
-                    const raw = cats.flatMap((c) => TAXONOMY_TAGS[c] ?? []);
-                    const seen = new Set<string>();
-                    const pool = raw.filter((t) => { if (seen.has(t.value)) return false; seen.add(t.value); return true; });
-                    const visible = editInterestSearch.trim()
-                      ? pool.filter((t) => t.label.toLowerCase().includes(editInterestSearch.toLowerCase()))
-                      : pool;
+                    const cats = editMotivations.length > 0 ? editMotivations : INTEREST_MACROS.map((u) => u.slug);
+                    const query = editInterestSearch.trim().toLowerCase();
+                    const groupes = cats
+                      .map((slug) => {
+                        const univers = UNIVERS.find((u) => u.value === slug);
+                        const tags = (TAXONOMY_TAGS[slug] ?? []).filter(
+                          (tag) => !query || tag.label.toLowerCase().includes(query),
+                        );
+                        return { slug, label: univers?.label ?? slug, tags };
+                      })
+                      .filter((g) => g.tags.length > 0);
+
+                    if (groupes.length === 0) {
+                      return (
+                        <p className="text-xs text-slate-500 italic">
+                          {query
+                            ? "Aucune activité correspondante."
+                            : "Les univers choisis n'appellent aucune précision — vous recevrez déjà des recommandations correspondantes."}
+                        </p>
+                      );
+                    }
                     return (
-                      <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pr-1">
-                        {visible.length === 0
-                          ? <p className="text-xs text-slate-400 italic">Aucun tag correspondant.</p>
-                          : visible.map((tag) => {
-                            const active = editInterests.includes(tag.value);
-                            return (
-                              <button key={tag.value} type="button"
-                                onClick={() => setEditInterests((prev) => active ? prev.filter((s) => s !== tag.value) : [...prev, tag.value])}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${active ? "bg-primary/10 border-primary text-primary" : "bg-slate-50 border-slate-200 text-slate-500 hover:border-primary/40"}`}>
-                                {active && <Check size={10} className="inline mr-1" />}{tag.label}
-                              </button>
-                            );
-                          })}
+                      <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                        {groupes.map((groupe) => (
+                          <div key={groupe.slug}>
+                            <p className="text-[10px] font-black tracking-wider text-primary/70 uppercase mb-1.5">
+                              {groupe.label}
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {groupe.tags.map((tag) => {
+                                const active = editInterests.includes(tag.value);
+                                return (
+                                  <button key={tag.value} type="button"
+                                    onClick={() => setEditInterests((prev) => active ? prev.filter((s) => s !== tag.value) : [...prev, tag.value])}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${active ? "bg-primary/10 border-primary text-primary" : "bg-slate-50 border-slate-200 text-slate-500 hover:border-primary/40"}`}>
+                                    {active && <Check size={10} className="inline mr-1" />}{tag.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     );
                   })()}
@@ -1273,10 +1248,13 @@ export default function EcoTravelerProfilePage() {
             </div>
 
             <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/80 flex items-center justify-end gap-3 shrink-0">
-              <button type="button" onClick={closeEditProfile}
-                className="px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors">
-                Annuler
-              </button>
+              {/* Rien à annuler en mode Paramètres : le formulaire est la page. */}
+              {!openEditOnMount && (
+                <button type="button" onClick={closeEditProfile}
+                  className="px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors">
+                  Annuler
+                </button>
+              )}
               <button type="submit" form="edit-profile-form" disabled={editProfileSaving}
                 className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs shadow-sm hover:shadow transition-all active:scale-95 disabled:opacity-60">
                 {editProfileSaving
@@ -1736,7 +1714,7 @@ export default function EcoTravelerProfilePage() {
       )}
 
       {/* ══ MAIN CONTENT ═════════════════════════════════════════════════════ */}
-      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 pt-6">
+      <div className={openEditOnMount ? "hidden" : embedded ? "w-full" : "w-full max-w-6xl mx-auto px-4 sm:px-6 pt-6"}>
 
         {/* ── Profile Header Card ──────────────────────────────────────────── */}
         <div className="relative w-full overflow-hidden bg-white shadow-sm rounded-3xl border border-slate-100/80 mb-6">
@@ -1756,10 +1734,7 @@ export default function EcoTravelerProfilePage() {
                       <AvatarImg />
                     </div>
                   </div>
-                  <div className="bg-primary text-white text-[10px] font-extrabold px-3 py-1 rounded-full flex items-center gap-1 shadow-md uppercase tracking-wider border border-white">
-                    <span className="material-symbols-outlined text-yellow-300" style={{ fontSize: 11 }}>star</span>
-                    {scoreLabel(profile.sustainability_score)}
-                  </div>
+                  <BadgeLabel role="eco_traveler" taille={11} />
                 </div>
                 <div className="text-center sm:text-left pb-1 min-w-0">
                   <div className="flex items-center justify-center sm:justify-start gap-2">
@@ -1803,7 +1778,7 @@ export default function EcoTravelerProfilePage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
           {/* ── LEFT SIDEBAR ── */}
-          <div className="lg:col-span-4 lg:sticky lg:top-6 space-y-6">
+          <div className={`lg:col-span-4 lg:sticky lg:top-6 space-y-6${embedded ? " hidden" : ""}`}>
 
             {/* Informations */}
             <div className="bg-white p-6 rounded-3xl border border-slate-100/80 shadow-sm">
@@ -1928,7 +1903,7 @@ export default function EcoTravelerProfilePage() {
           </div>
 
           {/* ── RIGHT COLUMN ── */}
-          <div className="lg:col-span-8 space-y-6">
+          <div className={`space-y-6${embedded ? " col-span-full" : " lg:col-span-8"}`}>
 
             {/* Tabs */}
             <div className="bg-slate-100 p-1.5 rounded-2xl flex flex-wrap gap-1 border border-slate-200/50">

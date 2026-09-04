@@ -4,7 +4,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/roles.enum';
 import { Public } from '../common/decorators/public.decorator';
 import { CircuitService } from './circuit.service';
-import { CreateCircuitDto, UpdateCircuitDto } from './dto/circuit.dto';
+import { CreateCircuitDto, UpdateCircuitDto , CircuitSustainabilityDto} from './dto/circuit.dto';
 
 @ApiTags('Circuits')
 @Controller('circuits')
@@ -41,8 +41,9 @@ export class CircuitController {
     return this.service.findPublishedByUser(userId);
   }
 
-  @ApiBearerAuth('bearer')
-  @Roles(Role.ECO_TRAVELER, Role.GUIDE, Role.PROVIDER, Role.ADMIN)
+  // Ouvert aux visiteurs : `all-public` renvoie déjà ces mêmes circuits enrichis
+  // sans authentification, le détail n'expose donc rien de plus.
+  @Public()
   @Get(':id/public-detail')
   findPublicDetail(@Param('id') id: string) {
     return this.service.findPublicDetail(id);
@@ -66,6 +67,11 @@ export class CircuitController {
 
   @ApiBearerAuth('bearer')
   @Roles(Role.PROVIDER, Role.GUIDE)
+  @Patch(':id/sustainability')
+  updateSustainability(@Req() req: any, @Param('id') id: string, @Body() dto: CircuitSustainabilityDto) {
+    return this.service.updateCircuitSustainability(req.user.sub, id, dto.score);
+  }
+
   @Post(':id/publish')
   publish(@Req() req: any, @Param('id') id: string) {
     return this.service.publishCircuit(req.user.sub, id);
