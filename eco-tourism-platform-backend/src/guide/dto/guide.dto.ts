@@ -102,6 +102,10 @@ export class UpdateGuideIdentityDto {
   @IsString()
   photo?: string;
 
+  @IsOptional()
+  @IsString()
+  cover_photo?: string;
+
   @IsArray()
   @IsString({ each: true })
   languages_spoken!: string[];
@@ -303,4 +307,7 @@ export class CreateGuideOfferDto {
   // Flag interne — indique que l'offre est finalisée (mise à jour du statut)
   @IsOptional() @IsBoolean()
   _finalize?: boolean;
+
+  @IsOptional() @IsArray() @IsString({ each: true })
+  tags?: string[];
 }

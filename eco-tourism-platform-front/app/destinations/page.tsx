@@ -20,14 +20,32 @@ import {
   ChevronLeft,
   ChevronRight,
   Calendar,
-  ShieldCheck,
   Tag,
   Star,
+  Landmark,
+  Mountain,
+  UtensilsCrossed,
+  Palette,
+  Sparkles,
+  Heart,
+  Bike,
+  HandHeart,
+  Home,
+  Tent,
+  TreePine,
+  LayoutGrid,
+  Route,
+  Ticket,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import dynamic from "next/dynamic";
 import Navbar from "@/components/home/Navbar";
 import Footer from "@/components/home/Footer";
 import { apiFetch } from "@/lib/api";
+import OfferDetailView from "@/components/offer/OfferDetailView";
+import CircuitViewContent from "@/components/circuit/CircuitViewContent";
+import { MACRO_CATEGORIES, TAXONOMY_TAGS, getTagsByMacro } from "@/lib/constants/taxonomy-tags";
+import type { MacroSlug } from "@/lib/constants/taxonomy-tags";
 
 const MapView = dynamic(() => import("@/components/map/MapView"),
   { ssr: false, loading: () => <div className="h-[200px] rounded-xl bg-slate-100 animate-pulse" /> }
@@ -79,8 +97,13 @@ type Offer = {
   price: number | null;
   duration: string | null;
   offer_type: string | null;
+  offer_subtypes: string[] | null;
   region: string | null;
   author_type: "guide" | "project_owner";
+  author_name: string | null;
+  author_photo: string | null;
+  org_name: string | null;
+  org_logo: string | null;
   images: string[] | null;
   inclusions: string | null;
   meeting_point: string | null;
@@ -91,6 +114,8 @@ type Offer = {
   min_age: number | null;
   cancellation_policy: string | null;
   sustainability_score: number | null;
+  tags: string[] | null;
+  details: Record<string, any> | null;
   created_at: string;
 };
 
@@ -129,22 +154,26 @@ type Experience = {
   created_at: string;
 };
 
+type Circuit = {
+  id: string;
+  provider_id: string;
+  title: string;
+  description: string | null;
+  nb_jours: number;
+  cover_image: string | null;
+  etapes: any[];
+  hebergement: any | null;
+  tags: string[] | null;
+  owner_type: string;
+  author_name: string | null;
+  author_photo: string | null;
+  created_at: string;
+};
+
 type SortKey = "recent" | "price_asc" | "price_desc";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
-const ALL_OFFER_TYPES = [
-  { value: "eco_tour", label: "Éco-Tour" },
-  { value: "activity", label: "Activité" },
-  { value: "workshop", label: "Atelier" },
-  { value: "transfer", label: "Transfert" },
-  { value: "sejour", label: "Séjour" },
-  { value: "circuit", label: "Circuit" },
-  { value: "activite", label: "Activité (projet)" },
-  { value: "restauration", label: "Restauration" },
-  { value: "hebergement", label: "Hébergement" },
-  { value: "autre", label: "Autre" },
-];
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "recent", label: "Plus récent" },
@@ -176,13 +205,86 @@ const AVATAR_COLORS = [
   "bg-lime-600",
 ];
 
+// ─── Taxonomy matching ─────────────────────────────────────────────────────────
+
+const OFFER_TYPE_TO_MACRO: Partial<Record<string, MacroSlug>> = {
+  hebergement:       "hebergement",
+  restauration:      "gastronomie",
+  artisanat:         "artisanat",
+  transport:         "transport_experientiel",
+  bien_etre:         "bien_etre",
+  location_materiel: "transport_experientiel",
+};
+
+// Normalisation subtype offre → slug taxonomie (quand ils diffèrent)
+const SUBTYPE_TO_TAG: Record<string, string> = {
+  randonnee:                  "randonnee_pedestre",
+  velo_vtt:                   "vtt_cyclisme",
+  observation_oiseaux:        "ornithologie",
+  observation_etoiles:        "astronomie",
+  visite_oasis:               "oasis",
+  poterie:                    "poterie_ceramique",
+  tissage:                    "tissage_tapis",
+  location_velo:              "vtt_cyclisme",
+  education_environnementale: "conservation_protection",
+};
+
+const MACRO_ICON: Record<string, LucideIcon> = {
+  nature:                 TreePine,
+  histoire_archeologie:   Landmark,
+  aventure_sport:         Mountain,
+  gastronomie:            UtensilsCrossed,
+  artisanat:              Palette,
+  decouverte_urbaine:     Building2,
+  culture_patrimoine:     Sparkles,
+  bien_etre:              Heart,
+  transport_experientiel: Bike,
+  volontariat:            HandHeart,
+  hebergement:            Tent,
+};
+
+function getOfferTagSlugs(offer: Offer): string[] {
+  const subtypes = offer.offer_subtypes ?? [];
+  const normalized = subtypes.map((st) => SUBTYPE_TO_TAG[st] ?? st);
+  return [...new Set([...normalized, ...(offer.tags ?? [])])];
+}
+
+function offerMatchesMacro(offer: Offer, macro: MacroSlug): boolean {
+  if (OFFER_TYPE_TO_MACRO[offer.offer_type ?? ""] === macro) return true;
+  const slugs = getOfferTagSlugs(offer);
+  return slugs.some((slug) => TAXONOMY_TAGS.find((t) => t.slug === slug)?.macro === macro);
+}
+
+function circuitMatchesMacro(circuit: Circuit, macro: MacroSlug): boolean {
+  const tags = circuit.tags ?? [];
+  if (tags.some((slug) => TAXONOMY_TAGS.find((t) => t.slug === slug)?.macro === macro)) return true;
+  return (circuit.etapes ?? []).some((e: any) =>
+    (e.subtypes ?? []).some((st: string) => {
+      const slug = SUBTYPE_TO_TAG[st] ?? st;
+      return TAXONOMY_TAGS.find((t) => t.slug === slug)?.macro === macro;
+    })
+  );
+}
+
+function circuitMatchesTag(circuit: Circuit, tagSlug: string): boolean {
+  if ((circuit.tags ?? []).includes(tagSlug)) return true;
+  return (circuit.etapes ?? []).some((e: any) =>
+    (e.subtypes ?? []).some((st: string) => (SUBTYPE_TO_TAG[st] ?? st) === tagSlug)
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+
 function seedFromId(id: string, mod: number): number {
   return id.charCodeAt(0) % mod;
 }
 
 function getTypeLabel(type: string | null): string {
   if (!type) return "Offre";
-  return ALL_OFFER_TYPES.find((t) => t.value === type)?.label ?? type;
+  const macro = MACRO_CATEGORIES.find((m) => m.slug === type);
+  if (macro) return macro.label;
+  const tag = TAXONOMY_TAGS.find((t) => t.slug === type);
+  return tag?.label ?? type;
 }
 
 function formatDate(dateStr: string) {
@@ -234,7 +336,6 @@ function ImageGallery({ images, fallback }: { images: string[]; fallback: string
 // ─── Offer Detail Modal ────────────────────────────────────────────────────────
 
 function OfferModal({ offer, onClose }: { offer: Offer; onClose: () => void }) {
-  const fallback = OFFER_PLACEHOLDERS[seedFromId(offer.id, OFFER_PLACEHOLDERS.length)];
   const isGuide = offer.author_type === "guide";
   const router = useRouter();
 
@@ -260,9 +361,6 @@ function OfferModal({ offer, onClose }: { offer: Offer; onClose: () => void }) {
         className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Gallery */}
-        <ImageGallery images={offer.images ?? []} fallback={fallback} />
-
         {/* Close */}
         <button
           onClick={onClose}
@@ -271,117 +369,65 @@ function OfferModal({ offer, onClose }: { offer: Offer; onClose: () => void }) {
           <X className="w-4 h-4" />
         </button>
 
-        {/* Content */}
-        <div className="p-6 md:p-8">
-          {/* Badges */}
-          <div className="flex flex-wrap gap-2 mb-4">
-            <span className="bg-slate-100 text-slate-700 text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-widest">
-              {getTypeLabel(offer.offer_type)}
-            </span>
-            <span className={`text-xs font-bold px-3 py-1 rounded-full ${isGuide ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>
-              {isGuide ? "Guide certifié" : "Projet éco"}
-            </span>
-          </div>
-
-          <h2 className="text-2xl font-black text-slate-900 mb-2">{offer.title}</h2>
-
-          {/* Quick info row */}
-          <div className="flex flex-wrap gap-3 mb-6">
-            {offer.region && (
-              <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-500">
-                <MapPin className="w-4 h-4 text-primary" /> {offer.region}
-              </span>
-            )}
-            {offer.duration && (
-              <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-500">
-                <Clock className="w-4 h-4 text-primary" /> {offer.duration}
-              </span>
-            )}
-            {(offer.min_group_size || offer.max_group_size) && (
-              <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-500">
-                <Users className="w-4 h-4 text-primary" />
-                {offer.min_group_size && offer.max_group_size
-                  ? `${offer.min_group_size}–${offer.max_group_size} pers.`
-                  : offer.max_group_size ? `max ${offer.max_group_size} pers.` : `min ${offer.min_group_size} pers.`}
-              </span>
-            )}
-            {offer.min_age && (
-              <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-500">
-                <Star className="w-4 h-4 text-primary" /> Dès {offer.min_age} ans
-              </span>
-            )}
-          </div>
-
-          {/* Description */}
-          {offer.description && (
-            <div className="mb-6">
-              <h3 className="text-sm font-extrabold text-slate-400 uppercase tracking-widest mb-2">Description</h3>
-              <p className="text-slate-700 leading-relaxed whitespace-pre-line">{offer.description}</p>
-            </div>
-          )}
-
-          {/* Inclusions */}
-          {offer.inclusions && (
-            <div className="mb-6">
-              <h3 className="text-sm font-extrabold text-slate-400 uppercase tracking-widest mb-2">Ce qui est inclus</h3>
-              <p className="text-slate-700 leading-relaxed whitespace-pre-line">{offer.inclusions}</p>
-            </div>
-          )}
-
-          {/* Meeting point */}
-          {offer.meeting_point && (
-            <div className="mb-4">
-              <div className="flex items-center gap-2 mb-2">
-                <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
-                <p className="text-xs font-extrabold text-slate-400 uppercase tracking-widest">Localisation</p>
-              </div>
-              <p className="text-sm font-semibold text-slate-700 mb-2">{offer.meeting_point}</p>
-              <MeetingMap lat={offer.meeting_lat} lng={offer.meeting_lng} address={offer.meeting_point ?? ""} />
-            </div>
-          )}
-
-          {/* Cancellation */}
-          {offer.cancellation_policy && (
-            <div className="flex items-start gap-3 bg-slate-50 rounded-xl px-4 py-3 mb-6">
-              <ShieldCheck className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
-              <div>
-                <p className="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">Politique d'annulation</p>
-                <p className="text-sm font-semibold text-slate-700">{offer.cancellation_policy}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Sustainability score */}
-          {offer.sustainability_score !== null && (() => {
-            const { label, color, bar } = sustainabilityLevel(offer.sustainability_score);
-            return (
-              <div className="mb-6 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">🌿 Score de durabilité</span>
-                  <span className={`text-sm font-black ${color}`}>{offer.sustainability_score}/100</span>
-                </div>
-                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden mb-1.5">
-                  <div className={`h-full ${bar} rounded-full`} style={{ width: `${offer.sustainability_score}%` }} />
-                </div>
-                <span className={`text-xs font-bold ${color}`}>{label}</span>
-              </div>
-            );
-          })()}
-
-          {/* Price + CTA */}
-          <div className="flex items-center justify-between pt-6 border-t border-slate-100">
-            {offer.price !== null ? (
-              <div>
-                <p className="text-xs text-slate-400 font-medium">À partir de</p>
-                <p className="text-3xl font-black text-slate-900">{offer.price} <span className="text-lg font-bold text-slate-400">TND</span></p>
-              </div>
+        {/* Author bar */}
+        {offer.author_name && (
+          <div className="flex items-center gap-3 px-6 pt-6 pb-3 border-b border-slate-100">
+            {offer.author_photo ? (
+              <img src={offer.author_photo} alt="" className="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" />
             ) : (
-              <p className="text-base font-semibold text-slate-400 italic">Prix sur demande</p>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-black text-sm shrink-0 ${isGuide ? "bg-emerald-500" : "bg-blue-500"}`}>
+                {offer.author_name[0]}
+              </div>
             )}
-            <button onClick={handleReserve} className="h-12 px-8 rounded-xl bg-primary text-slate-900 font-extrabold hover:bg-primary/90 transition-colors text-sm">
-              Réserver cette offre
-            </button>
+            <div className="flex-1">
+              <p className="font-bold text-slate-800 text-sm">{offer.author_name}</p>
+              {offer.org_name && (
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  {offer.org_logo && <img src={offer.org_logo} alt="" className="w-4 h-4 rounded object-cover" />}
+                  <p className="text-xs font-semibold text-slate-400">{offer.org_name}</p>
+                </div>
+              )}
+            </div>
+            <span className={`text-xs font-bold px-3 py-1 rounded-full ${isGuide ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>
+              {isGuide ? "Guide certifié" : "Prestataire"}
+            </span>
           </div>
+        )}
+
+        {/* Full offer detail view */}
+        <OfferDetailView offer={{
+          id: offer.id,
+          title: offer.title,
+          description: offer.description,
+          offer_type: offer.offer_type,
+          duration: offer.duration,
+          region: offer.region,
+          price: offer.price,
+          images: offer.images,
+          meeting_point: offer.meeting_point,
+          meeting_lat: offer.meeting_lat,
+          meeting_lng: offer.meeting_lng,
+          max_group_size: offer.max_group_size,
+          min_group_size: offer.min_group_size,
+          min_age: offer.min_age,
+          cancellation_policy: offer.cancellation_policy,
+          inclusions: offer.inclusions,
+          details: offer.details,
+        }} />
+
+        {/* CTA */}
+        <div className="flex items-center justify-between px-6 py-5 border-t border-slate-100">
+          {offer.price !== null ? (
+            <div>
+              <p className="text-xs text-slate-400 font-medium">À partir de</p>
+              <p className="text-3xl font-black text-slate-900">{offer.price} <span className="text-lg font-bold text-slate-400">TND</span></p>
+            </div>
+          ) : (
+            <p className="text-base font-semibold text-slate-400 italic">Prix sur demande</p>
+          )}
+          <button onClick={handleReserve} className="h-12 px-8 rounded-xl bg-primary text-slate-900 font-extrabold hover:bg-primary/90 transition-colors text-sm">
+            Réserver cette offre
+          </button>
         </div>
       </div>
     </div>
@@ -728,6 +774,21 @@ function OfferCard({ offer, onClick }: { offer: Offer; onClick: () => void }) {
 
         <SustainabilityBar score={offer.sustainability_score} />
 
+        {/* Author */}
+        {offer.author_name && (
+          <div className="flex items-center gap-2 mt-3 mb-2">
+            {offer.author_photo ? (
+              <img src={offer.author_photo} alt="" className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-100" />
+            ) : (
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-black text-[10px] shrink-0 ${isGuide ? "bg-emerald-500" : "bg-blue-500"}`}>
+                {offer.author_name[0]}
+              </div>
+            )}
+            <span className="text-xs font-bold text-slate-500 truncate">{offer.author_name}</span>
+            {offer.org_name && <span className="text-xs text-slate-400 truncate">· {offer.org_name}</span>}
+          </div>
+        )}
+
         <div className="flex items-center justify-between pt-4 border-t border-slate-100 mt-4">
           {offer.price !== null ? (
             <div>
@@ -859,17 +920,146 @@ function ExperienceCard({ exp, onClick }: { exp: Experience; onClick: () => void
   );
 }
 
+// ─── CircuitCard ───────────────────────────────────────────────────────────────
+
+function CircuitCard({ circuit, onClick }: { circuit: Circuit; onClick: () => void }) {
+  const image = circuit.cover_image ?? OFFER_PLACEHOLDERS[seedFromId(circuit.id, OFFER_PLACEHOLDERS.length)];
+  const nbEtapes = circuit.etapes?.length ?? 0;
+
+  return (
+    <div
+      className="flex flex-col rounded-2xl overflow-hidden bg-white border border-slate-100 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group cursor-pointer"
+      onClick={onClick}
+    >
+      <div className="relative h-60 overflow-hidden">
+        <div className="absolute inset-0 bg-cover bg-center group-hover:scale-105 transition-transform duration-500"
+          style={{ backgroundImage: `url('${image}')` }} />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+        <div className="absolute top-3 left-3 flex gap-2">
+          <span className="bg-white/95 backdrop-blur-sm px-3 py-1 rounded-full text-[11px] font-extrabold text-slate-700 uppercase tracking-widest shadow-sm">
+            Circuit
+          </span>
+          <span className="bg-emerald-500/90 backdrop-blur-sm text-white px-3 py-1 rounded-full text-[11px] font-bold shadow-sm">
+            {circuit.owner_type === "guide" ? "Guide" : "Prestataire"}
+          </span>
+        </div>
+        <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between">
+          <span className="flex items-center gap-1 text-white text-xs font-semibold bg-black/40 backdrop-blur-sm px-2.5 py-1 rounded-full">
+            <Clock className="w-3 h-3 shrink-0" /> {circuit.nb_jours} jour{circuit.nb_jours > 1 ? "s" : ""}
+          </span>
+          {nbEtapes > 0 && (
+            <span className="flex items-center gap-1 text-white text-xs font-semibold bg-black/40 backdrop-blur-sm px-2.5 py-1 rounded-full">
+              <MapPin className="w-3 h-3 shrink-0" /> {nbEtapes} étape{nbEtapes > 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="p-5 flex flex-col flex-1">
+        <h3 className="font-extrabold text-slate-900 text-base mb-2 line-clamp-2 group-hover:text-primary transition-colors">
+          {circuit.title}
+        </h3>
+        {circuit.description && (
+          <p className="text-slate-500 text-sm line-clamp-2 flex-1 leading-relaxed mb-3">{circuit.description}</p>
+        )}
+        {circuit.author_name && (
+          <div className="flex items-center gap-2 mt-2 mb-1">
+            {circuit.author_photo ? (
+              <img src={circuit.author_photo} alt="" className="w-6 h-6 rounded-full object-cover border border-slate-100 shrink-0" />
+            ) : (
+              <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center text-white font-black text-[9px] shrink-0">
+                {circuit.author_name[0]}
+              </div>
+            )}
+            <span className="text-xs font-bold text-slate-500 truncate">{circuit.author_name}</span>
+          </div>
+        )}
+        <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100">
+          <div className="flex items-center gap-1.5">
+            <Calendar className="w-4 h-4 text-slate-400" />
+            <span className="text-xs font-semibold text-slate-400">{circuit.nb_jours}J / {nbEtapes} étape{nbEtapes > 1 ? "s" : ""}</span>
+          </div>
+          <button onClick={(e) => { e.stopPropagation(); onClick(); }}
+            className="h-8 px-3 rounded-lg bg-primary/10 border border-primary/30 text-primary font-bold hover:bg-primary hover:text-slate-900 hover:border-primary transition-all text-xs">
+            Voir le circuit
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── CircuitModal ──────────────────────────────────────────────────────────────
+
+function CircuitModal({ circuit, onClose }: { circuit: Circuit; onClose: () => void }) {
+  const fallback = OFFER_PLACEHOLDERS[seedFromId(circuit.id, OFFER_PLACEHOLDERS.length)];
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        {/* Cover image */}
+        <ImageGallery images={circuit.cover_image ? [circuit.cover_image] : []} fallback={fallback} />
+
+        <button onClick={onClose}
+          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/70 transition-colors z-10">
+          <X className="w-4 h-4" />
+        </button>
+
+        {/* Header */}
+        <div className="px-6 pt-5 pb-3 border-b border-slate-100">
+          <div className="flex flex-wrap gap-2 mb-2">
+            <span className="bg-slate-100 text-slate-700 text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-widest">Circuit</span>
+            <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full">
+              {circuit.owner_type === "guide" ? "Guide certifié" : "Prestataire"}
+            </span>
+          </div>
+          <h2 className="text-xl font-black text-slate-900 mb-3">{circuit.title}</h2>
+
+          {/* Author */}
+          {circuit.author_name && (
+            <div className="flex items-center gap-3">
+              {circuit.author_photo ? (
+                <img src={circuit.author_photo} alt="" className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0" />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center text-white font-black text-sm shrink-0">
+                  {circuit.author_name[0]}
+                </div>
+              )}
+              <div>
+                <p className="font-bold text-slate-800 text-sm">{circuit.author_name}</p>
+                <p className="text-xs text-slate-400">{circuit.owner_type === "guide" ? "Guide certifié" : "Prestataire"}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Full circuit detail view */}
+        <CircuitViewContent circuit={circuit} ownerName={circuit.author_name ?? undefined} />
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function DestinationsPage() {
   const [offers, setOffers] = useState<Offer[]>([]);
+  const [circuits, setCircuits] = useState<Circuit[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [experiences, setExperiences] = useState<Experience[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [search, setSearch] = useState("");
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [contentType, setContentType] = useState<"all" | "offres" | "circuits">("all");
+  const [selectedMacro, setSelectedMacro] = useState<MacroSlug | null>(null);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [minPrice, setMinPrice] = useState<number | "">("");
   const [maxPrice, setMaxPrice] = useState<number | "">("");
   const [regionSearch, setRegionSearch] = useState("");
@@ -878,16 +1068,18 @@ export default function DestinationsPage() {
   const [showFilters, setShowFilters] = useState(false);
 
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
+  const [selectedCircuit, setSelectedCircuit] = useState<Circuit | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedExperience, setSelectedExperience] = useState<Experience | null>(null);
 
   useEffect(() => {
     Promise.all([
       apiFetch<Offer[]>("/offers"),
+      apiFetch<Circuit[]>("/circuits/all-public"),
       apiFetch<Project[]>("/project-owner/projects/public"),
       apiFetch<Experience[]>("/publications/experiences"),
     ])
-      .then(([o, p, e]) => { setOffers(o); setProjects(p); setExperiences(e); })
+      .then(([o, c, p, e]) => { setOffers(o); setCircuits(c); setProjects(p); setExperiences(e); })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
@@ -895,7 +1087,8 @@ export default function DestinationsPage() {
   const filtered = useMemo(() => {
     const result = offers.filter((o) => {
       if (search && !o.title.toLowerCase().includes(search.toLowerCase()) && !(o.description ?? "").toLowerCase().includes(search.toLowerCase())) return false;
-      if (selectedTypes.length && !selectedTypes.includes(o.offer_type ?? "")) return false;
+      if (selectedMacro && !offerMatchesMacro(o, selectedMacro)) return false;
+      if (selectedTag && !getOfferTagSlugs(o).includes(selectedTag)) return false;
       if (regionSearch && !(o.region ?? "").toLowerCase().includes(regionSearch.toLowerCase())) return false;
       if (minPrice !== "" && o.price !== null && o.price < minPrice) return false;
       if (maxPrice !== "" && o.price !== null && o.price > maxPrice) return false;
@@ -907,15 +1100,30 @@ export default function DestinationsPage() {
       if (sortBy === "price_desc") { if (a.price === null) return 1; if (b.price === null) return -1; return b.price - a.price; }
       return 0;
     });
-  }, [offers, search, selectedTypes, regionSearch, minPrice, maxPrice, minSustainability, sortBy]);
+  }, [offers, search, selectedMacro, selectedTag, regionSearch, minPrice, maxPrice, minSustainability, sortBy]);
 
-  function toggleType(value: string) {
-    setSelectedTypes((prev) => prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]);
+  const filteredCircuits = useMemo(() => {
+    return circuits.filter((c) => {
+      if (search && !c.title.toLowerCase().includes(search.toLowerCase()) && !(c.description ?? "").toLowerCase().includes(search.toLowerCase())) return false;
+      if (selectedMacro && !circuitMatchesMacro(c, selectedMacro)) return false;
+      if (selectedTag && !circuitMatchesTag(c, selectedTag)) return false;
+      if (regionSearch) {
+        const etapeDestinations = (c.etapes ?? []).map((e: any) => e.destination ?? "").join(" ");
+        if (!etapeDestinations.toLowerCase().includes(regionSearch.toLowerCase())) return false;
+      }
+      return true;
+    });
+  }, [circuits, search, selectedMacro, selectedTag, regionSearch]);
+
+  function resetFilters() {
+    setContentType("all"); setSelectedMacro(null); setSelectedTag(null);
+    setRegionSearch(""); setMinPrice(""); setMaxPrice(""); setMinSustainability(null);
   }
-  function resetFilters() { setSelectedTypes([]); setRegionSearch(""); setMinPrice(""); setMaxPrice(""); setMinSustainability(null); }
 
   const priceFilterActive = minPrice !== "" || maxPrice !== "";
-  const activeFilterCount = selectedTypes.length + (regionSearch ? 1 : 0) + (priceFilterActive ? 1 : 0) + (minSustainability !== null ? 1 : 0);
+  const activeFilterCount =
+    (contentType !== "all" ? 1 : 0) + (selectedMacro ? 1 : 0) + (selectedTag ? 1 : 0) +
+    (regionSearch ? 1 : 0) + (priceFilterActive ? 1 : 0) + (minSustainability !== null ? 1 : 0);
 
   const filterContent = (
     <div className="space-y-6">
@@ -926,18 +1134,78 @@ export default function DestinationsPage() {
         )}
       </div>
 
+      {/* Type de contenu */}
       <div>
-        <p className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-3">Type d'offre</p>
-        <div className="space-y-2">
-          {ALL_OFFER_TYPES.map((t) => (
-            <label key={t.value} className="flex items-center gap-2.5 cursor-pointer group">
-              <input type="checkbox" checked={selectedTypes.includes(t.value)} onChange={() => toggleType(t.value)} className="w-4 h-4 rounded accent-primary cursor-pointer" />
-              <span className="text-sm font-semibold text-slate-700 group-hover:text-primary transition-colors">{t.label}</span>
-            </label>
+        <p className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-3">Type</p>
+        <div className="grid grid-cols-3 gap-1.5">
+          {([
+            { value: "all",      label: "Tout",     Icon: LayoutGrid },
+            { value: "offres",   label: "Offres",   Icon: Ticket },
+            { value: "circuits", label: "Circuits", Icon: Route },
+          ] as const).map(({ value, label, Icon }) => (
+            <button
+              key={value}
+              onClick={() => setContentType(value)}
+              className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 text-xs font-bold transition-all ${
+                contentType === value
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-slate-200 text-slate-500 hover:border-primary/40 hover:text-slate-700"
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {label}
+            </button>
           ))}
         </div>
       </div>
 
+      {/* Thématique — Macro-catégories */}
+      <div>
+        <p className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-3">Thématique</p>
+        <div className="space-y-0.5">
+          {MACRO_CATEGORIES.map(({ slug, label }) => (
+            <button
+              key={slug}
+              onClick={() => {
+                if (selectedMacro === slug) { setSelectedMacro(null); setSelectedTag(null); }
+                else { setSelectedMacro(slug as MacroSlug); setSelectedTag(null); }
+              }}
+              className={`w-full text-left px-3 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 ${
+                selectedMacro === slug
+                  ? "bg-primary/10 text-primary"
+                  : "text-slate-700 hover:bg-slate-50 hover:text-primary"
+              }`}
+            >
+              {(() => { const Icon = MACRO_ICON[slug]; return Icon ? <Icon className="w-4 h-4 shrink-0" /> : null; })()}
+              <span className="flex-1">{label}</span>
+              {selectedMacro === slug && <span className="w-2 h-2 rounded-full bg-primary shrink-0" />}
+            </button>
+          ))}
+        </div>
+
+        {selectedMacro && (
+          <div className="pt-2 pb-1 pl-3 border-l-2 border-primary/30 ml-1 mt-2">
+            <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-2">Tags fins</p>
+            <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1">
+              {getTagsByMacro(selectedMacro).map(({ slug: tslug, label: tlabel }) => (
+                <button
+                  key={tslug}
+                  onClick={() => setSelectedTag(selectedTag === tslug ? null : tslug)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${
+                    selectedTag === tslug
+                      ? "bg-primary text-slate-900 border-primary"
+                      : "border-slate-200 text-slate-600 hover:border-primary/40 hover:text-primary"
+                  }`}
+                >
+                  {tlabel}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Emplacement */}
       <div>
         <p className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-3">Emplacement</p>
         <div className="relative">
@@ -955,6 +1223,7 @@ export default function DestinationsPage() {
         </div>
       </div>
 
+      {/* Budget */}
       <div>
         <p className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-3">Budget (TND)</p>
         <div className="flex items-center gap-2">
@@ -971,15 +1240,16 @@ export default function DestinationsPage() {
         )}
       </div>
 
+      {/* Durabilité */}
       <div>
         <p className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-3">🌿 Durabilité minimale</p>
         <div className="space-y-2">
           {[
-            { value: null,  label: "Tous",              sub: "Sans filtre" },
-            { value: 31,    label: "Sensibilisé",       sub: "31+",  color: "text-blue-600" },
-            { value: 51,    label: "Engagé",            sub: "51+",  color: "text-teal-600" },
-            { value: 71,    label: "Éco-Responsable",   sub: "71+",  color: "text-emerald-600" },
-            { value: 86,    label: "Ambassadeur",       sub: "86+",  color: "text-primary" },
+            { value: null, label: "Tous",            sub: "Sans filtre" },
+            { value: 31,   label: "Sensibilisé",     sub: "31+",  color: "text-blue-600" },
+            { value: 51,   label: "Engagé",          sub: "51+",  color: "text-teal-600" },
+            { value: 71,   label: "Éco-Responsable", sub: "71+",  color: "text-emerald-600" },
+            { value: 86,   label: "Ambassadeur",     sub: "86+",  color: "text-primary" },
           ].map((opt) => (
             <button
               key={String(opt.value)}
@@ -1042,7 +1312,7 @@ export default function DestinationsPage() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-6 gap-4">
               <p className="text-sm font-semibold text-slate-500 shrink-0">
-                {loading ? "Chargement…" : `${filtered.length} offre${filtered.length !== 1 ? "s" : ""} trouvée${filtered.length !== 1 ? "s" : ""}`}
+                {loading ? "Chargement…" : contentType === "circuits" ? `${filteredCircuits.length} circuit${filteredCircuits.length !== 1 ? "s" : ""} trouvé${filteredCircuits.length !== 1 ? "s" : ""}` : `${filtered.length} offre${filtered.length !== 1 ? "s" : ""} trouvée${filtered.length !== 1 ? "s" : ""}`}
               </p>
               <div className="flex items-center gap-3 ml-auto">
                 <div className="relative hidden sm:flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
@@ -1060,11 +1330,23 @@ export default function DestinationsPage() {
 
             {activeFilterCount > 0 && (
               <div className="flex flex-wrap gap-2 mb-6">
-                {selectedTypes.map((t) => (
-                  <button key={t} onClick={() => toggleType(t)} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary text-primary text-xs font-bold rounded-full hover:bg-primary/20 transition-colors">
-                    {getTypeLabel(t)} <X className="w-3 h-3" />
+                {contentType !== "all" && (
+                  <button onClick={() => setContentType("all")} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary text-primary text-xs font-bold rounded-full hover:bg-primary/20 transition-colors">
+                    {contentType === "offres" ? <Ticket className="w-3 h-3" /> : <Route className="w-3 h-3" />}
+                    {contentType === "offres" ? "Offres" : "Circuits"} <X className="w-3 h-3" />
                   </button>
-                ))}
+                )}
+                {selectedMacro && (
+                  <button onClick={() => { setSelectedMacro(null); setSelectedTag(null); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary text-primary text-xs font-bold rounded-full hover:bg-primary/20 transition-colors">
+                    {(() => { const Icon = MACRO_ICON[selectedMacro]; return Icon ? <Icon className="w-3 h-3" /> : null; })()}
+                    {MACRO_CATEGORIES.find((m) => m.slug === selectedMacro)?.label} <X className="w-3 h-3" />
+                  </button>
+                )}
+                {selectedTag && (
+                  <button onClick={() => setSelectedTag(null)} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary text-primary text-xs font-bold rounded-full hover:bg-primary/20 transition-colors">
+                    <Tag className="w-3 h-3" /> {TAXONOMY_TAGS.find((t) => t.slug === selectedTag)?.label ?? selectedTag} <X className="w-3 h-3" />
+                  </button>
+                )}
                 {regionSearch && (
                   <button onClick={() => setRegionSearch("")} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary text-primary text-xs font-bold rounded-full hover:bg-primary/20 transition-colors">
                     <MapPin className="w-3 h-3" /> {regionSearch} <X className="w-3 h-3" />
@@ -1104,7 +1386,7 @@ export default function DestinationsPage() {
               </div>
             )}
 
-            {!loading && !error && filtered.length === 0 && (
+            {!loading && !error && contentType !== "circuits" && filtered.length === 0 && (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <Leaf className="w-12 h-12 text-slate-200 mb-4" />
                 <p className="text-slate-500 font-semibold text-lg mb-2">Aucune offre trouvée</p>
@@ -1119,7 +1401,7 @@ export default function DestinationsPage() {
               </div>
             )}
 
-            {!loading && !error && filtered.length > 0 && (
+            {!loading && !error && contentType !== "circuits" && filtered.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {filtered.map((offer) => (
                   <OfferCard key={offer.id} offer={offer} onClick={() => setSelectedOffer(offer)} />
@@ -1129,6 +1411,42 @@ export default function DestinationsPage() {
           </div>
         </div>
       </main>
+
+      {/* Circuits */}
+      {!loading && contentType !== "offres" && filteredCircuits.length > 0 && (
+        <section className="bg-white border-t border-slate-100 py-16 px-6 md:px-20 lg:px-40">
+          <div className="max-w-[1440px] mx-auto">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-0.5 bg-primary" />
+              <span className="text-primary font-extrabold text-sm uppercase tracking-widest">Circuits Éco-Touristiques</span>
+            </div>
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-10">
+              <div>
+                <h2 className="text-3xl font-black text-slate-900 mb-2">Circuits disponibles</h2>
+                <p className="text-slate-500 max-w-lg">
+                  Parcourez les circuits éco-touristiques proposés par nos guides et prestataires certifiés à travers la Tunisie.
+                </p>
+              </div>
+              <span className="text-sm font-semibold text-slate-400 shrink-0">
+                {filteredCircuits.length} circuit{filteredCircuits.length !== 1 ? "s" : ""}
+                {filteredCircuits.length !== circuits.length && <span className="text-slate-300"> / {circuits.length}</span>}
+              </span>
+            </div>
+            {filteredCircuits.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <Leaf className="w-10 h-10 text-slate-200 mb-3" />
+                <p className="text-slate-400 font-semibold">Aucun circuit ne correspond aux filtres sélectionnés.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredCircuits.map((circuit) => (
+                  <CircuitCard key={circuit.id} circuit={circuit} onClick={() => setSelectedCircuit(circuit)} />
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Nos Partenaires */}
       {!loading && projects.length > 0 && (
@@ -1218,6 +1536,7 @@ export default function DestinationsPage() {
 
       {/* Detail modals */}
       {selectedOffer && <OfferModal offer={selectedOffer} onClose={() => setSelectedOffer(null)} />}
+      {selectedCircuit && <CircuitModal circuit={selectedCircuit} onClose={() => setSelectedCircuit(null)} />}
       {selectedProject && <ProjectModal project={selectedProject} onClose={() => setSelectedProject(null)} />}
       {selectedExperience && <ExperienceModal exp={selectedExperience} onClose={() => setSelectedExperience(null)} />}
 

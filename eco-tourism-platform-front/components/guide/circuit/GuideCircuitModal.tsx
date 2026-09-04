@@ -9,6 +9,7 @@ import { DOMAINES } from "@/lib/guideOfferConfig";
 import { OfferAvailPicker, EMPTY_OFFER_AVAIL, type OfferAvailSlot } from "@/components/offer/OfferAvailPicker";
 import EtapeCollabPickerModal from "@/components/guide/offer/EtapeCollabPickerModal";
 import DynamicFields from "@/components/guide/offer/DynamicFields";
+import TaxonomyTagPicker from "@/components/common/TaxonomyTagPicker";
 
 const MapPicker = dynamic(() => import("@/components/map/MapPicker"), { ssr: false });
 const CircuitRouteMap = dynamic(() => import("@/components/map/CircuitRouteMap"), {
@@ -91,6 +92,7 @@ export default function GuideCircuitModal({ open, token, editingCircuit, onClose
   const [etapes, setEtapes]               = useState<CircuitEtape[]>([]);
   const [pendingKicks, setPendingKicks]   = useState<PendingKick[]>([]);
   const [etapeStatusMap, setEtapeStatusMap] = useState<Map<string, { status: string; collab_id: string }>>(new Map());
+  const [circTags, setCircTags]           = useState<string[]>([]);
 
   // Étape form (inline, par jour)
   const [etapeFormOpen, setEtapeFormOpen]     = useState(false);
@@ -144,6 +146,7 @@ export default function GuideCircuitModal({ open, token, editingCircuit, onClose
       setHebergSubtypes((hb.etape?.subtypes ?? []) as string[]);
       setHebergCollab(hb.etape?.collaborator_id ? { user_id: hb.etape.collaborator_id, name: hb.etape.collaborator_name ?? "", type: "provider" } : null);
       setEtapes((editingCircuit.etapes ?? []) as CircuitEtape[]);
+      setCircTags(editingCircuit.tags ?? []);
       setFormError(""); setEtapeConflict(null); setPendingKicks([]);
       if (editingCircuit.id) {
         apiFetch<any[]>(`/circuits/${editingCircuit.id}/collaborations`, { headers: { Authorization: `Bearer ${token}` } })
@@ -173,7 +176,7 @@ export default function GuideCircuitModal({ open, token, editingCircuit, onClose
     setCircCoverImg(null); setCircCoverExisting(null);
     setCircAvail(EMPTY_OFFER_AVAIL);
     setHebergInclus(false); setHebergType("same"); setHebergSubtypes([]); setHebergCollab(null);
-    setEtapes([]); setPendingKicks([]); setEtapeStatusMap(new Map());
+    setEtapes([]); setPendingKicks([]); setEtapeStatusMap(new Map()); setCircTags([]);
     resetEtapeForm();
   }
 
@@ -220,9 +223,11 @@ export default function GuideCircuitModal({ open, token, editingCircuit, onClose
     const isGuidage = etapeMode === "guidage";
     if (!etapeHeureDebut || !etapeHeureFin) { setEtapeFormError("Horaires requis."); return; }
     if (isGuidage && !etapeGuidageDomaine) { setEtapeFormError("Choisissez un domaine de guidage."); return; }
+    if (isGuidage && etapeGuidageDomaine && etapeGuidageExpertises.length === 0) { setEtapeFormError("Sélectionnez au moins une expertise pour ce domaine."); return; }
     if (isGuidage && etapeGuidageAuthorType === "self" && !etapeTitre.trim()) { setEtapeFormError("Titre requis."); return; }
     if (isGuidage && etapeGuidageAuthorType === "guide" && !etapeCollabSelected) { setEtapeFormError("Invitez un guide pour cette activité."); return; }
     if (!isGuidage && !etapeCategorie) { setEtapeFormError("Choisissez une catégorie de service."); return; }
+    if (!isGuidage && etapeCategorie && etapeSubtypes.length === 0) { setEtapeFormError("Sélectionnez au moins un sous-type pour cette catégorie."); return; }
     if (!isGuidage && etapeServiceAuthorType === "self" && !etapeTitre.trim()) { setEtapeFormError("Titre requis."); return; }
     if (!isGuidage && etapeServiceAuthorType === "provider" && !etapeCollabSelected) { setEtapeFormError("Invitez un prestataire pour cette étape."); return; }
 
@@ -329,7 +334,7 @@ export default function GuideCircuitModal({ open, token, editingCircuit, onClose
         } : null,
       } : { inclus: false };
 
-      const body = { title: circTitle.trim(), description: circDesc.trim() || null, nb_jours: circNbJours, cover_image: coverUrl, etapes, availability: circAvail, hebergement: hebergBody };
+      const body = { title: circTitle.trim(), description: circDesc.trim() || null, nb_jours: circNbJours, cover_image: coverUrl, etapes, availability: circAvail, hebergement: hebergBody, ...(circTags.length ? { tags: circTags } : {}) };
 
       let circuit: any;
       if (editingCircuit?.id) {
@@ -925,8 +930,8 @@ export default function GuideCircuitModal({ open, token, editingCircuit, onClose
                             );
                           })()}
 
-                          {/* Responsable (dès qu'un domaine est choisi) */}
-                          {etapeGuidageDomaine && (
+                          {/* Responsable (dès qu'un domaine et au moins une expertise sont choisis) */}
+                          {etapeGuidageDomaine && etapeGuidageExpertises.length > 0 && (
                             <>
                               <div>
                                 <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Responsable</label>
@@ -1013,10 +1018,12 @@ export default function GuideCircuitModal({ open, token, editingCircuit, onClose
                                       </button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => setEtapeCollabOpen(true)}
-                                      className="flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-all group cursor-pointer">
-                                      <span className="material-symbols-outlined text-base group-hover:text-primary">person_add</span>
-                                      <span className="text-xs font-extrabold">+ Inviter un guide pour cette étape</span>
+                                    <button type="button"
+                                      disabled={etapeGuidageExpertises.length === 0}
+                                      onClick={() => etapeGuidageExpertises.length > 0 && setEtapeCollabOpen(true)}
+                                      className={`flex items-center gap-2 px-4 py-2.5 border-2 border-dashed rounded-xl text-xs font-extrabold transition-all group ${etapeGuidageExpertises.length === 0 ? "border-slate-200 text-slate-300 cursor-not-allowed opacity-60" : "border-slate-200 text-slate-400 hover:border-primary/50 hover:text-primary hover:bg-primary/5 cursor-pointer"}`}>
+                                      <span className="material-symbols-outlined text-base">person_add</span>
+                                      <span>{etapeGuidageExpertises.length === 0 ? "Sélectionnez d'abord une expertise" : "+ Inviter un guide pour cette étape"}</span>
                                     </button>
                                   )}
 
@@ -1075,7 +1082,7 @@ export default function GuideCircuitModal({ open, token, editingCircuit, onClose
                             );
                           })()}
 
-                          {etapeCategorie && (
+                          {etapeCategorie && etapeSubtypes.length > 0 && (
                             <>
                               {/* Toggle responsable */}
                               <div>
@@ -1164,10 +1171,12 @@ export default function GuideCircuitModal({ open, token, editingCircuit, onClose
                                       </button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => setEtapeCollabOpen(true)}
-                                      className="flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-all group cursor-pointer">
-                                      <span className="material-symbols-outlined text-base group-hover:text-primary">person_add</span>
-                                      <span className="text-xs font-extrabold">+ Inviter un prestataire pour cette étape</span>
+                                    <button type="button"
+                                      disabled={etapeSubtypes.length === 0}
+                                      onClick={() => etapeSubtypes.length > 0 && setEtapeCollabOpen(true)}
+                                      className={`flex items-center gap-2 px-4 py-2.5 border-2 border-dashed rounded-xl text-xs font-extrabold transition-all group ${etapeSubtypes.length === 0 ? "border-slate-200 text-slate-300 cursor-not-allowed opacity-60" : "border-slate-200 text-slate-400 hover:border-primary/50 hover:text-primary hover:bg-primary/5 cursor-pointer"}`}>
+                                      <span className="material-symbols-outlined text-base">person_add</span>
+                                      <span>{etapeSubtypes.length === 0 ? "Sélectionnez d'abord un sous-type" : "+ Inviter un prestataire pour cette étape"}</span>
                                     </button>
                                   )}
 
@@ -1226,6 +1235,50 @@ export default function GuideCircuitModal({ open, token, editingCircuit, onClose
               </div>
             );
           })()}
+
+          {/* Tags thématiques */}
+          <div className="space-y-3 border border-slate-100 rounded-2xl p-5 bg-white">
+            <div>
+              <p className="text-xs font-black tracking-widest text-slate-400 uppercase mb-0.5">Tags thématiques</p>
+              <p className="text-xs text-slate-500">Facultatif — aide à classer et retrouver ce circuit.</p>
+            </div>
+            <TaxonomyTagPicker
+              value={circTags}
+              onChange={setCircTags}
+              onSuggest={circTitle.trim() && etapes.length > 0 ? async () => {
+                const res = await fetch('/api/offers/suggest-tags', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    titre: circTitle,
+                    description: circDesc,
+                    contexte: {
+                      etapes_circuit: etapes.map((e) => ({
+                        domaine:    (e.fields as any)?.domaine  ?? (e.etape_mode === "guidage" ? e.categorie : undefined),
+                        expertises: Array.isArray((e.fields as any)?.expertises) ? (e.fields as any).expertises : undefined,
+                        categorie:  e.etape_mode === "service" ? e.categorie : undefined,
+                        subtypes:   Array.isArray(e.subtypes) && e.subtypes.length ? e.subtypes : undefined,
+                      })).filter((e) => e.domaine || e.categorie),
+                      sections_collab: etapes
+                        .filter((e) => e.author_type !== "self" && e.collaborator_id)
+                        .map((e) => ({
+                          section:    e.categorie,
+                          domaine:    e.etape_mode === "guidage" ? ((e.fields as any)?.domaine ?? e.categorie) : undefined,
+                          expertises: e.etape_mode === "guidage" && Array.isArray((e.fields as any)?.expertises) ? (e.fields as any).expertises : undefined,
+                          categorie:  e.etape_mode === "service" ? e.categorie : undefined,
+                          sous_types: e.etape_mode === "service" && Array.isArray(e.subtypes) && e.subtypes.length ? e.subtypes : undefined,
+                        }))
+                        .filter((c) => c.domaine || c.categorie),
+                    },
+                  }),
+                });
+                if (!res.ok) throw new Error('fetch failed');
+                const data = await res.json() as { tags?: unknown };
+                if (!Array.isArray(data.tags)) throw new Error('invalid response');
+                return data.tags as string[];
+              } : undefined}
+            />
+          </div>
 
           {/* Erreur globale */}
           {formError && (

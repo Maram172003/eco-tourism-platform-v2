@@ -14,6 +14,7 @@ import {
   MoreVertical, UserX, ShieldBan, Flag, Route, Trash2,
 } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
+import { logoutUser } from "@/lib/auth";
 import { DOMAIN_CASCADE_CONFIG } from "@/lib/domainCascadeConfig";
 import { OFFER_DETAIL_FIELDS } from "@/lib/offer-schema";
 import { PROVIDER_SCHEMA } from "@/lib/provider-schema";
@@ -686,6 +687,14 @@ export default function GuideProfilePage() {
     init();
   }, [router]);
 
+  async function handleLogout() {
+    try { if (token) await logoutUser(token); } catch {}
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    localStorage.removeItem("user");
+    router.push("/auth/login");
+  }
+
   // Network search — prestataires + guides
   useEffect(() => {
     if (!netSearch.trim() || !token) { setNetResults([]); return; }
@@ -695,8 +704,9 @@ export default function GuideProfilePage() {
         apiFetch<any[]>(`/providers/search?q=${encodeURIComponent(netSearch)}`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => []),
         apiFetch<any[]>(`/guide/public/search?q=${encodeURIComponent(netSearch)}`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => []),
       ]).then(([providers, guides]) => {
-        const p = providers.map((o: any) => ({ user_id: o.user_id, full_name: o.organization ?? o.full_name, photo: o.photo, _type: "provider", sub: o.provider_type ?? null }));
-        const g = guides.map((o: any) => ({ user_id: o.user_id, full_name: o.full_name, photo: o.photo, _type: "guide", sub: o.zone ?? null }));
+        const myId = profile?.user_id ?? "";
+        const p = providers.filter((o: any) => o.user_id !== myId).map((o: any) => ({ user_id: o.user_id, full_name: o.organization ?? o.full_name, photo: o.org_logo ?? o.photo, _type: "provider", sub: o.full_name ?? o.provider_type ?? null }));
+        const g = guides.filter((o: any) => o.user_id !== myId).map((o: any) => ({ user_id: o.user_id, full_name: o.full_name, photo: o.photo, _type: "guide", sub: o.zone ?? null }));
         setNetResults([...p, ...g]);
       }).catch(() => setNetResults([]))
         .finally(() => setNetLoading(false));
@@ -744,7 +754,8 @@ export default function GuideProfilePage() {
     });
     if (!res.ok) throw new Error("Upload échoué");
     const data = await res.json();
-    return data.url as string;
+    if (!data?.url || typeof data.url !== "string") throw new Error("URL d'image invalide après upload");
+    return data.url;
   }
 
   // ── Score label ─────────────────────────────────────────────────────────
@@ -937,16 +948,17 @@ export default function GuideProfilePage() {
         apiFetch("/guide/identity", {
           method: "POST", headers,
           body: JSON.stringify({
-            full_name:       editProfileForm.full_name.trim(),
-            bio:             editProfileForm.bio.trim()             || undefined,
-            photo:           photoUrl,
+            full_name:        editProfileForm.full_name.trim(),
+            bio:              editProfileForm.bio.trim()             || undefined,
+            photo:            photoUrl,
+            cover_photo:      coverUrl,
             languages_spoken: editLangsSpoken,
             years_experience: editProfileForm.years_experience !== "" ? Number(editProfileForm.years_experience) : undefined,
-            telephone:       editProfileForm.telephone.trim()       || undefined,
-            ville_residence: editProfileForm.ville_residence.trim() || undefined,
-            experience_pro:  editProfileForm.experience_pro.trim()  || undefined,
-            centres_interet: editProfileForm.centres_interet.trim() || undefined,
-            pourquoi_moi:    editProfileForm.pourquoi_moi.trim()    || undefined,
+            telephone:        editProfileForm.telephone.trim()       || undefined,
+            ville_residence:  editProfileForm.ville_residence.trim() || undefined,
+            experience_pro:   editProfileForm.experience_pro.trim()  || undefined,
+            centres_interet:  editProfileForm.centres_interet.trim() || undefined,
+            pourquoi_moi:     editProfileForm.pourquoi_moi.trim()    || undefined,
           }),
         }),
         // Étape 2 : domaines + expertises + certifications
@@ -970,13 +982,6 @@ export default function GuideProfilePage() {
             publics_accueillis: editPublicsAccueillis,
           }),
         }),
-        // Photo de couverture via l'ancien endpoint si changée
-        coverUrl !== profile?.cover_photo
-          ? apiFetch("/guide/profile", {
-              method: "POST", headers,
-              body: JSON.stringify({ full_name: editProfileForm.full_name.trim(), cover_photo: coverUrl }),
-            }).catch(() => {})
-          : Promise.resolve(),
       ]);
 
       setProfile((prev) => prev ? {
@@ -1986,6 +1991,7 @@ export default function GuideProfilePage() {
 
           {/* ── LEFT SIDEBAR ────────────────────────────────────────────────── */}
           <div className="lg:col-span-4 lg:sticky lg:top-6 space-y-6">
+
             <div className="bg-white p-6 rounded-3xl border border-slate-100/80 shadow-sm">
               <div className="flex items-center gap-2.5 mb-5">
                 <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-primary">
@@ -2058,7 +2064,8 @@ export default function GuideProfilePage() {
                 <>
                   <div className="flex items-center gap-1.5 flex-wrap mb-3">
                     {followers.slice(0, 5).map((f) => {
-                      const path = f._type === "eco_traveler" ? `/profile/ecovoyageur/${f.user_id}` : f._type === "project" ? `/profile/project-owner/${f.user_id}` : `/profile/guide/${f.user_id}`;
+                      const fType = (f as any)._type ?? (f as any).role;
+                      const path = fType === "eco_traveler" ? `/profile/ecovoyageur/${f.user_id}` : fType === "provider" ? `/profile/provider/${f.user_id}` : fType === "project" ? `/profile/project-owner/${f.user_id}` : `/profile/guide/${f.user_id}`;
                       return (
                         <button key={f.user_id} onClick={() => router.push(path)}
                           className="w-10 h-10 rounded-xl bg-slate-100 border-2 border-white shadow-sm overflow-hidden flex items-center justify-center hover:scale-105 transition-transform"
@@ -2340,7 +2347,10 @@ export default function GuideProfilePage() {
                               <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center shrink-0">{r.photo ? <img src={r.photo} alt={r.full_name} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-slate-400">person</span>}</div>
                               <div className="min-w-0">
                                 <p className="font-extrabold text-slate-800 text-sm truncate">{r.full_name}</p>
-                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{typeLabel}</span>
+                                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{typeLabel}</span>
+                                  {r.sub && r._type === "provider" && <span className="text-[10px] text-slate-400 font-medium truncate">{r.sub}</span>}
+                                </div>
                               </div>
                             </button>
                             <button onClick={() => router.push(path)} className="shrink-0 px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary text-xs font-bold rounded-xl hover:bg-primary hover:text-slate-900 transition-all">Voir</button>
@@ -2360,14 +2370,23 @@ export default function GuideProfilePage() {
                   </h3>
                   {following.length === 0 ? <p className="text-sm text-slate-400">Vous ne suivez personne encore.</p> : (
                     <div className="divide-y divide-slate-50" onClick={() => setNetMenuId(null)}>
-                      {following.map((f) => (
+                      {following.map((f) => {
+                        const fRole = (f as any).role ?? f._type;
+                        const fPath = fRole === "provider" ? `/profile/provider/${f.user_id}` : `/profile/guide/${f.user_id}`;
+                        return (
                         <div key={f.user_id} className="flex items-center justify-between py-3 gap-2">
-                          <button onClick={() => router.push(`/profile/project-owner/${f.user_id}`)} className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 text-left">
-                            <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center shrink-0">{f.photo ? <img src={f.photo} alt={f.full_name} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-slate-400">business</span>}</div>
-                            <div className="min-w-0"><p className="font-extrabold text-slate-800 text-sm truncate">{f.full_name}</p>{f.sub && <p className="text-xs text-slate-400">{f.sub}</p>}</div>
+                          <button onClick={() => router.push(fPath)} className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 text-left">
+                            <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center shrink-0">{f.photo ? <img src={f.photo} alt={f.full_name} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-slate-400">{fRole === "provider" ? "storefront" : "person"}</span>}</div>
+                            <div className="min-w-0">
+                              <p className="font-extrabold text-slate-800 text-sm truncate">{f.full_name}</p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{fRole === "provider" ? "Prestataire" : "Guide"}</span>
+                                {f.sub && <span className="text-[10px] text-slate-400 font-medium truncate">{f.sub}</span>}
+                              </div>
+                            </div>
                           </button>
                           <div className="flex items-center gap-1.5 shrink-0">
-                            <button onClick={() => router.push(`/profile/project-owner/${f.user_id}`)} className="px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary text-xs font-bold rounded-xl hover:bg-primary hover:text-slate-900 transition-all">Voir</button>
+                            <button onClick={() => router.push(fPath)} className="px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary text-xs font-bold rounded-xl hover:bg-primary hover:text-slate-900 transition-all">Voir</button>
                             <div className="relative" onClick={(e) => e.stopPropagation()}>
                               <button onClick={() => setNetMenuId(netMenuId === `fw-${f.user_id}` ? null : `fw-${f.user_id}`)}
                                 className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors">
@@ -2393,7 +2412,8 @@ export default function GuideProfilePage() {
                             </div>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -2454,15 +2474,20 @@ export default function GuideProfilePage() {
                   {followers.length === 0 ? <p className="text-sm text-slate-400">Aucun abonné pour l'instant.</p> : (
                     <div className="divide-y divide-slate-50" onClick={() => setNetMenuId(null)}>
                       {followers.map((f) => {
-                        const path = f._type === "eco_traveler" ? `/profile/ecovoyageur/${f.user_id}` : f._type === "project" ? `/profile/project-owner/${f.user_id}` : `/profile/guide/${f.user_id}`;
-                        const typeLabel = f._type === "eco_traveler" ? "Éco-Voyageur" : f._type === "project" ? "Prestataire" : "Guide";
+                        const fRole = (f as any).role ?? f._type;
+                        const path = fRole === "eco_traveler" ? `/profile/ecovoyageur/${f.user_id}` : fRole === "provider" ? `/profile/provider/${f.user_id}` : `/profile/guide/${f.user_id}`;
+                        const typeLabel = fRole === "eco_traveler" ? "Éco-Voyageur" : fRole === "provider" ? "Prestataire" : "Guide";
+                        const typeIcon = fRole === "provider" ? "storefront" : "person";
                         return (
                           <div key={f.user_id} className="flex items-center justify-between py-3 gap-2">
                             <button onClick={() => router.push(path)} className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 text-left">
-                              <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center shrink-0">{f.photo ? <img src={f.photo} alt={f.full_name} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-slate-400">person</span>}</div>
+                              <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center shrink-0">{f.photo ? <img src={f.photo} alt={f.full_name} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-slate-400">{typeIcon}</span>}</div>
                               <div className="min-w-0">
                                 <p className="font-extrabold text-slate-800 text-sm truncate">{f.full_name}</p>
-                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{typeLabel}</span>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{typeLabel}</span>
+                                  {(f as any).sub && <span className="text-[10px] text-slate-400 font-medium truncate">{(f as any).sub}</span>}
+                                </div>
                               </div>
                             </button>
                             <div className="flex items-center gap-1.5 shrink-0">

@@ -228,7 +228,8 @@ export class GuideService {
     }
     profile.full_name = dto.full_name;
     profile.bio = dto.bio ?? null;
-    profile.photo = dto.photo ?? null;
+    if (dto.photo !== undefined) profile.photo = dto.photo ?? null;
+    if (dto.cover_photo !== undefined) profile.cover_photo = dto.cover_photo ?? null;
     profile.languages_spoken = dto.languages_spoken;
     if (dto.years_experience !== undefined) profile.years_experience = dto.years_experience;
     if (dto.telephone !== undefined) profile.telephone = dto.telephone ?? null;
@@ -316,6 +317,7 @@ export class GuideService {
       images: dto.photos,
       inclusions: dto.inclus_resume.join('||'),
       status: 'approved' as const,
+      tags: dto.tags ?? null,
       details: {
         description_longue: dto.description_longue,
         type_prestation: dto.type_prestation,
@@ -437,7 +439,7 @@ export class GuideService {
 
     // Préserver les données de collaboration ajoutées par saveContribution
     const existingDetails = ((offer as any).details ?? {}) as Record<string, any>;
-    const COLLAB_KEYS = ['restauration_types', 'restauration_svcs', 'transport_types', 'transport_svcs', 'hebergement_types', 'hebergement_svcs', 'collaborators'];
+    const COLLAB_KEYS = ['restauration_types', 'restauration_svcs', 'hebergement_types', 'hebergement_svcs', 'collaborators'];
     const preservedCollab: Record<string, any> = {};
     for (const key of COLLAB_KEYS) {
       if (existingDetails[key] !== undefined) preservedCollab[key] = existingDetails[key];
@@ -506,6 +508,7 @@ export class GuideService {
       images: dto.photos,
       inclusions: dto.inclus_resume.join('||'),
       details: newDetails,
+      tags: dto.tags ?? null,
       ...(newStatus ? { status: newStatus } : {}),
     });
     const savedOffer = await this.offerRepo.save(offer);
@@ -946,7 +949,7 @@ export class GuideService {
         ...(dto.details ?? {}),
       },
     });
-    const COLLAB_KEYS = ['restauration_types', 'restauration_svcs', 'transport_types', 'transport_svcs', 'hebergement_types', 'hebergement_svcs', 'collaborators'];
+    const COLLAB_KEYS = ['restauration_types', 'restauration_svcs', 'hebergement_types', 'hebergement_svcs', 'collaborators'];
 
     function mergePreservingCollab(existing: any, newOffer: any) {
       const existingDetails = (existing.details ?? {}) as Record<string, any>;
@@ -1018,7 +1021,7 @@ export class GuideService {
   async inviteCollaborator(
     guideId: string,
     offerId: string,
-    dto: { invited_user_id: string; invited_user_type: string; invited_user_name: string; section: string; message?: string },
+    dto: { invited_user_id: string; invited_user_type: string; invited_user_name: string; section: string; message?: string; section_context?: Record<string, any> | null },
   ): Promise<OfferCollaboration> {
     const offer = await this.offerRepo.findOne({ where: { id: offerId, author_id: guideId } });
     if (!offer) throw new NotFoundException('Offre introuvable ou non autorisée');
@@ -1027,10 +1030,11 @@ export class GuideService {
     if (existing) {
       const st = (existing as any).status as string;
       if (st !== 'declined') return existing; // déjà en cours — ne pas dupliquer
-      // Réinvitation après refus : remettre à pending
+      // Réinvitation après refus : remettre à pending, mettre à jour le contexte
       (existing as any).status = 'pending';
       (existing as any).message = dto.message ?? null;
       (existing as any).contribution_data = null;
+      (existing as any).section_context = dto.section_context ?? null;
       await this.collabRepo.save(existing);
     }
 
@@ -1043,8 +1047,17 @@ export class GuideService {
       section: dto.section,
       message: dto.message ?? null,
       status: 'pending',
+      section_context: dto.section_context ?? null,
     });
     const saved = existing ?? await this.collabRepo.save(collab);
+
+    // Quand le guide délègue la section hébergement à un collaborateur,
+    // vider hebergement_svcs dans l'offre pour que le collaborateur parte d'une feuille blanche.
+    if (dto.section === 'hebergement') {
+      const details = (offer.details ?? {}) as Record<string, unknown>;
+      offer.details = { ...details, hebergement_svcs: {} };
+      await this.offerRepo.save(offer);
+    }
 
     const guideProfile = await this.repo.findOne({ where: { user_id: guideId } });
     let inviterName = guideProfile?.full_name ?? null;
@@ -1126,6 +1139,24 @@ export class GuideService {
     return saved;
   }
 
+  async findPublicOfferDetail(offerId: string): Promise<any> {
+    const offer = await this.offerRepo.findOne({ where: { id: offerId } });
+    if (!offer) throw new NotFoundException('Offre introuvable');
+    const allCollabs = await this.collabRepo.find({ where: { offer_id: offerId } });
+    const activeCollabs = allCollabs.filter((c) => !((c as any).status === 'declined' && (c as any).contribution_data?.kicked === true));
+    if (activeCollabs.length > 0) {
+      const collaborators = activeCollabs.map((c) => ({
+        id: (c as any).invited_user_id,
+        name: (c as any).invited_user_name ?? (c as any).invited_user_id,
+        section: (c as any).section,
+        status: (c as any).status,
+      }));
+      const existing = ((offer as any).details ?? {}) as Record<string, any>;
+      (offer as any).details = { ...existing, collaborators };
+    }
+    return offer;
+  }
+
   async getOfferForCollaborator(userId: string, offerId: string): Promise<Offer> {
     const offer = await this.offerRepo.findOne({ where: { id: offerId } });
     if (!offer) throw new NotFoundException('Offre introuvable');
@@ -1178,10 +1209,12 @@ export class GuideService {
       const offer = await this.offerRepo.findOne({ where: { id: collab.offer_id } });
       if (offer) {
         const details: Record<string, any> = { ...((offer as any).details ?? {}) };
-        if (data.types) {
+        // Pour transport : le guide est propriétaire de transport_types/svcs (le collab choisit un sous-type via formData).
+        // On ne met à jour section_types/svcs que si le tableau est non-vide.
+        if (Array.isArray(data.types) && data.types.length > 0) {
           details[`${collab.section}_types`] = data.types;
         }
-        if (data.svcs) {
+        if (data.svcs && Object.keys(data.svcs as Record<string, any>).length > 0) {
           details[`${collab.section}_svcs`] = {
             ...((details[`${collab.section}_svcs`] as Record<string, any>) ?? {}),
             ...(data.svcs as Record<string, any>),
@@ -1489,6 +1522,17 @@ export class GuideService {
     const details: Record<string, any> = { ...((offer as any).details ?? {}) };
     details.collaborators = collaborators;
     await this.offerRepo.update({ id: offerId }, { status: 'approved', details } as any);
+  }
+
+  async findPublicCollaborations(userId: string) {
+    const all = await this.findMyCollaborations(userId);
+    return all.filter((c: any) => {
+      if (c.status !== 'completed') return false;
+      const offerApproved = c.source_type === 'circuit'
+        ? c.circuit_status === 'approved'
+        : c.offer_status === 'approved';
+      return offerApproved;
+    });
   }
 
   async findMyCollaborations(userId: string) {
