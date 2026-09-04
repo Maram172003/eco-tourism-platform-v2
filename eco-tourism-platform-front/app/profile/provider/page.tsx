@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import CollaborationModal from "@/components/CollaborationModal";
+import OfferDetailView, { type OfferFull } from "@/components/offer/OfferDetailView";
+import CircuitViewContent from "@/components/circuit/CircuitViewContent";
 import dynamic from "next/dynamic";
 import {
   Plus, Edit3, ShieldCheck, MapPin, Calendar, Phone, Building2, Globe, Leaf, ArrowLeft,
@@ -16,9 +19,15 @@ import { PROVIDER_SCHEMA, SUBTYPE_FIELDS, getCategoryByValue } from "@/lib/provi
 import type { FieldConfig } from "@/lib/provider-schema";
 import {
   OFFER_DETAIL_FIELDS, getCapacityLimit,
-  AVAILABILITY_TYPES, CONFIRMATION_TYPES, CANCELLATION_POLICIES, SAISONS,
+  AVAILABILITY_TYPES, SAISONS,
   type CrossValidationRule,
 } from "@/lib/offer-schema";
+import InviteCollaboratorModal, { type CollabSection } from "@/components/guide/offer/InviteCollaboratorModal";
+import EtapeCollabPickerModal from "@/components/guide/offer/EtapeCollabPickerModal";
+import { OfferAvailPicker, EMPTY_OFFER_AVAIL, type OfferAvailSlot } from "@/components/offer/OfferAvailPicker";
+import { ConfirmationTypePicker, EMPTY_CONFIRMATION, type ConfirmationData } from "@/components/offer/ConfirmationTypePicker";
+import { PUBLIC_RECOMMANDE, DOMAINES } from "@/lib/guideOfferConfig";
+import { Bool, PrestSubBlock, InviteButton, SectionLockedBanner, TRANSPORT_ECO_SUBTYPES, TRANSPORT_STD_SUBTYPES, HEBERGEMENT_PREST_SUBTYPES, RepasBlock, AutreServiceBlock, type RepasBlockData, type AutreServiceBlockData } from "@/components/GuideOfferModal";
 
 const MapPicker = dynamic(
   () => import("@/components/map/MapPicker"),
@@ -178,11 +187,36 @@ type OrgActivity = {
 
 const OFFER_TYPES = [
   { value: "sejour",       label: "Séjour",       icon: "hotel",      gradient: "from-blue-500 to-cyan-400" },
-  { value: "circuit",      label: "Circuit",      icon: "route",      gradient: "from-violet-500 to-purple-400" },
+  { value: "circuit",      label: "Circuit",      icon: "route",      gradient: "from-slate-600 to-slate-500" },
   { value: "activite",     label: "Activité",     icon: "hiking",     gradient: "from-orange-500 to-amber-400" },
   { value: "restauration", label: "Restauration", icon: "restaurant", gradient: "from-red-500 to-rose-400" },
   { value: "hebergement",  label: "Hébergement",  icon: "cabin",      gradient: "from-emerald-500 to-green-400" },
   { value: "autre",        label: "Autre",        icon: "category",   gradient: "from-slate-400 to-slate-500" },
+];
+
+const TYPE_PRESTATION_PROVIDER = [
+  { value: "service_seul",    icon: "handyman",       label: "Prestation seule",      desc: "Le service uniquement" },
+  { value: "avec_transport",  icon: "directions_car", label: "+ Transport",            desc: "Service + transfert inclus" },
+  { value: "transport_repas", icon: "restaurant",     label: "+ Transport & Repas",   desc: "Transport, repas et service" },
+  { value: "immersion",       icon: "camping",        label: "+ Immersion complète",  desc: "Multi-jours, tout inclus" },
+  { value: "sur_mesure",      icon: "tune",           label: "Sur mesure",            desc: "Contenu entièrement personnalisé" },
+];
+
+const PROVIDER_SERVICES = [
+  "Eau / Boissons", "Déjeuner inclus", "Équipement fourni", "Transport inclus",
+  "Guide local", "Assurance incluse", "Wi-Fi disponible", "Photos / Vidéos",
+  "Certificat", "Formation / Initiation", "Traduction", "Service VIP",
+  "Livraison", "Installation / Montage", "Pack famille", "Parking gratuit",
+];
+
+const PROVIDER_STEPS = [
+  { id: 1, title: "Présentation",         subtitle: "Activité, photos, titre & public" },
+  { id: 2, title: "Localisation",         subtitle: "Emplacement et description" },
+  { id: 3, title: "Sous-types & Détails", subtitle: "Types et champs spécifiques" },
+  { id: 4, title: "Disponibilités",       subtitle: "Quand êtes-vous disponible ?" },
+  { id: 5, title: "Ce que vous fournissez", subtitle: "Configuration de votre prestation" },
+  { id: 6, title: "Tarification",         subtitle: "Prix & Acompte" },
+  { id: 7, title: "Conditions",           subtitle: "Confirmation & Annulation" },
 ];
 
 const COUNTRY_LABELS: Record<string, string> = {
@@ -209,7 +243,7 @@ const PROVIDER_ACTIVITY_TYPES = [
   { value: "agriculture",  label: "Agro-tourisme",           icon: "agriculture",    gradient: "from-lime-500 to-green-400" },
   { value: "artisanat",    label: "Artisanat local",         icon: "handshake",      gradient: "from-amber-500 to-yellow-400" },
   { value: "transport",    label: "Transport éco",           icon: "electric_car",   gradient: "from-sky-500 to-blue-400" },
-  { value: "bienetre",     label: "Bien-être & Spa",         icon: "spa",            gradient: "from-purple-500 to-violet-400" },
+  { value: "bienetre",     label: "Bien-être & Spa",         icon: "spa",            gradient: "from-teal-600 to-emerald-500" },
   { value: "culture",      label: "Tourisme culturel",       icon: "museum",         gradient: "from-rose-500 to-pink-400" },
   { value: "aventure",     label: "Aventure & Nature",       icon: "terrain",        gradient: "from-teal-500 to-cyan-400" },
   { value: "formation",    label: "Formation & Éducation",   icon: "school",         gradient: "from-indigo-500 to-blue-400" },
@@ -222,7 +256,7 @@ const CATEGORY_GRADIENT_MAP: Record<string, string> = {
   activite:    "from-orange-500 to-amber-400",
   restauration:"from-red-500 to-rose-400",
   culture:     "from-rose-500 to-pink-400",
-  bien_etre:   "from-purple-500 to-violet-400",
+  bien_etre:   "from-teal-600 to-emerald-500",
   artisanat:   "from-amber-500 to-yellow-400",
   agriculture: "from-lime-500 to-green-400",
   transport:   "from-sky-500 to-blue-400",
@@ -340,7 +374,52 @@ const ACTIVITY_SUSTAINABILITY_STEPS = [
   },
 ];
 
-type Tab = "tout" | "offres" | "activites" | "circuits" | "reseau" | "apropos";
+type Tab = "tout" | "offres" | "activites" | "circuits" | "reseau" | "apropos" | "collaborations";
+
+type MyCollab = {
+  id: string;
+  source_type?: "offer" | "circuit";
+  offer_id?: string | null;
+  offer_title?: string | null;
+  offer_description?: string | null;
+  offer_cover?: string | null;
+  offer_status?: string | null;
+  guide_id?: string | null;
+  circuit_id?: string | null;
+  circuit_title?: string | null;
+  circuit_cover?: string | null;
+  circuit_status?: string | null;
+  circuit_nb_jours?: number | null;
+  circuit_description?: string | null;
+  circuit_nb_etapes?: number | null;
+  circuit_etapes_preview?: { jour: number | null; titre: string | null; destination: string | null; categorie: string | null; subtypes: string[]; etape_mode?: string | null; expertises?: string[]; heure_debut?: string | null; heure_fin?: string | null }[];
+  circuit_categories?: string[];
+  owner_id?: string | null;
+  circuit_owner_type?: string | null;
+  etape_id?: string | null;
+  etape_jour?: number | null;
+  etape_destination?: string | null;
+  etape_titre?: string | null;
+  etape_heure_debut?: string | null;
+  etape_heure_fin?: string | null;
+  etape_subtypes?: string[];
+  etape_description_courte?: string | null;
+  section: string;
+  status: "pending" | "accepted" | "completed" | "declined";
+  message: string | null;
+  created_at: string;
+  invited_user_name?: string;
+  contribution_data?: Record<string, any> | null;
+};
+
+type ProviderCollab = {
+  id?: string;
+  userId: string;
+  userName: string;
+  userType: string;
+  section: CollabSection;
+  status?: string;
+};
 
 // ── Circuit types ─────────────────────────────────────────────────────────────
 type CircuitEtape = {
@@ -364,6 +443,14 @@ type CircuitEtape = {
   nb_unites: Record<string, number>;
   form_config: Record<string, Record<string, any>>;
   entity_photos: Record<string, string[]>;
+  author_type?: "self" | "guide" | "provider";
+  collaborator_id?: string | null;
+  collaborator_name?: string | null;
+  collaborator_type?: string | null;
+  etape_mode?: "guidage" | "service";
+  guidage_data?: AutreServiceBlockData;
+  collab_contribution?: Record<string, any> | null;
+  collab_destination?: string | null;
 };
 
 type CircuitAvailability = {
@@ -391,10 +478,32 @@ type Circuit = {
   nb_jours: number;
   cover_image: string | null;
   etapes: CircuitEtape[];
-  availability?: CircuitAvailability;
+  availability?: any;
   hebergement?: CircuitHebergement;
+  status?: string;
   created_at: string;
 };
+
+function oldAvailToOfferSlot(av: any): OfferAvailSlot {
+  if (!av) return { ...EMPTY_OFFER_AVAIL };
+  if (av.type !== undefined) return av as OfferAvailSlot;
+  const buildTs = (keys: string[]) => {
+    if (!av.heure_debut || !av.heure_fin || !keys.length) return null;
+    return keys.reduce((acc: Record<string, {start: string; end: string}[]>, k) => ({ ...acc, [k]: [{ start: av.heure_debut, end: av.heure_fin }] }), {});
+  };
+  switch (av.mode) {
+    case 'specific':
+      return { type: 'specific', dates: av.specific_dates ?? [], time_slots: buildTs(av.specific_dates ?? []), start_date: null, end_date: null, days_of_week: null, label: null };
+    case 'weekly':
+      return { type: 'recurring', days_of_week: (av.weekdays ?? []).map(String), start_date: av.avail_start ?? null, end_date: av.avail_end ?? null, time_slots: buildTs((av.weekdays ?? []).map(String)), dates: null, label: null };
+    case 'period':
+      return { type: 'range', start_date: av.avail_start ?? null, end_date: av.avail_end ?? null, time_slots: buildTs(['0','1','2','3','4','5','6']), dates: null, days_of_week: null, label: null };
+    case 'season':
+      return { type: 'season', label: Array.isArray(av.saisons) ? av.saisons.join(', ') : null, dates: null, start_date: null, end_date: null, days_of_week: null, time_slots: null };
+    default:
+      return { ...EMPTY_OFFER_AVAIL };
+  }
+}
 
 // ─── Botanical SVG Cover ──────────────────────────────────────────────────────
 
@@ -433,6 +542,7 @@ function BotanicalCover() {
 
 export default function ProviderProfilePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [profile,        setProfile]        = useState<ProviderProfile | null>(null);
   const [org,            setOrg]            = useState<OrganizationProfile | null>(null);
@@ -443,6 +553,23 @@ export default function ProviderProfilePage() {
   const [token,     setToken]     = useState("");
   const [loading,   setLoading]   = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("tout");
+  const [collaborations, setCollaborations] = useState<MyCollab[]>([]);
+  const [collabLoading, setCollabLoading] = useState(false);
+  const [openCollab, setOpenCollab] = useState<MyCollab | null>(null);
+  const [highlightCollabId,   setHighlightCollabId]   = useState<string | null>(null);
+  const [highlightOfferId,    setHighlightOfferId]    = useState<string | null>(null);
+  const [highlightCircuitId,  setHighlightCircuitId]  = useState<string | null>(null);
+  const [collabResponding, setCollabResponding] = useState(false);
+  const [showCollabForm, setShowCollabForm] = useState(false);
+  const [detailOffer, setDetailOffer] = useState<OfferFull | null>(null);
+  const [detailOfferLoading, setDetailOfferLoading] = useState(false);
+  const [circuitFullDetail, setCircuitFullDetail] = useState<any>(null);
+  const [circuitFullDetailLoading, setCircuitFullDetailLoading] = useState(false);
+
+  // ── Publication offre (attente_publication) ───────────────────────────────
+  const [publishOfferModal,   setPublishOfferModal]   = useState<{ offer: Offer; detail: OfferFull | null } | null>(null);
+  const [publishOfferLoading, setPublishOfferLoading] = useState(false);
+  const [publishOfferSaving,  setPublishOfferSaving]  = useState(false);
 
   // ── OrgActivity detail modal ──────────────────────────────────────────────
   const [viewOrgActivity, setViewOrgActivity] = useState<OrgActivity | null>(null);
@@ -466,23 +593,23 @@ export default function ProviderProfilePage() {
   const [circuitFormError,    setCircuitFormError]    = useState("");
   const [editingCircuit,      setEditingCircuit]      = useState<Circuit | null>(null);
   const [viewingCircuit,      setViewingCircuit]      = useState<Circuit | null>(null);
+  const [viewingCircuitCollabsMap, setViewingCircuitCollabsMap] = useState<Record<string, string>>({});
+  const [publishingCircuit,   setPublishingCircuit]   = useState(false);
+  const [publishCircuitError, setPublishCircuitError] = useState("");
   const [circuitTitle,        setCircuitTitle]        = useState("");
   const [circuitDescription,  setCircuitDescription]  = useState("");
   const [circuitNbJours,      setCircuitNbJours]      = useState(1);
   const [circuitCoverImg,     setCircuitCoverImg]     = useState<{ file: File; preview: string } | null>(null);
   const [circuitCoverExisting,setCircuitCoverExisting]= useState<string | null>(null);
   const [circuitEtapes,       setCircuitEtapes]       = useState<CircuitEtape[]>([]);
+  const [circuitEtapeStatusMap, setCircuitEtapeStatusMap] = useState<Map<string, {status: string; collab_id: string}>>(new Map());
+  const [pendingKicks,         setPendingKicks]         = useState<{collabId: string; circuitId: string}[]>([]);
+  const [editingCollabSchedule, setEditingCollabSchedule] = useState<string | null>(null); // etape id en cours d'édition horaire
+  const [collabSchedStart,     setCollabSchedStart]     = useState("");
+  const [collabSchedEnd,       setCollabSchedEnd]       = useState("");
+  const [collabScheduleConflicts, setCollabScheduleConflicts] = useState<Set<string>>(new Set()); // etape ids avec conflit détecté
   // Circuit-level availability
-  const [circuitAvailMode,    setCircuitAvailMode]    = useState("specific");
-  const [circuitAvailDates,   setCircuitAvailDates]   = useState<string[]>([]);
-  const [circuitAvailNewDate, setCircuitAvailNewDate] = useState("");
-  const [circuitAvailWeekdays,setCircuitAvailWeekdays]= useState<number[]>([]);
-  const [circuitAvailStart,   setCircuitAvailStart]   = useState("");
-  const [circuitAvailEnd,     setCircuitAvailEnd]     = useState("");
-  const [circuitAvailSaisons, setCircuitAvailSaisons] = useState<string[]>([]);
-  const [circuitAvailHDebut,  setCircuitAvailHDebut]  = useState("");
-  const [circuitAvailHFin,    setCircuitAvailHFin]    = useState("");
-  const [circuitAvailDelai,    setCircuitAvailDelai]    = useState("24h");
+  const [circuitAvail, setCircuitAvail] = useState<OfferAvailSlot>(EMPTY_OFFER_AVAIL);
   // Circuit-level hébergement
   const [circuitHebergInclus,  setCircuitHebergInclus]  = useState(false);
   const [circuitHebergType,    setCircuitHebergType]    = useState<"same" | "per_day">("same");
@@ -514,6 +641,14 @@ export default function ProviderProfilePage() {
   const [etapeSubtypeDetails,    setEtapeSubtypeDetails]    = useState<Record<string, Record<string, any>>>({});
   const [etapeHeureDebut,        setEtapeHeureDebut]        = useState("");
   const [etapeHeureFin,          setEtapeHeureFin]          = useState("");
+  const [etapeAuthorType,        setEtapeAuthorType]        = useState<"self" | "guide" | "provider">("self");
+  const [etapeCollabSearch,      setEtapeCollabSearch]      = useState("");
+  const [etapeCollabResults,     setEtapeCollabResults]     = useState<{ user_id: string; name: string; type: string }[]>([]);
+  const [etapeCollabSelected,    setEtapeCollabSelected]    = useState<{ user_id: string; name: string; type: string } | null>(null);
+  const [etapeCollabSearching,   setEtapeCollabSearching]   = useState(false);
+  const [etapeCollabPanelOpen,   setEtapeCollabPanelOpen]   = useState(false);
+  const [etapeMode,              setEtapeMode]              = useState<"guidage" | "service">("service");
+  const [etapeGuidageData,       setEtapeGuidageData]       = useState<AutreServiceBlockData>({ categorie: "", sousType: "", details: { _mode: "guide" } });
   const [editingEtapeId,         setEditingEtapeId]         = useState<string | null>(null);
 
   // ── Activity detail/edit modal ───────────────────────────────────────────
@@ -547,6 +682,8 @@ export default function ProviderProfilePage() {
   type NetUser = { user_id: string; full_name: string; photo: string | null; _type: string; sub?: string | null };
   const [following,  setFollowing]  = useState<NetUser[]>([]);
   const [followers,  setFollowers]  = useState<NetUser[]>([]);
+  type FollowRequest = { id: string; created_at: string; sender: { user_id: string; full_name: string | null; photo: string | null; role: string } };
+  const [followRequests, setFollowRequests] = useState<FollowRequest[]>([]);
   const [netSearch,  setNetSearch]  = useState("");
   const [netResults, setNetResults] = useState<NetUser[]>([]);
   const [netLoading, setNetLoading] = useState(false);
@@ -558,6 +695,7 @@ export default function ProviderProfilePage() {
 
   // ── Publish offer modal ──────────────────────────────────────────────────
   const [modalOpen,       setModalOpen]       = useState(false);
+  const [offerStep,       setOfferStep]       = useState(1);
   const [form,            setForm]            = useState({ title: "", offer_type: "", description: "", price: "", duration: "", region: "", inclusions: "", meeting_point: "", min_group_size: "", max_group_size: "", min_age: "", cancellation_policy: "" });
   const [titleError,      setTitleError]      = useState("");
   const [publishing,      setPublishing]      = useState(false);
@@ -616,6 +754,38 @@ export default function ProviderProfilePage() {
   const [offerNbUnites,      setOfferNbUnites]      = useState(1);
   const [unitDetailsArray,   setUnitDetailsArray]   = useState<Array<Record<string, any>>>([{}]);
   const [activeUnitTab,      setActiveUnitTab]      = useState(0);
+  // ── Type de prestation + collaboration prestataire ────────────────────────
+  const [offerTypePrestation,   setOfferTypePrestation]   = useState<string | null>(null);
+  const [providerOfferCollabs,  setProviderOfferCollabs]  = useState<ProviderCollab[]>([]);
+  const [providerInviteSection, setProviderInviteSection] = useState<CollabSection | null>(null);
+  const [providerCollabSaving,  setProviderCollabSaving]  = useState(false);
+  // ── Public ciblé, services inclus, disponibilité OfferAvailPicker, confirmation ──
+  const [offerPublicCible,       setOfferPublicCible]       = useState<string[]>([]);
+  const [providerServicesInclus, setProviderServicesInclus] = useState<string[]>([]);
+  const [offerLocationDesc,          setOfferLocationDesc]          = useState("");
+  const [providerTransportInclus,    setProviderTransportInclus]    = useState<boolean | null>(null);
+  const [providerTransportEcoST,     setProviderTransportEcoST]     = useState("");
+  const [providerTransportEcoDet,    setProviderTransportEcoDet]    = useState<Record<string, any>>({});
+  const [providerTransportStdST,     setProviderTransportStdST]     = useState("");
+  const [providerTransportStdDet,    setProviderTransportStdDet]    = useState<Record<string, any>>({});
+  const [providerRepasFlag,          setProviderRepasFlag]          = useState<boolean | null>(null);
+  const [providerRepasMode,          setProviderRepasMode]          = useState<"guide"|"prestataire">("prestataire");
+  const [providerRepasGastroExp,     setProviderRepasGastroExp]     = useState("");
+  const [providerRepasGastroDet,     setProviderRepasGastroDet]     = useState<Record<string, any>>({});
+  const [providerRepasST,            setProviderRepasST]            = useState("");
+  const [providerRepasDet,           setProviderRepasDet]           = useState<Record<string, any>>({});
+  const [providerHebergementInclus,  setProviderHebergementInclus]  = useState<boolean | null>(null);
+  const [providerHebergementST,      setProviderHebergementST]      = useState("");
+  const [providerHebergementDet,     setProviderHebergementDet]     = useState<Record<string, any>>({});
+  const [providerAutreServiceInclus, setProviderAutreServiceInclus] = useState<boolean | null>(null);
+  const [providerAutreServiceCat,    setProviderAutreServiceCat]    = useState("");
+  const [providerAutreServiceST,     setProviderAutreServiceST]     = useState("");
+  const [providerAutreServiceDet,    setProviderAutreServiceDet]    = useState<Record<string, any>>({});
+  const [offerAvail,             setOfferAvail]             = useState<OfferAvailSlot>(EMPTY_OFFER_AVAIL);
+  const [offerConfirmation,      setOfferConfirmation]      = useState<ConfirmationData>(EMPTY_CONFIRMATION);
+  type ProviderCollabConflict = { userName: string; section: string; conflictSlot: string; conflictDays: string[]; conflictTimeSlots?: Record<string, { start: string; end: string }[]> | null };
+  const [providerCollabConflicts,     setProviderCollabConflicts]     = useState<ProviderCollabConflict[]>([]);
+  const [checkingProviderCollabConfs, setCheckingProviderCollabConfs] = useState(false);
   // ── Config par sous-type (disponibilité + tarification — hébergement) ────
   const [subtypeFormConfig,  setSubtypeFormConfig]  = useState<Record<string, Record<string, any>>>({});
   // ── Photos par entité (sous-type ou unité) ───────────────────────────────
@@ -663,6 +833,14 @@ export default function ProviderProfilePage() {
   const [editProfileSaving, setEditProfileSaving] = useState(false);
   const [editProfileError,  setEditProfileError]  = useState("");
 
+  // Lire le tab depuis l'URL (?tab=collaborations)
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && ["tout","offres","activites","circuits","reseau","apropos","collaborations"].includes(tab)) {
+      setActiveTab(tab as Tab);
+    }
+  }, [searchParams]);
+
   useEffect(() => {
     async function init() {
       const tkn = localStorage.getItem("access_token");
@@ -692,8 +870,9 @@ export default function ProviderProfilePage() {
         Promise.all([
           apiFetch<NetUser[]>("/follows/following/profiles", { headers: { Authorization: `Bearer ${tkn}` } }).catch(() => []),
           apiFetch<NetUser[]>("/follows/followers/profiles", { headers: { Authorization: `Bearer ${tkn}` } }).catch(() => []),
-        ]).then(([fwing, fwers]) => {
-          setFollowing(fwing); setFollowers(fwers);
+          apiFetch<FollowRequest[]>("/follows/requests", { headers: { Authorization: `Bearer ${tkn}` } }).catch(() => []),
+        ]).then(([fwing, fwers, reqs]) => {
+          setFollowing(fwing); setFollowers(fwers); setFollowRequests(reqs);
         });
       } catch {
         router.push("/dashboard/provider");
@@ -704,14 +883,61 @@ export default function ProviderProfilePage() {
     init();
   }, [router]);
 
+  // Charger les collaborations à la demande
+  useEffect(() => {
+    if ((activeTab !== "collaborations" && activeTab !== "tout") || !token) return;
+    setCollabLoading(true);
+    const autoOpenId        = activeTab === "collaborations" ? searchParams.get("openCollab") : null;
+    const autoOpenByOffer   = activeTab === "collaborations" ? searchParams.get("openCollabByOffer") : null;
+    const autoOpenByCircuit = activeTab === "collaborations" ? searchParams.get("openCollabByCircuit") : null;
+    apiFetch<MyCollab[]>("/guide/collaborations/mine", { headers: { Authorization: `Bearer ${token}` } })
+      .then((list) => {
+        setCollaborations(list);
+        const resolveTarget = (t: typeof list[0] | undefined) => {
+          if (!t) return;
+          setHighlightCollabId(t.id);
+          setTimeout(() => {
+            document.getElementById(`collab-${t.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+            setTimeout(() => setHighlightCollabId(null), 3000);
+          }, 300);
+        };
+        if (autoOpenId) {
+          resolveTarget(list.find((x) => x.id === autoOpenId));
+        } else if (autoOpenByOffer) {
+          resolveTarget(list.find((x) => x.offer_id === autoOpenByOffer));
+        } else if (autoOpenByCircuit) {
+          resolveTarget(list.find((x: any) => x.circuit_id === autoOpenByCircuit));
+        }
+      })
+      .catch(() => setCollaborations([]))
+      .finally(() => setCollabLoading(false));
+  }, [activeTab, token, searchParams]);
+
+  // Highlight une offre depuis URL (?tab=offres&openOffer=...)
+  useEffect(() => {
+    if (activeTab !== "offres") return;
+    const openOfferId = searchParams.get("openOffer");
+    if (!openOfferId || !offers.length) return;
+    setHighlightOfferId(openOfferId);
+    setTimeout(() => {
+      document.getElementById(`offer-${openOfferId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(() => setHighlightOfferId(null), 3000);
+    }, 300);
+  }, [activeTab, searchParams, offers]);
+
   // Network search
   useEffect(() => {
     if (!netSearch.trim() || !token) { setNetResults([]); return; }
     const t = setTimeout(() => {
       setNetLoading(true);
-      apiFetch<any[]>(`/guide/public/search?q=${encodeURIComponent(netSearch)}`, { headers: { Authorization: `Bearer ${token}` } })
-        .then((r) => setNetResults(r.map((g) => ({ user_id: g.user_id, full_name: g.full_name, photo: g.photo, _type: "guide", sub: g.zone ?? null }))))
-        .catch(() => setNetResults([]))
+      Promise.all([
+        apiFetch<any[]>(`/guide/public/search?q=${encodeURIComponent(netSearch)}`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => []),
+        apiFetch<any[]>(`/providers/search?q=${encodeURIComponent(netSearch)}`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => []),
+      ]).then(([guides, providers]) => {
+        const g = guides.map((g: any) => ({ user_id: g.user_id, full_name: g.full_name, photo: g.photo, _type: "guide", sub: g.zone ?? null }));
+        const p = providers.map((p: any) => ({ user_id: p.user_id, full_name: p.full_name ?? p.organization, photo: p.photo, _type: "provider", sub: p.provider_type ?? null }));
+        setNetResults([...g, ...p]);
+      }).catch(() => setNetResults([]))
         .finally(() => setNetLoading(false));
     }, 350);
     return () => clearTimeout(t);
@@ -725,7 +951,109 @@ export default function ProviderProfilePage() {
       .catch(() => {});
   }, [token]);
 
+  // Highlight circuit depuis URL (?tab=circuits&openCircuit=...)
+  useEffect(() => {
+    if (activeTab !== "circuits" || !token || !circuits.length) return;
+    const openId = searchParams.get("openCircuit");
+    if (!openId) return;
+    if (!circuits.find((c) => c.id === openId)) return;
+    setHighlightCircuitId(openId);
+    setTimeout(() => {
+      document.getElementById(`circuit-${openId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(() => setHighlightCircuitId(null), 3000);
+    }, 300);
+  }, [activeTab, token, circuits, searchParams]);
+
+  // Vérification des conflits agenda collaborateurs (étape 4 wizard offre prestataire)
+  const providerAvailKey = JSON.stringify(offerAvail);
+  useEffect(() => {
+    if (!offerEditId || !offerAvail.type || !token) {
+      setProviderCollabConflicts([]);
+      return;
+    }
+    setCheckingProviderCollabConfs(true);
+    const timer = setTimeout(async () => {
+      try {
+        const result = await apiFetch<ProviderCollabConflict[]>(`/offers/${offerEditId}/collab-conflicts`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ disponibilite: offerAvail }),
+        });
+        setProviderCollabConflicts(Array.isArray(result) ? result : []);
+      } catch {
+        setProviderCollabConflicts([]);
+      } finally {
+        setCheckingProviderCollabConfs(false);
+      }
+    }, 700);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerAvailKey, offerEditId, token]);
+
+  // Quand les dates range de la dispo changent → resync nb_jours (en tenant compte des jours inclus)
+  useEffect(() => {
+    if (circuitAvail.type !== 'range' || !circuitAvail.start_date || !circuitAvail.end_date) return;
+    const frDays = circuitAvail.days_of_week;
+    let n: number;
+    if (frDays?.length) {
+      // Compter uniquement les jours de la semaine sélectionnés dans la plage
+      const s = new Date(circuitAvail.start_date + 'T12:00:00');
+      const e = new Date(circuitAvail.end_date + 'T12:00:00');
+      n = 0;
+      const cur = new Date(s);
+      while (cur <= e) {
+        const frIdx = String((cur.getDay() + 6) % 7); // 0=Lun…6=Dim
+        if (frDays.includes(frIdx)) n++;
+        cur.setDate(cur.getDate() + 1);
+      }
+    } else {
+      n = Math.round((new Date(circuitAvail.end_date).getTime() - new Date(circuitAvail.start_date).getTime()) / 86400000) + 1;
+    }
+    if (n > 0 && n !== circuitNbJours) {
+      if (n < circuitNbJours) setCircuitEtapes((prev) => prev.filter((ep) => ep.jour <= n));
+      setCircuitNbJours(n);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [circuitAvail.type, circuitAvail.start_date, circuitAvail.end_date, JSON.stringify(circuitAvail.days_of_week)]);
+
+  // Quand les jours récurrents changent → nb_jours = nombre de jours/semaine sélectionnés
+  useEffect(() => {
+    if (circuitAvail.type !== 'recurring') return;
+    const n = circuitAvail.days_of_week?.length ?? 0;
+    if (n > 0 && n !== circuitNbJours) {
+      if (n < circuitNbJours) setCircuitEtapes((prev) => prev.filter((ep) => ep.jour <= n));
+      setCircuitNbJours(n);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [circuitAvail.type, JSON.stringify(circuitAvail.days_of_week)]);
+
+  // Quand les dates specific changent → nb_jours = nombre de dates sélectionnées
+  useEffect(() => {
+    if (circuitAvail.type !== 'specific') return;
+    const n = circuitAvail.dates?.length ?? 0;
+    if (n > 0 && n !== circuitNbJours) {
+      if (n < circuitNbJours) setCircuitEtapes((prev) => prev.filter((ep) => ep.jour <= n));
+      setCircuitNbJours(n);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [circuitAvail.type, JSON.stringify(circuitAvail.dates)]);
+
+  // Quand les dates specific changent → nb_jours = nombre de dates sélectionnées
+  useEffect(() => {
+    if (circuitAvail.type !== 'specific') return;
+    const n = circuitAvail.dates?.length ?? 0;
+    if (n > 0 && n !== circuitNbJours) {
+      if (n < circuitNbJours) setCircuitEtapes((prev) => prev.filter((ep) => ep.jour <= n));
+      setCircuitNbJours(n);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [circuitAvail.type, JSON.stringify(circuitAvail.dates)]);
+
   function openCircuitModal(circuit?: Circuit) {
+    setCircuitEtapeStatusMap(new Map());
+    setPendingKicks([]);
+    setEditingCollabSchedule(null);
+    setCollabScheduleConflicts(new Set());
     if (circuit) {
       setEditingCircuit(circuit);
       setCircuitTitle(circuit.title);
@@ -733,33 +1061,31 @@ export default function ProviderProfilePage() {
       setCircuitNbJours(circuit.nb_jours);
       setCircuitCoverExisting(circuit.cover_image);
       setCircuitEtapes([...circuit.etapes]);
-      const av = circuit.availability;
-      setCircuitAvailMode(av?.mode ?? "specific");
-      setCircuitAvailDates(av?.specific_dates ?? []);
-      setCircuitAvailWeekdays(av?.weekdays ?? []);
-      setCircuitAvailStart(av?.avail_start ?? "");
-      setCircuitAvailEnd(av?.avail_end ?? "");
-      setCircuitAvailSaisons(av?.saisons ?? []);
-      setCircuitAvailHDebut(av?.heure_debut ?? "");
-      setCircuitAvailHFin(av?.heure_fin ?? "");
-      setCircuitAvailDelai(av?.delai_reponse ?? "24h");
+      setCircuitAvail(oldAvailToOfferSlot(circuit.availability));
       const hb = circuit.hebergement;
       setCircuitHebergInclus(hb?.inclus ?? false);
       setCircuitHebergType(hb?.type ?? "same");
       setCircuitHebergEtape(hb?.etape ?? null);
+      // Charger les collabs pour savoir quelles étapes sont verrouillées
+      const tkn = localStorage.getItem("access_token") ?? "";
+      apiFetch<any[]>(`/circuits/${circuit.id}/collaborations`, { headers: { Authorization: `Bearer ${tkn}` } })
+        .then((collabs) => {
+          const statusMap = new Map<string, {status: string; collab_id: string}>();
+          for (const c of collabs ?? []) {
+            if (c.etape_id) statusMap.set(c.etape_id, { status: c.status, collab_id: c.id });
+          }
+          setCircuitEtapeStatusMap(statusMap);
+        })
+        .catch(() => {});
     } else {
       setEditingCircuit(null);
       setCircuitTitle(""); setCircuitDescription("");
       setCircuitNbJours(1); setCircuitCoverExisting(null);
       setCircuitEtapes([]);
-      setCircuitAvailMode("specific"); setCircuitAvailDates([]);
-      setCircuitAvailWeekdays([]); setCircuitAvailStart(""); setCircuitAvailEnd("");
-      setCircuitAvailSaisons([]); setCircuitAvailHDebut(""); setCircuitAvailHFin("");
-      setCircuitAvailDelai("24h");
+      setCircuitAvail(EMPTY_OFFER_AVAIL);
       setCircuitHebergInclus(false); setCircuitHebergType("same");
       setCircuitHebergEtape(null);
     }
-    setCircuitAvailNewDate("");
     setCircuitCoverImg(null); setCircuitFormError("");
     setEtapeFormOpen(false); resetEtapeForm();
     setCircuitModalOpen(true);
@@ -781,6 +1107,9 @@ export default function ProviderProfilePage() {
     setEtapeActiveSubtypeTab({}); setEtapeSubtypeFormConfig({});
     setEtapeSubtypeDetails({});
     setEtapeHeureDebut(""); setEtapeHeureFin("");
+    setEtapeAuthorType("self"); setEtapeCollabSearch(""); setEtapeCollabResults([]); setEtapeCollabSelected(null); setEtapeCollabPanelOpen(false);
+    setEtapeMode("service");
+    setEtapeGuidageData({ categorie: "", sousType: "", details: { _mode: "guide" } });
     setEditingEtapeId(null);
   }
 
@@ -799,16 +1128,36 @@ export default function ProviderProfilePage() {
       setEtapeSubtypeNbUnites(circuitHebergEtape.nb_unites ?? {});
       setEtapeSubtypeFormConfig(circuitHebergEtape.form_config ?? {});
       setEtapeEntityExistingImages(circuitHebergEtape.entity_photos ?? {});
+      setEtapeLat(circuitHebergEtape.lat);
+      setEtapeLng(circuitHebergEtape.lng);
+      setEtapeAddress(circuitHebergEtape.address ?? "");
+      setEtapeAuthorType(circuitHebergEtape.author_type ?? "self");
+      if (circuitHebergEtape.collaborator_id && circuitHebergEtape.collaborator_name) {
+        setEtapeCollabSelected({
+          user_id: circuitHebergEtape.collaborator_id,
+          name: circuitHebergEtape.collaborator_name,
+          type: circuitHebergEtape.collaborator_type ?? "provider",
+        });
+      }
     }
     setEtapeFormOpen(true);
   }
 
   async function addEtape(keepOpen = false) {
     const isCircuitHeberg = etapeJour === -1;
-    if (!etapeLat || !etapeLng) { setEtapeFormError("Positionnez la destination sur la carte."); return; }
-    if (!etapeCategorie)              { setEtapeFormError("Choisissez un type d'activité."); return; }
-    if (etapeSubtypes.length === 0)   { setEtapeFormError("Choisissez au moins un sous-type."); return; }
-    if (!etapeTitre.trim())           { setEtapeFormError("Le titre est requis."); return; }
+    const isGuidage = etapeMode === "guidage" && !isCircuitHeberg;
+    if (!etapeCollabSelected && (!etapeLat || !etapeLng)) { setEtapeFormError("Positionnez la destination sur la carte."); return; }
+    if (isGuidage) {
+      if (!etapeGuidageData.categorie) { setEtapeFormError("Choisissez un domaine de guidage."); return; }
+      if (!etapeCollabSelected) { setEtapeFormError("Invitez un guide pour assurer cette étape."); return; }
+    } else {
+      if (!isCircuitHeberg && !etapeCategorie) { setEtapeFormError("Choisissez un type d'activité."); return; }
+      if (etapeSubtypes.length === 0) { setEtapeFormError(isCircuitHeberg ? "Choisissez au moins un type d'hébergement." : "Choisissez au moins un sous-type."); return; }
+      const selfPossible = orgActivities.some((a) => a.category === etapeCategorie);
+      if (!selfPossible && !etapeCollabSelected) { setEtapeFormError(isCircuitHeberg ? "Invitez un prestataire hébergement pour ce circuit." : "Invitez un prestataire pour cette catégorie."); return; }
+      if (selfPossible && etapeAuthorType === "provider" && !etapeCollabSelected) { setEtapeFormError("Invitez un prestataire ou passez en mode 'Moi-même'."); return; }
+    }
+    if (!isGuidage && !etapeCollabSelected && !etapeTitre.trim()) { setEtapeFormError("Le titre est requis."); return; }
     if (!isCircuitHeberg) {
       if (!etapeHeureDebut)             { setEtapeFormError("L'heure de début est requise."); return; }
       if (!etapeHeureFin)               { setEtapeFormError("L'heure de fin est requise."); return; }
@@ -825,7 +1174,7 @@ export default function ProviderProfilePage() {
         toMinutes(e.heure_fin)   > newStart
       );
       if (conflict) {
-        setEtapeFormError(`Conflit horaire avec "${conflict.titre || conflict.destination}" (${conflict.heure_debut} – ${conflict.heure_fin}).`);
+        setEtapeFormError(`Ce créneau (${etapeHeureDebut} – ${etapeHeureFin}) est déjà occupé par une autre activité de ce jour. Modifiez les horaires.`);
         return;
       }
     }
@@ -852,18 +1201,24 @@ export default function ProviderProfilePage() {
       address: etapeAddress,
       lat: etapeLat,
       lng: etapeLng,
-      categorie: etapeCategorie,
-      subtypes: etapeSubtypes,
+      categorie: isGuidage ? (etapeGuidageData.categorie || "guidage") : etapeCategorie,
+      subtypes: isGuidage ? (etapeGuidageData.sousType ? [etapeGuidageData.sousType] : []) : etapeSubtypes,
       titre: etapeTitre.trim(),
       description_courte: etapeDescCourte.trim(),
       description_longue: etapeDescLongue.trim(),
       prix: etapePrix ? Number(etapePrix) : null,
-      photos: allEntityUrls,
-      fields: etapeSubtypeDetails,
-      unit_details: etapeSubtypeUnitDetails,
-      nb_unites: etapeSubtypeNbUnites,
-      form_config: etapeSubtypeFormConfig,
-      entity_photos: finalEntityPhotos,
+      photos: isGuidage ? [] : allEntityUrls,
+      fields: isGuidage ? {} : etapeSubtypeDetails,
+      unit_details: isGuidage ? {} : etapeSubtypeUnitDetails,
+      nb_unites: isGuidage ? {} : etapeSubtypeNbUnites,
+      form_config: isGuidage ? {} : etapeSubtypeFormConfig,
+      entity_photos: isGuidage ? {} : finalEntityPhotos,
+      etape_mode: isCircuitHeberg ? "service" : etapeMode,
+      guidage_data: isGuidage ? etapeGuidageData : undefined,
+      author_type: isGuidage ? "guide" : etapeAuthorType,
+      collaborator_id: etapeCollabSelected?.user_id ?? null,
+      collaborator_name: etapeCollabSelected?.name ?? null,
+      collaborator_type: isGuidage ? "guide" : (etapeCollabSelected?.type ?? null),
     };
     if (isCircuitHeberg) {
       setCircuitHebergEtape(newEtape);
@@ -896,22 +1251,14 @@ export default function ProviderProfilePage() {
     try {
       let coverUrl = circuitCoverExisting;
       if (circuitCoverImg) coverUrl = await uploadImage(circuitCoverImg.file);
-      const availability: CircuitAvailability = {
-        mode: circuitAvailMode,
-        ...(circuitAvailMode === 'specific' && { specific_dates: circuitAvailDates }),
-        ...(circuitAvailMode === 'weekly' && { weekdays: circuitAvailWeekdays, avail_start: circuitAvailStart, avail_end: circuitAvailEnd }),
-        ...(circuitAvailMode === 'period' && { avail_start: circuitAvailStart, avail_end: circuitAvailEnd }),
-        ...(circuitAvailMode === 'season' && { saisons: circuitAvailSaisons }),
-        ...(circuitAvailMode === 'on_demand' && { delai_reponse: circuitAvailDelai }),
-        ...(circuitAvailMode !== 'on_demand' && circuitAvailHDebut && { heure_debut: circuitAvailHDebut }),
-        ...(circuitAvailMode !== 'on_demand' && circuitAvailHFin && { heure_fin: circuitAvailHFin }),
-      };
+      const availability = circuitAvail;
       const hebergement: CircuitHebergement = {
         inclus: circuitHebergInclus,
         ...(circuitHebergInclus && { type: circuitHebergType }),
         ...(circuitHebergInclus && circuitHebergType === 'same' && circuitHebergEtape && { etape: circuitHebergEtape }),
       };
       const body = { title: circuitTitle, description: circuitDescription, nb_jours: circuitNbJours, cover_image: coverUrl, etapes: circuitEtapes, availability, hebergement };
+      let savedCircuitId: string;
       if (editingCircuit) {
         const updated = await apiFetch<Circuit>(`/circuits/${editingCircuit.id}`, {
           method: "PATCH",
@@ -919,6 +1266,7 @@ export default function ProviderProfilePage() {
           body: JSON.stringify(body),
         });
         setCircuits((prev) => prev.map((c) => c.id === updated.id ? { ...updated, created_at: typeof updated.created_at === 'string' ? updated.created_at : new Date(updated.created_at).toISOString() } : c));
+        savedCircuitId = updated.id;
       } else {
         const created = await apiFetch<Circuit>("/circuits", {
           method: "POST",
@@ -926,7 +1274,35 @@ export default function ProviderProfilePage() {
           body: JSON.stringify(body),
         });
         setCircuits((prev) => [{ ...created, created_at: typeof created.created_at === 'string' ? created.created_at : new Date(created.created_at).toISOString() }, ...prev]);
+        savedCircuitId = created.id;
       }
+      // Inviter automatiquement les collaborateurs des étapes non-self
+      const etapesWithCollab = circuitEtapes.filter((e) => e.author_type && e.author_type !== "self" && e.collaborator_id);
+      for (const etape of etapesWithCollab) {
+        try {
+          await apiFetch(`/circuits/${savedCircuitId}/collaborations`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              etape_id: etape.id,
+              invited_user_id: etape.collaborator_id,
+              invited_user_type: etape.collaborator_type ?? etape.author_type,
+              invited_user_name: etape.collaborator_name,
+              section: etape.categorie,
+            }),
+          });
+        } catch { /* invite non bloquante */ }
+      }
+      // Exécuter les kicks différés (après le save du circuit)
+      for (const kick of pendingKicks) {
+        try {
+          await apiFetch(`/circuits/${kick.circuitId}/collaborations/${kick.collabId}/kick`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        } catch { /* kick non bloquant */ }
+      }
+      setPendingKicks([]);
       if (circuitCoverImg) URL.revokeObjectURL(circuitCoverImg.preview);
       setCircuitModalOpen(false);
     } catch { setCircuitFormError("Erreur lors de la sauvegarde."); }
@@ -1009,10 +1385,37 @@ export default function ProviderProfilePage() {
     setForm({ title: "", offer_type: "", description: "", price: "", duration: "", region: "", inclusions: "", meeting_point: "", min_group_size: "", max_group_size: "", min_age: "", cancellation_policy: "" });
     setPublishMapLat(null); setPublishMapLng(null); setShowPublishMap(false);
     setOfferEditMode(false); setOfferEditId(""); setPublishExistingImages([]);
+    setOfferTypePrestation(null);
+    setProviderOfferCollabs([]);
+    setProviderInviteSection(null);
+    setOfferPublicCible([]); setProviderServicesInclus([]);
+    setOfferLocationDesc("");
+    setProviderTransportInclus(null);
+    setProviderTransportEcoST(""); setProviderTransportEcoDet({});
+    setProviderTransportStdST(""); setProviderTransportStdDet({});
+    setProviderRepasFlag(null);
+    setProviderRepasMode("prestataire"); setProviderRepasGastroExp(""); setProviderRepasGastroDet({});
+    setProviderRepasST(""); setProviderRepasDet({});
+    setProviderHebergementInclus(null);
+    setProviderHebergementST(""); setProviderHebergementDet({});
+    setProviderAutreServiceInclus(null);
+    setProviderAutreServiceCat(""); setProviderAutreServiceST(""); setProviderAutreServiceDet({});
+    setOfferAvail(EMPTY_OFFER_AVAIL); setOfferConfirmation(EMPTY_CONFIRMATION);
+    setProviderCollabConflicts([]); setCheckingProviderCollabConfs(false);
+    setOfferStep(1);
   }
 
-  async function handlePublish(e: React.SyntheticEvent<HTMLFormElement>) {
-    e.preventDefault();
+  function handleNextProvider() {
+    if (offerStep === 1 && !form.title.trim()) { setTitleError("Le titre est obligatoire."); return; }
+    setTitleError("");
+    if (offerStep < PROVIDER_STEPS.length) {
+      setOfferStep((s) => s + 1);
+    } else {
+      handlePublish();
+    }
+  }
+
+  async function handlePublish() {
     if (!form.title.trim()) { setTitleError("Le titre est obligatoire."); return; }
     setPublishError(""); setPublishing(true);
     try {
@@ -1028,28 +1431,55 @@ export default function ProviderProfilePage() {
       } else {
         Object.values(subtypeDetails).forEach((d) => Object.assign(combinedDetails, d));
       }
-      if (availabilityMode === "weekly")   combinedDetails.available_weekdays = availableWeekdays;
-      if (availabilityMode === "specific") combinedDetails.specific_dates = specificDates;
-      if (availabilityMode === "season")   combinedDetails.available_saisons = availSaisons;
-      if (availHeureDebut) combinedDetails.heure_debut = availHeureDebut;
-      if (availHeureFin)   combinedDetails.heure_fin   = availHeureFin;
-      if (availabilityMode === "on_demand") {
-        combinedDetails.delai_reponse   = availDelaiReponse;
-        combinedDetails.message_accueil = availMessageAccueil;
+      if (offerAvail.type) {
+        combinedDetails.disponibilite = offerAvail;
+        if (offerAvail.dates?.length) combinedDetails.specific_dates = offerAvail.dates;
+        if (offerAvail.days_of_week?.length) combinedDetails.available_weekdays = offerAvail.days_of_week;
       }
       if (form.description.trim()) combinedDetails.description_longue = form.description.trim();
+      if (offerTypePrestation) combinedDetails.type_prestation = offerTypePrestation;
+      if (offerLocationDesc.trim()) combinedDetails.description_localisation = offerLocationDesc.trim();
+      if (providerTransportInclus !== null) combinedDetails.transport_inclus = providerTransportInclus;
+      if (providerTransportEcoST) combinedDetails.transport_eco_sous_type = providerTransportEcoST;
+      if (Object.keys(providerTransportEcoDet).length) combinedDetails.transport_eco_details = providerTransportEcoDet;
+      if (providerTransportStdST) combinedDetails.transport_std_sous_type = providerTransportStdST;
+      if (Object.keys(providerTransportStdDet).length) combinedDetails.transport_std_details = providerTransportStdDet;
+      if (providerRepasFlag !== null) combinedDetails.repas_flag = providerRepasFlag;
+      combinedDetails.repas_mode = providerRepasMode;
+      if (providerRepasGastroExp) combinedDetails.repas_gastro_expertise = providerRepasGastroExp;
+      if (Object.keys(providerRepasGastroDet).length) combinedDetails.repas_gastro_details = providerRepasGastroDet;
+      if (providerRepasST) combinedDetails.repas_prest_sous_type = providerRepasST;
+      if (Object.keys(providerRepasDet).length) combinedDetails.repas_prest_details = providerRepasDet;
+      if (providerHebergementInclus !== null) combinedDetails.hebergement_inclus = providerHebergementInclus;
+      if (providerHebergementST) combinedDetails.hebergement_sous_type = providerHebergementST;
+      if (Object.keys(providerHebergementDet).length) combinedDetails.hebergement_details = providerHebergementDet;
+      if (providerAutreServiceInclus !== null) combinedDetails.autre_service_inclus = providerAutreServiceInclus;
+      if (providerAutreServiceCat) combinedDetails.autre_service_categorie = providerAutreServiceCat;
+      if (providerAutreServiceST) combinedDetails.autre_service_sous_type = providerAutreServiceST;
+      if (Object.keys(providerAutreServiceDet).length) combinedDetails.autre_service_details = providerAutreServiceDet;
+      if (offerPublicCible.length) combinedDetails.public_cible = offerPublicCible;
+
+      const availMode = offerAvail.type === "specific" ? "specific"
+        : offerAvail.type === "range" ? "period"
+        : offerAvail.type === "recurring" ? "weekly"
+        : offerAvail.type === "season" ? "season"
+        : "always";
+
+      const polAnn = offerConfirmation.politique_annulation;
+      const cancPolicy = polAnn === "Personnalisée"
+        ? (offerConfirmation.description_politique || undefined)
+        : (polAnn || undefined);
 
       const payload = {
+        _finalize:                   true,
         activity_id:                 offerActivity?.id                         || undefined,
         offer_subtypes:              offerSubtypes.length > 0 ? offerSubtypes  : undefined,
         offer_subtype:               offerSubtypes[0]                          || undefined,
         offer_mode:                  offerSubtypes.length > 1 ? offerMode      : "single",
-        availability_mode:           availabilityMode,
-        availability_start:          availabilityMode === "period" ? availabilityStart : undefined,
-        availability_end:            availabilityMode === "period" ? availabilityEnd   : undefined,
-        confirmation_mode:           offerConfirmMode,
-        confirmation_deadline_hours: ["24h","48h"].includes(offerConfirmMode) ? Number(offerDeadlineHours) : undefined,
-        deposit_percentage:          offerConfirmMode === "deposit" ? Number(offerDepositPct) : undefined,
+        availability_mode:           availMode,
+        availability_start:          (offerAvail.type === "range" || offerAvail.type === "recurring" || offerAvail.type === "season") ? (offerAvail.start_date ?? undefined) : undefined,
+        availability_end:            (offerAvail.type === "range" || offerAvail.type === "recurring" || offerAvail.type === "season") ? (offerAvail.end_date ?? undefined) : undefined,
+        confirmation_mode:           offerConfirmation.type_confirmation || undefined,
         details: Object.keys(combinedDetails).length > 0 ? combinedDetails : undefined,
         title:               form.title.trim(),
         offer_type:          form.offer_type || offerActivity?.category || undefined,
@@ -1058,16 +1488,14 @@ export default function ProviderProfilePage() {
         price:               form.price  ? Number(form.price)  : undefined,
         duration:            form.duration.trim()      || undefined,
         region:              form.region.trim()        || undefined,
-        inclusions:          form.inclusions.trim()    || undefined,
+        inclusions:          providerServicesInclus.length ? providerServicesInclus.join(", ") : undefined,
         meeting_point:       form.meeting_point.trim() || undefined,
         meeting_lat:         publishMapLat              ?? undefined,
         meeting_lng:         publishMapLng              ?? undefined,
         min_group_size:      form.min_group_size ? Number(form.min_group_size) : undefined,
         max_group_size:      form.max_group_size ? Number(form.max_group_size) : undefined,
         min_age:             form.min_age        ? Number(form.min_age)        : undefined,
-        cancellation_policy: cancellationPolicy !== "custom"
-          ? cancellationPolicy
-          : (cancellationDesc.trim() || undefined),
+        cancellation_policy: cancPolicy,
       };
 
       let finalOffer: Offer;
@@ -1159,6 +1587,46 @@ export default function ProviderProfilePage() {
     }
   }
 
+  async function handleProviderInvite(section: CollabSection) {
+    let id = offerEditId;
+    if (!id) {
+      if (!form.title.trim()) { setTitleError("Le titre est obligatoire pour inviter un collaborateur."); return; }
+      setProviderCollabSaving(true);
+      try {
+        const savedOffer = await apiFetch<Offer>("/offers", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            organization_id: org?.id || undefined,
+            title: form.title.trim(),
+            offer_type: form.offer_type || offerActivity?.category || undefined,
+            description: offerDescCourte.trim() || undefined,
+            details: offerTypePrestation ? { type_prestation: offerTypePrestation } : undefined,
+          }),
+        });
+        id = savedOffer.id;
+        setOfferEditId(id);
+        setOfferEditMode(true);
+        setOffers((prev) => [savedOffer, ...prev]);
+      } catch {
+        setProviderCollabSaving(false);
+        return;
+      }
+      setProviderCollabSaving(false);
+    }
+    setProviderInviteSection(section);
+  }
+
+  async function kickProviderCollab(collabId: string) {
+    try {
+      await apiFetch(`/guide/collaborations/${collabId}/kick`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setProviderOfferCollabs((prev) => prev.filter((c) => c.id !== collabId));
+    } catch { /* silent */ }
+  }
+
   // ── Offer detail / edit modal ──────────────────────────────────────────────
 
   function openEditModal(offer: Offer) {
@@ -1183,6 +1651,15 @@ export default function ProviderProfilePage() {
     setEditMode(false);
     setSliderIdx(0);
     setEditModalOpen(true);
+    // Fetcher les détails complets en arrière-plan (collaborateurs, données de prestation, etc.)
+    if (token) {
+      apiFetch<any>(`/guide/offers/${offer.id}/detail`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then((detail) => {
+        setViewOffer((prev) => prev ? { ...prev, details: detail.details ?? (prev as any).details } : prev);
+        setOffers((prev) => prev.map((o) => o.id === offer.id ? { ...o, details: detail.details ?? (o as any).details } : o));
+      }).catch(() => {});
+    }
   }
 
   function closeEditModal() {
@@ -1340,22 +1817,103 @@ export default function ProviderProfilePage() {
     setPublishImages([]);
     setPublishCoverIdx(0);
 
-    // 15 – Activer le mode édition et ouvrir le modal
+    // 15 – Type de prestation
+    setOfferTypePrestation((details.type_prestation as string) ?? null);
+
+    // 15a – Localisation description
+    setOfferLocationDesc((details.description_localisation as string) ?? "");
+    // 15b – Prestation config (étape 5 "Ce que vous fournissez")
+    setProviderTransportInclus((details.transport_inclus as boolean | null) ?? null);
+    setProviderTransportEcoST((details.transport_eco_sous_type as string) ?? "");
+    setProviderTransportEcoDet((details.transport_eco_details as Record<string, any>) ?? {});
+    setProviderTransportStdST((details.transport_std_sous_type as string) ?? "");
+    setProviderTransportStdDet((details.transport_std_details as Record<string, any>) ?? {});
+    setProviderRepasFlag((details.repas_flag as boolean | null) ?? null);
+    setProviderRepasMode(((details.repas_mode as string) || "prestataire") as "guide"|"prestataire");
+    setProviderRepasGastroExp((details.repas_gastro_expertise as string) ?? "");
+    setProviderRepasGastroDet((details.repas_gastro_details as Record<string, any>) ?? {});
+    setProviderRepasST((details.repas_prest_sous_type as string) ?? "");
+    setProviderRepasDet((details.repas_prest_details as Record<string, any>) ?? {});
+    setProviderHebergementInclus((details.hebergement_inclus as boolean | null) ?? null);
+    setProviderHebergementST((details.hebergement_sous_type as string) ?? "");
+    setProviderHebergementDet((details.hebergement_details as Record<string, any>) ?? {});
+    setProviderAutreServiceInclus((details.autre_service_inclus as boolean | null) ?? null);
+    setProviderAutreServiceCat((details.autre_service_categorie as string) ?? "");
+    setProviderAutreServiceST((details.autre_service_sous_type as string) ?? "");
+    setProviderAutreServiceDet((details.autre_service_details as Record<string, any>) ?? {});
+
+    // 15b – Public ciblé
+    setOfferPublicCible((details.public_cible as string[]) ?? []);
+
+    // 15c – Services inclus (reconstituer depuis inclusions CSV)
+    const rawInclusions: string = (offer as any).inclusions ?? "";
+    setProviderServicesInclus(
+      rawInclusions ? rawInclusions.split(", ").filter((s: string) => PROVIDER_SERVICES.includes(s)) : []
+    );
+
+    // 15d – OfferAvailSlot (reconstituer depuis format legacy)
+    const am2 = offer.availability_mode ?? "always";
+    const reconAvail: OfferAvailSlot = {
+      type: am2 === "specific" ? "specific" : am2 === "period" ? "range" : am2 === "weekly" ? "recurring" : am2 === "season" ? "season" : null,
+      dates:       (details.specific_dates as string[]) ?? (details.disponibilite as any)?.dates ?? null,
+      start_date:  offer.availability_start ?? null,
+      end_date:    offer.availability_end ?? null,
+      days_of_week:(details.available_weekdays as string[]) ?? null,
+      label: null,
+      time_slots:  (details.disponibilite as any)?.time_slots ?? null,
+    };
+    setOfferAvail(reconAvail.type ? reconAvail : { ...EMPTY_OFFER_AVAIL });
+
+    // 15e – ConfirmationData
+    const rawMode = offer.confirmation_mode ?? "";
+    const rawPol  = offer.cancellation_policy ?? "";
+    const polLabel = rawPol === "flexible" ? "Flexible (100% remboursé jusqu'à 24h avant)"
+      : rawPol === "moderate" ? "Modérée (50% remboursé jusqu'à 48h avant)"
+      : rawPol === "strict"   ? "Stricte (non remboursable)"
+      : rawPol ? "Personnalisée" : "";
+    const polDesc = !["flexible","moderate","strict",""].includes(rawPol) ? rawPol : "";
+    setOfferConfirmation({
+      type_confirmation:   rawMode,
+      politique_annulation: polLabel,
+      description_politique: polDesc,
+      annulation_meteo:    null,
+    });
+
+    // 16 – Charger les collaborations existantes en arrière-plan
+    apiFetch<any[]>(`/guide/offers/${offer.id}/collaborations`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then((list) => {
+      setProviderOfferCollabs(
+        (list ?? []).filter((c: any) => c.status !== "declined").map((c: any) => ({
+          id: c.id,
+          userId: c.invited_user_id,
+          userName: c.invited_user_name ?? c.invited_user_id,
+          userType: c.invited_user_type ?? "provider",
+          section: c.section as CollabSection,
+          status: c.status,
+        }))
+      );
+    }).catch(() => {});
+
+    // 17 – Activer le mode édition et ouvrir le modal
     setOfferEditMode(true);
     setOfferEditId(offer.id);
     setModalOpen(true);
   }
 
   async function handleDeleteOffer() {
-    if (!viewOffer) return;
-    if (!confirm(`Supprimer l'offre "${viewOffer.title}" ? Cette action est irréversible.`)) return;
+    const targetId = offerEditId || viewOffer?.id;
+    if (!targetId) return;
+    const offerTitle = offers.find((o) => o.id === targetId)?.title ?? viewOffer?.title ?? "cette offre";
+    if (!confirm(`Supprimer l'offre "${offerTitle}" ? Cette action est irréversible.`)) return;
     setOfferDeleting(true);
     try {
-      await apiFetch(`/offers/${viewOffer.id}`, {
+      await apiFetch(`/offers/${targetId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      setOffers((prev) => prev.filter((o) => o.id !== viewOffer.id));
+      setOffers((prev) => prev.filter((o) => o.id !== targetId));
+      closeModal();
       closeEditModal();
     } catch {
       alert("Erreur lors de la suppression.");
@@ -1840,11 +2398,11 @@ export default function ProviderProfilePage() {
   // ── Offer card ─────────────────────────────────────────────────────────────
   const OfferCard = ({ offer }: { offer: Offer }) => {
     const typeData    = OFFER_TYPES.find((t) => t.value === offer.offer_type) ?? OFFER_TYPES[OFFER_TYPES.length - 1];
-    const statusLabel = offer.status === "approved" ? "Offre Active" : offer.status === "pending" ? "En attente" : "Refusée";
-    const statusClass = offer.status === "approved" ? "bg-primary text-white border-white/20" : offer.status === "pending" ? "bg-amber-500 text-white border-white/20" : "bg-red-500 text-white border-white/20";
+    const statusLabel = offer.status === "approved" ? "Active" : offer.status === "pending" ? "En attente" : offer.status === "draft" ? "Brouillon" : offer.status === "attente_publication" ? "Prêt à publier" : "Refusée";
+    const statusClass = offer.status === "approved" ? "bg-primary text-white border-white/20" : offer.status === "pending" ? "bg-amber-500 text-white border-white/20" : offer.status === "draft" ? "bg-slate-400 text-white border-white/20" : offer.status === "attente_publication" ? "bg-teal-600 text-white border-white/20" : "bg-red-500 text-white border-white/20";
 
     return (
-      <div className="bg-white rounded-3xl border border-slate-100/90 shadow-sm overflow-hidden hover:shadow-md transition-shadow duration-300">
+      <div id={`offer-${offer.id}`} className={`bg-white rounded-3xl border shadow-sm overflow-hidden hover:shadow-md transition-shadow duration-300 ${highlightOfferId === offer.id ? "border-primary ring-2 ring-primary/30 shadow-primary/20" : "border-slate-100/90"}`}>
         <div className="flex flex-col lg:flex-row">
           <div className="lg:w-2/5 relative min-h-[200px] bg-slate-50 flex items-center justify-center overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-100">
             {offer.cover_image ? (
@@ -1908,7 +2466,7 @@ export default function ProviderProfilePage() {
                 🌿 Évaluer la durabilité
               </button>
             )}
-            <div className="flex items-center justify-between border-t border-slate-50 pt-4 mt-3">
+            <div className="flex items-center justify-between border-t border-slate-50 pt-4 mt-3 gap-2 flex-wrap">
               <p className="text-[11px] font-bold text-slate-400">
                 {new Date(offer.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
               </p>
@@ -1933,6 +2491,30 @@ export default function ProviderProfilePage() {
             commentApiBase="/interactions"
           />
         )}
+        {offer.status === "attente_publication" && (
+          <div className="border-t border-primary/20 bg-primary/5 px-6 py-3 flex items-center gap-3">
+            <span className="material-symbols-outlined text-emerald-600 text-[18px]">pending_actions</span>
+            <p className="text-emerald-700 text-xs font-bold flex-1">Tous les collaborateurs ont complété leur partie. Vérifiez l&apos;offre et confirmez la publication.</p>
+            <button
+              onClick={async () => {
+                setPublishOfferLoading(true);
+                setPublishOfferModal({ offer, detail: null });
+                try {
+                  const detail = await apiFetch<OfferFull>(`/offers/${offer.id}`, { headers: { Authorization: `Bearer ${token}` } });
+                  setPublishOfferModal({ offer, detail });
+                } catch {
+                  setPublishOfferModal({ offer, detail: null });
+                } finally {
+                  setPublishOfferLoading(false);
+                }
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-slate-900 text-xs font-extrabold hover:bg-primary/90 transition-colors shrink-0"
+            >
+              <span className="material-symbols-outlined text-sm">check_circle</span>
+              Voir et confirmer
+            </button>
+          </div>
+        )}
       </div>
     );
   };
@@ -1940,6 +2522,64 @@ export default function ProviderProfilePage() {
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <>
+    {/* ══ MODAL CONFIRMATION PUBLICATION OFFRE ═════════════════════════════ */}
+    {publishOfferModal && (
+      <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="w-full max-w-3xl h-[90vh] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col relative">
+          <button onClick={() => setPublishOfferModal(null)}
+            className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 flex items-center justify-center transition-colors">
+            <X size={16} className="text-white" />
+          </button>
+          <div className="flex-1 overflow-y-auto">
+            {publishOfferLoading || !publishOfferModal.detail ? (
+              <div className="flex flex-col items-center justify-center h-full gap-3">
+                {publishOfferLoading ? (
+                  <>
+                    <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
+                    <p className="text-slate-400 text-sm">Chargement de l&apos;offre complète…</p>
+                  </>
+                ) : (
+                  <p className="text-slate-400 text-sm">Impossible de charger les détails de l&apos;offre.</p>
+                )}
+              </div>
+            ) : (
+              <OfferDetailView offer={publishOfferModal.detail} />
+            )}
+          </div>
+          <div className="shrink-0 border-t border-slate-100 bg-white px-6 py-4 flex items-center gap-3">
+            <button onClick={() => setPublishOfferModal(null)}
+              className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl border-2 border-slate-200 text-slate-500 font-bold text-sm hover:border-slate-300 transition-all">
+              Annuler
+            </button>
+            <button
+              disabled={publishOfferSaving || !publishOfferModal.detail}
+              onClick={async () => {
+                setPublishOfferSaving(true);
+                try {
+                  await apiFetch(`/offers/${publishOfferModal.offer.id}/publish`, {
+                    method: "POST", headers: { Authorization: `Bearer ${token}` },
+                  });
+                  setOffers((prev) => prev.map((o) => o.id === publishOfferModal!.offer.id ? { ...o, status: "approved" } : o));
+                  setPublishOfferModal(null);
+                } catch {
+                  alert("Erreur lors de la publication. Veuillez réessayer.");
+                } finally {
+                  setPublishOfferSaving(false);
+                }
+              }}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-slate-900 font-extrabold text-sm hover:bg-primary/90 transition-all disabled:opacity-60"
+            >
+              {publishOfferSaving ? (
+                <><div className="w-4 h-4 border-2 border-slate-900/30 border-t-slate-900 rounded-full animate-spin" />Publication en cours…</>
+              ) : (
+                <><span className="material-symbols-outlined text-base">rocket_launch</span>Confirmer la publication</>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* ══ ACTIVITY CREATE MODAL ════════════════════════════════════════════ */}
     {actModalOpen && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -2192,57 +2832,65 @@ export default function ProviderProfilePage() {
             )}
 
             {/* Disponibilité */}
-            {viewingCircuit.availability && (
-              <div>
-                <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Disponibilité</p>
-                <div className="bg-slate-50 rounded-2xl p-4 space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <Calendar size={13} className="text-primary shrink-0" />
-                    <span className="text-sm font-semibold text-slate-700">
-                      {AVAILABILITY_TYPES.find((a) => a.value === viewingCircuit.availability?.mode)?.label ?? viewingCircuit.availability.mode}
-                    </span>
-                  </div>
-                  {viewingCircuit.availability.mode === "specific" && viewingCircuit.availability.specific_dates && (
-                    <div className="flex flex-wrap gap-1.5 pl-5">
-                      {viewingCircuit.availability.specific_dates.map((slot) => {
-                        const [start, end] = slot.includes(':') ? slot.split(':') : [slot, slot];
-                        const fmt = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
-                        return (
-                          <span key={slot} className="flex items-center gap-1 text-[11px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-lg">
-                            <Calendar size={9} />{fmt(start)}{start !== end ? ` → ${fmt(end)}` : ''}
+            {viewingCircuit.availability && (() => {
+              const avSlot = oldAvailToOfferSlot(viewingCircuit.availability);
+              if (!avSlot.type) return null;
+              const FR_DAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+              const typeLabel = avSlot.type === 'specific' ? 'Dates spécifiques' : avSlot.type === 'range' ? 'Plage de dates' : avSlot.type === 'recurring' ? 'Récurrence hebdomadaire' : avSlot.type === 'season' ? 'Saison complète' : avSlot.type;
+              const firstTs = avSlot.time_slots ? (Object.values(avSlot.time_slots)[0]?.[0] ?? null) : null;
+              return (
+                <div>
+                  <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Disponibilité</p>
+                  <div className="bg-slate-50 rounded-2xl p-4 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Calendar size={13} className="text-primary shrink-0" />
+                      <span className="text-sm font-semibold text-slate-700">{typeLabel}</span>
+                    </div>
+                    {avSlot.type === 'specific' && (avSlot.dates?.length ?? 0) > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pl-5">
+                        {avSlot.dates!.map((d) => (
+                          <span key={d} className="flex items-center gap-1 text-[11px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-lg">
+                            <Calendar size={9} />{new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {viewingCircuit.availability.mode === "weekly" && viewingCircuit.availability.weekdays && (
-                    <div className="flex flex-wrap gap-1.5 pl-5">
-                      {viewingCircuit.availability.weekdays.map((d) => (
-                        <span key={d} className="text-[11px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-lg">
-                          {["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"][d]}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {viewingCircuit.availability.mode === "period" && (viewingCircuit.availability.avail_start || viewingCircuit.availability.avail_end) && (
-                    <p className="text-xs text-slate-500 pl-5">{viewingCircuit.availability.avail_start} → {viewingCircuit.availability.avail_end}</p>
-                  )}
-                  {viewingCircuit.availability.mode === "season" && viewingCircuit.availability.saisons && (
-                    <div className="flex flex-wrap gap-1.5 pl-5">
-                      {viewingCircuit.availability.saisons.map((s) => (
-                        <span key={s} className="text-[11px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-lg">{s}</span>
-                      ))}
-                    </div>
-                  )}
-                  {viewingCircuit.availability.heure_debut && viewingCircuit.availability.heure_fin && (
-                    <div className="flex items-center gap-2 pl-5">
-                      <Clock size={12} className="text-slate-400" />
-                      <span className="text-xs text-slate-500">{viewingCircuit.availability.heure_debut} – {viewingCircuit.availability.heure_fin}</span>
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    )}
+                    {avSlot.type === 'range' && (avSlot.start_date || avSlot.end_date) && (
+                      <div className="pl-5 space-y-1">
+                        <p className="text-xs text-slate-600 font-semibold">{avSlot.start_date}{avSlot.start_date && avSlot.end_date ? ' → ' : ''}{avSlot.end_date}</p>
+                        {(avSlot.days_of_week?.length ?? 0) > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {avSlot.days_of_week!.map((d) => (
+                              <span key={d} className="text-[11px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-lg">{FR_DAYS[Number(d)] ?? d}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {avSlot.type === 'recurring' && (avSlot.days_of_week?.length ?? 0) > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pl-5">
+                        {avSlot.days_of_week!.map((d) => (
+                          <span key={d} className="text-[11px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-lg">{FR_DAYS[Number(d)] ?? d}</span>
+                        ))}
+                      </div>
+                    )}
+                    {avSlot.type === 'season' && avSlot.label && (
+                      <div className="flex flex-wrap gap-1.5 pl-5">
+                        {avSlot.label.split(', ').map((s) => (
+                          <span key={s} className="text-[11px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-lg">{s}</span>
+                        ))}
+                      </div>
+                    )}
+                    {firstTs && (
+                      <div className="flex items-center gap-2 pl-5">
+                        <Clock size={12} className="text-slate-400" />
+                        <span className="text-xs text-slate-500">{firstTs.start} – {firstTs.end}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Hébergement */}
             {viewingCircuit.hebergement && (
@@ -2262,29 +2910,39 @@ export default function ProviderProfilePage() {
                       {viewingCircuit.hebergement.type === "same" && viewingCircuit.hebergement.etape && (() => {
                         const hb = viewingCircuit.hebergement!.etape!;
                         const hbCat = PROVIDER_SCHEMA.find((c) => c.value === "hebergement");
+                        // Lire depuis contribution prestataire en priorité
+                        const hbContrib = hb.collab_contribution as Record<string, any> | null | undefined;
+                        const collabTitre = hbContrib?.titre ?? hb.titre;
+                        const collabDest = hbContrib?.collab_destination ?? hb.collab_destination ?? hb.destination;
+                        const collabDescCourte = hbContrib?.description_courte ?? hb.description_courte;
+                        const collabDescLongue = hbContrib?.description_longue ?? hb.description_longue;
                         return (
                           <div className="space-y-3 pt-1">
                             {/* Titre + localisation */}
                             <div>
-                              <p className="text-sm font-extrabold text-slate-800">{hb.titre}</p>
-                              {hb.destination && (
+                              {collabTitre && <p className="text-sm font-extrabold text-slate-800">{collabTitre}</p>}
+                              {collabDest && (
                                 <div className="flex items-center gap-1 text-[11px] text-slate-400 mt-0.5">
-                                  <MapPin size={10} />{hb.destination}
+                                  <MapPin size={10} />{collabDest}
                                 </div>
                               )}
                             </div>
                             {/* Descriptions */}
-                            {hb.description_courte && <p className="text-xs text-slate-600">{hb.description_courte}</p>}
-                            {hb.description_longue && <p className="text-xs text-slate-500">{hb.description_longue}</p>}
+                            {collabDescCourte && <p className="text-xs text-slate-600">{collabDescCourte}</p>}
+                            {collabDescLongue && <p className="text-xs text-slate-500">{collabDescLongue}</p>}
                             {/* Sous-types avec photos + tarifs + détails par unité */}
                             {hb.subtypes.length > 0 && (
                               <div className="space-y-3">
                                 {hb.subtypes.map((sv) => {
                                   const stLabel = hbCat?.subtypes.find((s) => s.value === sv)?.label ?? sv;
-                                  const nbU = hb.nb_unites?.[sv] ?? 1;
-                                  const cfg = hb.form_config?.[sv] ?? {};
                                   const fieldConfig = OFFER_DETAIL_FIELDS[sv];
-                                  const hasPrice = cfg.prixGroupe || cfg.prixEnfant || cfg.suppPrivatisation;
+                                  // Lire la contribution HebergBlock du prestataire (format hb_${sv})
+                                  const collabContrib = hb.collab_contribution as Record<string, any> | null | undefined;
+                                  const svHeberg = collabContrib?.[`hb_${sv}`] as { nb_unites?: number; units?: Array<Record<string, any>>; global_pricing?: Record<string, any> } | undefined;
+                                  // nb_unites et tarif : contribution prestataire, puis données guide
+                                  const nbU = svHeberg?.nb_unites ?? hb.nb_unites?.[sv] ?? 1;
+                                  const gp = svHeberg?.global_pricing ?? {};
+                                  const hasPrice = gp.prix_groupe || gp.prix_enfant || gp.supp_priv;
 
                                   const renderFieldRows = (data: Record<string, any>) => {
                                     if (!fieldConfig || Object.keys(data).length === 0) return null;
@@ -2318,20 +2976,22 @@ export default function ProviderProfilePage() {
                                         <span className="text-[11px] font-extrabold text-slate-700">{stLabel}</span>
                                         <span className="text-[10px] font-bold text-slate-500">{nbU} unité{nbU > 1 ? 's' : ''}</span>
                                       </div>
-                                      {/* Tarification commune */}
+                                      {/* Tarification issue de la contribution prestataire */}
                                       {hasPrice && (
                                         <div className="flex flex-wrap gap-2 px-3 py-2 border-b border-slate-50">
-                                          {cfg.prixGroupe && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg">{cfg.prixGroupe} DT{cfg.nbPersonnesGroupe ? ` / ${cfg.nbPersonnesGroupe} pers.` : ''}</span>}
-                                          {cfg.prixEnfant && <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-lg">{cfg.prixEnfant} DT enfant{cfg.ageMaxEnfant ? ` (≤${cfg.ageMaxEnfant} ans)` : ''}</span>}
-                                          {cfg.suppPrivatisation && <span className="text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-100 px-2 py-0.5 rounded-lg">+{cfg.suppPrivatisation} DT privatisation</span>}
+                                          {gp.prix_groupe && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg">{gp.prix_groupe} DT{gp.nb_pers_groupe ? ` / ${gp.nb_pers_groupe} pers.` : ''}</span>}
+                                          {gp.prix_enfant && <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-lg">{gp.prix_enfant} DT enfant{gp.age_max_enfant ? ` (≤${gp.age_max_enfant} ans)` : ''}</span>}
+                                          {gp.supp_priv && <span className="text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-100 px-2 py-0.5 rounded-lg">+{gp.supp_priv} DT privatisation</span>}
                                         </div>
                                       )}
-                                      {/* Détails par unité */}
+                                      {/* Détails par unité — depuis HebergBlock (units[i]) */}
                                       <div className="divide-y divide-slate-50">
                                         {Array.from({ length: nbU }, (_, i) => {
-                                          const unitPhotos = hb.entity_photos?.[`${sv}_unit_${i}`] ?? (i === 0 ? (hb.entity_photos?.[sv] ?? []) : []);
-                                          const unitData: Record<string, any> =
-                                            ((hb.unit_details as Record<string, Array<Record<string, any>>>)?.[sv]?.[i] ?? {});
+                                          const svUnit = svHeberg?.units?.[i] ?? {};
+                                          const unitPhotos: string[] = Array.isArray(svUnit.photos) ? svUnit.photos : (hb.entity_photos?.[`${sv}_unit_${i}`] ?? (i === 0 ? (hb.entity_photos?.[sv] ?? []) : []));
+                                          const unitData: Record<string, any> = Object.keys(svUnit).length > 0
+                                            ? svUnit
+                                            : ((hb.unit_details as Record<string, Array<Record<string, any>>>)?.[sv]?.[i] ?? {});
                                           const unitName = unitData?.nom_chambre ?? unitData?.nom_suite ?? unitData?.nom_tente ?? unitData?.nom_bungalow;
                                           return (
                                             <div key={i} className="p-3 space-y-2">
@@ -2346,7 +3006,7 @@ export default function ProviderProfilePage() {
                                                 </div>
                                               )}
                                               {renderFieldRows(unitData) ?? (
-                                                <p className="text-[10px] text-slate-300 italic">Aucun détail renseigné — modifiez l'hébergement pour compléter.</p>
+                                                <p className="text-[10px] text-slate-300 italic">Aucun détail renseigné.</p>
                                               )}
                                             </div>
                                           );
@@ -2396,14 +3056,30 @@ export default function ProviderProfilePage() {
                               const coverPhoto = allPhotos[0] ?? etape.photos?.[0];
                               return (
                                 <div key={etape.id} className="p-4 space-y-3">
-                                  {/* Top row: categorie + horaires */}
+                                  {/* Top row: categorie + badge collab + horaires */}
                                   <div className="flex items-center justify-between gap-2">
-                                    <span className="text-[10px] font-black tracking-widest uppercase text-primary bg-primary/10 px-2 py-0.5 rounded-lg">{cat?.label ?? etape.categorie}</span>
-                                    {etape.heure_debut && etape.heure_fin && (
-                                      <span className="flex items-center gap-1 text-[10px] text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded-lg">
-                                        <Clock size={9} />{etape.heure_debut} – {etape.heure_fin}
-                                      </span>
-                                    )}
+                                    <span className="text-[10px] font-black tracking-widest uppercase text-primary bg-primary/10 px-2 py-0.5 rounded-lg">{cat?.label ?? DOMAINES[etape.categorie as string]?.label ?? etape.categorie}</span>
+                                    <div className="flex items-center gap-2">
+                                      {etape.collaborator_id && etape.collaborator_name && (() => {
+                                        const st = viewingCircuitCollabsMap[etape.id] ?? "pending";
+                                        const cls = st === "declined" ? "bg-red-50 border-red-200 text-red-600"
+                                          : st === "pending" ? "bg-amber-50 border-amber-200 text-amber-600"
+                                          : "bg-teal-50 border-teal-200 text-teal-700";
+                                        const icon = st === "declined" ? "cancel" : st === "pending" ? "schedule" : "check_circle";
+                                        const statusLabel = st === "declined" ? "Refusé" : st === "pending" ? "En attente" : null;
+                                        return (
+                                          <span className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full border ${cls}`}>
+                                            <span className="material-symbols-outlined text-[11px]">{icon}</span>
+                                            {statusLabel ? `${etape.collaborator_name} · ${statusLabel}` : etape.collaborator_name}
+                                          </span>
+                                        );
+                                      })()}
+                                      {etape.heure_debut && etape.heure_fin && (
+                                        <span className="flex items-center gap-1 text-[10px] text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded-lg">
+                                          <Clock size={9} />{etape.heure_debut} – {etape.heure_fin}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
 
                                   {/* Photo + titre + localisation */}
@@ -2428,6 +3104,24 @@ export default function ProviderProfilePage() {
                                   {etape.description_longue && (
                                     <p className="text-xs text-slate-500 leading-relaxed">{etape.description_longue}</p>
                                   )}
+
+                                  {/* Données de contribution du collaborateur */}
+                                  {(etape as any).collab_contribution && (() => {
+                                    const cd = (etape as any).collab_contribution as Record<string, any>;
+                                    const displayEntries = Object.entries(cd).filter(([k, v]) => !k.startsWith('collab_') && v && String(v).trim());
+                                    if (displayEntries.length === 0) return null;
+                                    return (
+                                      <div className="mt-2 p-3 bg-teal-50 border border-teal-100 rounded-xl space-y-1">
+                                        <p className="text-[9px] font-black text-teal-600 uppercase tracking-widest">Contribution</p>
+                                        {displayEntries.map(([k, v]) => (
+                                          <div key={k} className="text-[11px]">
+                                            <span className="text-slate-400 capitalize">{k.replace(/_/g, " ")} : </span>
+                                            <span className="text-slate-700 font-semibold">{String(v)}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    );
+                                  })()}
 
                                   {/* Sous-types avec leurs détails */}
                                   {etape.subtypes.length > 0 && (
@@ -2484,11 +3178,25 @@ export default function ProviderProfilePage() {
                                             <div className="divide-y divide-slate-100">
                                               {Array.from({ length: nbU }, (_, i) => {
                                                 const unitPhotos = etape.entity_photos?.[`${sv}_unit_${i}`] ?? (i === 0 ? (etape.entity_photos?.[sv] ?? []) : []);
-                                                const unitData: Record<string, any> = etape.categorie === 'hebergement'
+                                                const isEtapeHeberg = etape.categorie === 'hebergement';
+                                                const baseUnitData: Record<string, any> = isEtapeHeberg
                                                   ? ((etape.unit_details as Record<string, Array<Record<string, any>>>)?.[sv]?.[i] ?? {})
                                                   : (nbU === 1
                                                     ? ((etape.fields as Record<string, Record<string, any>>)?.[sv] ?? {})
                                                     : ((etape.unit_details as Record<string, Array<Record<string, any>>>)?.[sv]?.[i] ?? {}));
+                                                // Contribution prestataire avec préfixe ${sv}__ prime sur les champs statiques
+                                                const svPfxT = `${sv}__`;
+                                                const rawContribT = (etape as any).collab_contribution as Record<string, any> | undefined;
+                                                const svContribDataT: Record<string, any> = rawContribT
+                                                  ? Object.fromEntries(
+                                                      Object.entries(rawContribT)
+                                                        .filter(([k]) => k.startsWith(svPfxT))
+                                                        .map(([k, v]) => [k.slice(svPfxT.length), v])
+                                                    )
+                                                  : {};
+                                                const unitData: Record<string, any> = Object.keys(svContribDataT).length > 0
+                                                  ? svContribDataT
+                                                  : baseUnitData;
                                                 const unitName = unitData?.nom_chambre ?? unitData?.nom_suite ?? unitData?.nom_tente ?? unitData?.nom_bungalow ?? unitData?.nom;
                                                 return (
                                                   <div key={i} className="p-3 space-y-2">
@@ -2534,13 +3242,21 @@ export default function ProviderProfilePage() {
 
             {/* Carte du tracé */}
             {(() => {
-              const pts = viewingCircuit.etapes
-                .filter((e) => e.lat !== null && e.lng !== null)
+              const pts = (viewingCircuit.etapes as any[])
+                .filter((e) => (e.lat != null && e.lng != null) || (e.collab_lat != null && e.collab_lng != null))
                 .sort((a, b) => a.jour - b.jour)
-                .map((e) => ({ jour: e.jour, lat: e.lat as number, lng: e.lng as number, destination: e.destination }));
+                .map((e) => ({
+                  jour: e.jour,
+                  lat: (e.lat ?? e.collab_lat) as number,
+                  lng: (e.lng ?? e.collab_lng) as number,
+                  destination: e.destination ?? e.collab_destination ?? "",
+                }));
               const hbEtape = viewingCircuit.hebergement?.inclus && viewingCircuit.hebergement.type === "same" ? viewingCircuit.hebergement.etape : null;
-              const hb = (hbEtape?.lat && hbEtape?.lng)
-                ? { lat: hbEtape.lat as number, lng: hbEtape.lng as number, nom: hbEtape.titre || hbEtape.destination || "Hébergement" }
+              const hbContribMap = ((hbEtape as any)?.collab_contribution as Record<string, any> | undefined);
+              const hbMapLat = hbContribMap?.collab_lat != null ? Number(hbContribMap.collab_lat) : ((hbEtape as any)?.lat ?? undefined);
+              const hbMapLng = hbContribMap?.collab_lng != null ? Number(hbContribMap.collab_lng) : ((hbEtape as any)?.lng ?? undefined);
+              const hb = (hbMapLat && hbMapLng)
+                ? { lat: hbMapLat, lng: hbMapLng, nom: (hbContribMap?.titre ?? (hbEtape as any)?.titre) || hbContribMap?.collab_destination || (hbEtape as any)?.destination || "Hébergement" }
                 : undefined;
               if (pts.length === 0 && !hb) return null;
               return (
@@ -2553,19 +3269,72 @@ export default function ProviderProfilePage() {
           </div>
 
           {/* Footer */}
+          {viewingCircuit.status === "attente_publication" && publishCircuitError && (
+            <div className="px-6 pt-3 shrink-0">
+              <p className="text-xs text-red-600 font-semibold bg-red-50 border border-red-200 rounded-xl px-3 py-2">{publishCircuitError}</p>
+            </div>
+          )}
           <div className="px-6 py-4 border-t border-slate-100 shrink-0 flex items-center justify-between gap-3">
-            <button
-              onClick={() => { setViewingCircuit(null); openCircuitModal(viewingCircuit); }}
-              className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold rounded-2xl text-xs transition-all cursor-pointer"
-            >
-              <Edit3 size={12} />Modifier
-            </button>
-            <button
-              onClick={() => setViewingCircuit(null)}
-              className="px-5 py-2 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs transition-all cursor-pointer"
-            >
-              Fermer
-            </button>
+            <div className="flex items-center gap-2">
+              {viewingCircuit.status !== "approved" && (
+                <button
+                  onClick={() => { setViewingCircuit(null); openCircuitModal(viewingCircuit); }}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold rounded-2xl text-xs transition-all cursor-pointer"
+                >
+                  <Edit3 size={12} />Modifier
+                </button>
+              )}
+              <button
+                onClick={async () => {
+                  const msg = viewingCircuit.status === "approved"
+                    ? "Supprimer ce circuit publié ? Les créneaux agenda de tous les collaborateurs seront supprimés."
+                    : "Supprimer ce circuit ?";
+                  if (!confirm(msg)) return;
+                  try {
+                    await apiFetch(`/circuits/${viewingCircuit.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+                    setCircuits((prev) => prev.filter((c) => c.id !== viewingCircuit.id));
+                    setViewingCircuit(null);
+                  } catch {}
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-500 font-extrabold rounded-2xl text-xs transition-all cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-sm">delete</span>Supprimer
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setViewingCircuit(null); setPublishCircuitError(""); }}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold rounded-2xl text-xs transition-all cursor-pointer"
+              >
+                Fermer
+              </button>
+              {viewingCircuit.status === "attente_publication" && (
+                <button
+                  disabled={publishingCircuit}
+                  onClick={async () => {
+                    setPublishingCircuit(true);
+                    setPublishCircuitError("");
+                    try {
+                      await apiFetch(`/circuits/${viewingCircuit.id}/publish`, {
+                        method: "POST",
+                        headers: { Authorization: `Bearer ${token}` },
+                      });
+                      setCircuits((prev) => prev.map((c) => c.id === viewingCircuit.id ? { ...c, status: "approved" } : c));
+                      setViewingCircuit(null);
+                    } catch (e: any) {
+                      setPublishCircuitError(e?.message ?? "Erreur lors de la publication.");
+                    } finally {
+                      setPublishingCircuit(false);
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white font-extrabold rounded-2xl text-xs transition-all cursor-pointer disabled:opacity-60"
+                >
+                  {publishingCircuit
+                    ? <><div className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />Publication...</>
+                    : <><span className="material-symbols-outlined text-sm">rocket_launch</span>Publier le circuit</>}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -2581,7 +3350,7 @@ export default function ProviderProfilePage() {
               <Route size={20} className="text-primary" />
             </div>
             <div className="flex-1">
-              <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">{editingCircuit ? "Modifier le circuit" : "Nouveau circuit"}</h3>
+              <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">{editingCircuit ? (editingCircuit.status === "approved" ? "Circuit publié (lecture seule)" : "Modifier le circuit") : "Nouveau circuit"}</h3>
               <p className="text-slate-400 text-xs mt-0.5">Itinéraire multi-destinations avec activités, hébergements et plus</p>
             </div>
             <button onClick={() => setCircuitModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer">
@@ -2603,22 +3372,40 @@ export default function ProviderProfilePage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Nombre de jours</label>
-                  <input type="number" min="1" max="30"
-                    value={circuitNbJours} onChange={(e) => {
-                      const n = Math.max(1, Number(e.target.value));
-                      if (n < circuitNbJours) {
-                        setCircuitEtapes((prev) => prev.filter((ep) => ep.jour <= n));
-                        if (etapeFormOpen && etapeJour > n) { setEtapeFormOpen(false); resetEtapeForm(); }
-                      }
-                      setCircuitNbJours(n);
-                      // sync availability end date if in period mode
-                      if (circuitAvailMode === 'period' && circuitAvailStart) {
-                        const d = new Date(circuitAvailStart);
-                        d.setDate(d.getDate() + n - 1);
-                        setCircuitAvailEnd(d.toISOString().split('T')[0]);
-                      }
-                    }}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                  {(() => {
+                    const isRangeAuto     = circuitAvail.type === 'range' && !!circuitAvail.start_date && !!circuitAvail.end_date;
+                    const isSpecificAuto  = circuitAvail.type === 'specific' && (circuitAvail.dates?.length ?? 0) > 0;
+                    const isRecurringAuto = circuitAvail.type === 'recurring' && (circuitAvail.days_of_week?.length ?? 0) > 0;
+                    const isAuto = isRangeAuto || isSpecificAuto || isRecurringAuto;
+                    const autoLabel = isRangeAuto
+                      ? (circuitAvail.days_of_week?.length ? "jour(s) — jours filtrés dans la plage" : "jour(s) — calculé depuis les dates")
+                      : isSpecificAuto
+                        ? `jour(s) — ${circuitAvail.dates?.length ?? 0} date(s) sélectionnée(s)`
+                        : `jour(s) — ${circuitAvail.days_of_week?.length ?? 0} jour(s)/semaine`;
+                    return isAuto ? (
+                      <div className="flex items-center gap-2 w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-3">
+                        <span className="text-sm font-extrabold text-primary">{circuitNbJours}</span>
+                        <span className="text-xs text-slate-400 font-medium">{autoLabel}</span>
+                        <span className="material-symbols-outlined text-slate-300 text-base ml-auto">lock</span>
+                      </div>
+                    ) : (
+                      <input type="number" min="1" max="30"
+                        value={circuitNbJours} onChange={(e) => {
+                          const n = Math.max(1, Number(e.target.value));
+                          if (n < circuitNbJours) {
+                            setCircuitEtapes((prev) => prev.filter((ep) => ep.jour <= n));
+                            if (etapeFormOpen && etapeJour > n) { setEtapeFormOpen(false); resetEtapeForm(); }
+                          }
+                          setCircuitNbJours(n);
+                          if (circuitAvail.type === 'range' && circuitAvail.start_date) {
+                            const d = new Date(circuitAvail.start_date);
+                            d.setDate(d.getDate() + n - 1);
+                            setCircuitAvail((prev) => ({ ...prev, end_date: d.toISOString().split('T')[0] }));
+                          }
+                        }}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                    );
+                  })()}
                 </div>
                 <div>
                   <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Photo de couverture</label>
@@ -2651,141 +3438,7 @@ export default function ProviderProfilePage() {
             {/* ── Disponibilité du circuit ── */}
             <div className="space-y-3">
               <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Disponibilité</p>
-              <div className="grid grid-cols-2 gap-2">
-                {AVAILABILITY_TYPES.map((m) => (
-                  <button key={m.value} type="button" onClick={() => setCircuitAvailMode(m.value)}
-                    className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border-2 text-[10px] font-bold transition-all ${circuitAvailMode === m.value ? 'border-primary bg-primary/10 text-slate-900' : 'border-slate-200 bg-white text-slate-500 hover:border-primary/30'}`}>
-                    <span className={`material-symbols-outlined text-sm ${circuitAvailMode === m.value ? 'text-primary' : 'text-slate-400'}`}>{m.icon}</span>{m.label}
-                  </button>
-                ))}
-              </div>
-
-              {circuitAvailMode === 'specific' && (
-                <div className="space-y-1.5">
-                  <p className="text-[10px] text-slate-400 font-semibold">
-                    Choisissez la <span className="font-black text-slate-500">date de départ</span> — le circuit durera automatiquement {circuitNbJours} jour{circuitNbJours > 1 ? 's' : ''}.
-                  </p>
-                  <div className="flex gap-2">
-                    <input type="date" value={circuitAvailNewDate} onChange={(e) => setCircuitAvailNewDate(e.target.value)}
-                      className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                    <button type="button" onClick={() => {
-                      if (!circuitAvailNewDate) return;
-                      if (circuitAvailDates.includes(circuitAvailNewDate)) return;
-                      // compute end date = start + nb_jours - 1
-                      const start = new Date(circuitAvailNewDate);
-                      const end = new Date(start);
-                      end.setDate(end.getDate() + circuitNbJours - 1);
-                      const endStr = end.toISOString().split('T')[0];
-                      // store as "startDate:endDate" to carry the range
-                      const slot = `${circuitAvailNewDate}:${endStr}`;
-                      if (!circuitAvailDates.includes(slot)) {
-                        setCircuitAvailDates((prev) => [...prev, slot].sort());
-                        setCircuitAvailNewDate("");
-                      }
-                    }} className="px-3 py-2 bg-primary text-white rounded-xl text-xs font-extrabold hover:bg-primary/90">Ajouter</button>
-                  </div>
-                  {circuitAvailDates.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {circuitAvailDates.map((slot) => {
-                        const [start, end] = slot.includes(':') ? slot.split(':') : [slot, slot];
-                        const fmt = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-                        return (
-                          <span key={slot} className="flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 text-primary rounded-full text-[10px] font-bold border border-primary/20">
-                            <Calendar size={9} />{fmt(start)}{start !== end ? ` → ${fmt(end)}` : ''}
-                            <button type="button" onClick={() => setCircuitAvailDates((prev) => prev.filter((x) => x !== slot))}><X size={8} /></button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {circuitAvailMode === 'weekly' && (
-                <div className="space-y-1.5">
-                  <div className="flex gap-1">
-                    {['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map((day, i) => (
-                      <button key={i} type="button"
-                        onClick={() => setCircuitAvailWeekdays((prev) => prev.includes(i) ? prev.filter((d) => d !== i) : [...prev, i])}
-                        className={`flex-1 py-1.5 rounded-lg text-[9px] font-black border-2 transition-all ${circuitAvailWeekdays.includes(i) ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{day}</button>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début</label><input type="date" value={circuitAvailStart} onChange={(e) => setCircuitAvailStart(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                    <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin</label><input type="date" value={circuitAvailEnd} onChange={(e) => setCircuitAvailEnd(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                  </div>
-                </div>
-              )}
-
-              {circuitAvailMode === 'period' && (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Début *</label>
-                      <input type="date" value={circuitAvailStart}
-                        onChange={(e) => {
-                          const start = e.target.value;
-                          setCircuitAvailStart(start);
-                          // auto-calculate end from nb_jours
-                          if (start && circuitNbJours > 0) {
-                            const d = new Date(start);
-                            d.setDate(d.getDate() + circuitNbJours - 1);
-                            setCircuitAvailEnd(d.toISOString().split('T')[0]);
-                          }
-                        }}
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Fin *</label>
-                      <input type="date" value={circuitAvailEnd}
-                        onChange={(e) => {
-                          const end = e.target.value;
-                          setCircuitAvailEnd(end);
-                          // sync nb_jours from the date range
-                          if (circuitAvailStart && end && end >= circuitAvailStart) {
-                            const diff = Math.round((new Date(end).getTime() - new Date(circuitAvailStart).getTime()) / 86400000) + 1;
-                            if (diff !== circuitNbJours) {
-                              if (diff < circuitNbJours) setCircuitEtapes((prev) => prev.filter((ep) => ep.jour <= diff));
-                              setCircuitNbJours(diff);
-                            }
-                          }
-                        }}
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                    </div>
-                  </div>
-                  {circuitAvailStart && circuitAvailEnd && (
-                    <p className="text-[10px] text-primary font-bold">
-                      Circuit de {circuitNbJours} jour{circuitNbJours > 1 ? 's' : ''} · {circuitAvailStart} → {circuitAvailEnd}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {circuitAvailMode === 'on_demand' && (
-                <div className="flex gap-2">
-                  {['24h','48h','72h'].map((d) => (
-                    <button key={d} type="button" onClick={() => setCircuitAvailDelai(d)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border-2 transition-all ${circuitAvailDelai === d ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 bg-white text-slate-500'}`}>{d}</button>
-                  ))}
-                </div>
-              )}
-
-              {circuitAvailMode === 'season' && (
-                <div className="flex gap-1.5">
-                  {SAISONS.map((s) => (
-                    <button key={s} type="button"
-                      onClick={() => setCircuitAvailSaisons((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s])}
-                      className={`flex-1 py-1.5 rounded-xl text-[9px] font-black border-2 transition-all ${circuitAvailSaisons.includes(s) ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-500'}`}>{s}</button>
-                  ))}
-                </div>
-              )}
-
-              {circuitAvailMode !== 'on_demand' && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Heure début</label><input type="time" value={circuitAvailHDebut} onChange={(e) => setCircuitAvailHDebut(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                  <div><label className="text-[9px] font-black text-slate-400 uppercase mb-0.5 block">Heure fin</label><input type="time" value={circuitAvailHFin} onChange={(e) => setCircuitAvailHFin(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
-                </div>
-              )}
+              <OfferAvailPicker value={circuitAvail} onChange={setCircuitAvail} hideTimeSlots />
             </div>
 
             {/* ── Hébergement du circuit ── */}
@@ -2851,6 +3504,34 @@ export default function ProviderProfilePage() {
                   ? (circuitHebergEtape ? [circuitHebergEtape] : [])
                   : circuitEtapes.filter((e) => e.jour === jour);
                 const isFormOpenForThisJour = etapeFormOpen && etapeJour === jour;
+                const selfPossible = orgActivities.some((a) => a.category === etapeCategorie);
+                const collabSearchMode = etapeMode === "guidage" ? "guide" : etapeCategorie;
+
+                // Slot de disponibilité de l'étape pour la vérification de conflits du guide
+                const etapeConflictAvail = (() => {
+                  if (isCircuitHebergSlot) return undefined;
+                  let date: string | null = null;
+                  if (circuitAvail.type === 'range' && circuitAvail.start_date) {
+                    const d = new Date(circuitAvail.start_date + 'T12:00:00');
+                    d.setDate(d.getDate() + jour - 1);
+                    date = d.toISOString().split('T')[0];
+                  } else if (circuitAvail.type === 'specific' && circuitAvail.dates?.length) {
+                    const sorted = [...circuitAvail.dates].sort();
+                    date = sorted[jour - 1] ?? null;
+                  }
+                  if (!date) return undefined;
+                  return {
+                    type: "specific" as const,
+                    dates: [date],
+                    time_slots: etapeHeureDebut && etapeHeureFin
+                      ? { [date]: [{ start: etapeHeureDebut, end: etapeHeureFin }] }
+                      : null,
+                  };
+                })();
+
+                const showCollabSearch = isCircuitHebergSlot
+                  ? (!selfPossible || (etapeAuthorType === "provider" && etapeSubtypes.length > 0))
+                  : (etapeMode === "guidage" || (etapeMode === "service" && etapeCategorie && (!selfPossible || etapeAuthorType === "provider")));
 
                 return (
                   <div key={jour} className="space-y-2">
@@ -2874,50 +3555,164 @@ export default function ProviderProfilePage() {
                       const actCat = PROVIDER_SCHEMA.find((c) => c.value === act.categorie);
                       const actStLabels = act.subtypes.map((sv) => actCat?.subtypes.find((s) => s.value === sv)?.label ?? sv);
                       const firstPhoto = Object.values(act.entity_photos ?? {}).flat()[0] ?? act.photos?.[0];
+                      const collabEntry  = circuitEtapeStatusMap.get(act.id);
+                      const hasCollab    = !!act.collaborator_id && act.author_type !== "self";
+                      const isEtapeLocked = collabEntry?.status === "completed";
+                      const isPublished   = editingCircuit?.status === "approved";
+                      const isEditingSchedule = editingCollabSchedule === act.id;
+                      const collabStatusMeta: Record<string, { label: string; cls: string }> = {
+                        pending:   { label: "En attente",         cls: "bg-amber-100 text-amber-700" },
+                        accepted:  { label: "Accepté",            cls: "bg-blue-100 text-blue-700" },
+                        completed: { label: "Contribution reçue", cls: "bg-teal-100 text-teal-700" },
+                        declined:  { label: "Refusé",             cls: "bg-red-100 text-red-600" },
+                      };
+                      const sMeta = collabEntry?.status ? (collabStatusMeta[collabEntry.status] ?? { label: collabEntry.status, cls: "bg-slate-100 text-slate-500" }) : null;
                       return (
-                        <div key={act.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100 ml-9">
-                          {firstPhoto && <img src={firstPhoto} alt="" className="w-10 h-10 rounded-xl object-cover shrink-0" />}
-                          <div className="flex-1 min-w-0">
-                            {(act.heure_debut || act.heure_fin) && (
-                              <p className="text-[10px] font-black text-primary mb-0.5">{act.heure_debut || "?"} → {act.heure_fin || "?"}</p>
-                            )}
-                            <p className="text-sm font-extrabold text-slate-800 truncate">{act.titre || act.destination}</p>
-                            <p className="text-[10px] text-slate-400 font-semibold truncate">{act.destination} · {actCat?.label}{actStLabels.length > 0 && ` · ${actStLabels.join(", ")}`}</p>
-                            {act.prix != null && <p className="text-[10px] font-black text-primary mt-0.5">{act.prix} TND</p>}
+                        <div key={act.id} className={`rounded-2xl border ml-9 overflow-hidden ${hasCollab ? "bg-green-50/40 border-green-200/60" : "bg-slate-50 border-slate-100"}`}>
+                          <div className="flex items-center gap-3 p-3">
+                            {firstPhoto && <img src={firstPhoto} alt="" className="w-10 h-10 rounded-xl object-cover shrink-0" />}
+                            <div className="flex-1 min-w-0">
+                              {(act.heure_debut || act.heure_fin) && !isEditingSchedule && (
+                                <p className="text-[10px] font-black text-primary mb-0.5">{act.heure_debut || "?"} → {act.heure_fin || "?"}</p>
+                              )}
+                              {/* Éditeur horaire inline (collab étapes) */}
+                              {isEditingSchedule && (
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <input type="time" value={collabSchedStart} onChange={(e) => setCollabSchedStart(e.target.value)}
+                                    className="border border-primary/40 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary w-24" />
+                                  <span className="text-[10px] text-slate-400 font-bold">→</span>
+                                  <input type="time" value={collabSchedEnd} onChange={(e) => setCollabSchedEnd(e.target.value)}
+                                    className="border border-primary/40 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary w-24" />
+                                  <button type="button" onClick={async () => {
+                                    // Appliquer localement
+                                    setCircuitEtapes((prev) => prev.map((e) => e.id === act.id ? { ...e, heure_debut: collabSchedStart, heure_fin: collabSchedEnd } : e));
+                                    setEditingCollabSchedule(null);
+                                    // Vérifier conflit agenda si la collab est connue
+                                    const cEntry = circuitEtapeStatusMap.get(act.id);
+                                    if (cEntry?.collab_id && editingCircuit?.id) {
+                                      try {
+                                        const res = await apiFetch<{hasConflict: boolean}>(`/circuits/${editingCircuit.id}/collaborations/${cEntry.collab_id}/sync-etape-schedule`, {
+                                          method: "POST",
+                                          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                                          body: JSON.stringify({ heure_debut: collabSchedStart, heure_fin: collabSchedEnd }),
+                                        });
+                                        if (res?.hasConflict) {
+                                          setCollabScheduleConflicts((prev) => new Set([...prev, act.id]));
+                                        } else {
+                                          setCollabScheduleConflicts((prev) => { const s = new Set(prev); s.delete(act.id); return s; });
+                                        }
+                                      } catch { /* non bloquant */ }
+                                    }
+                                  }} className="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center shrink-0 cursor-pointer">
+                                    <Check size={10} />
+                                  </button>
+                                  <button type="button" onClick={() => setEditingCollabSchedule(null)}
+                                    className="w-5 h-5 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center shrink-0 cursor-pointer">
+                                    <X size={9} />
+                                  </button>
+                                </div>
+                              )}
+                              <p className="text-sm font-extrabold text-slate-800 truncate">{act.titre || act.destination}</p>
+                              <p className="text-[10px] text-slate-400 font-semibold truncate">{act.destination} · {actCat?.label}{actStLabels.length > 0 && ` · ${actStLabels.join(", ")}`}</p>
+                              {act.prix != null && <p className="text-[10px] font-black text-primary mt-0.5">{act.prix} TND</p>}
+                            </div>
+                            <div className="flex flex-col gap-1 shrink-0">
+                              {hasCollab ? (
+                                /* Pour les étapes collab : bouton crayon = édition horaire uniquement */
+                                !isPublished && !isEditingSchedule && (
+                                  <button type="button" onClick={() => {
+                                    setCollabSchedStart(act.heure_debut ?? "");
+                                    setCollabSchedEnd(act.heure_fin ?? "");
+                                    setEditingCollabSchedule(act.id);
+                                  }} className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-primary flex items-center justify-center transition-colors cursor-pointer" title="Modifier l'horaire">
+                                    <Edit3 size={10} />
+                                  </button>
+                                )
+                              ) : (
+                                /* Étapes normales : bouton crayon = formulaire complet */
+                                <button type="button" onClick={() => {
+                                  if (isCircuitHebergSlot) { openCircuitHebergConfig(); return; }
+                                  resetEtapeForm();
+                                  setEditingEtapeId(act.id);
+                                  setEtapeJour(jour);
+                                  setEtapeDestination(act.destination);
+                                  setEtapeAddress(act.address);
+                                  setEtapeLat(act.lat); setEtapeLng(act.lng);
+                                  setEtapeCategorie(act.categorie);
+                                  setEtapeSubtypes(act.subtypes);
+                                  setEtapeTitre(act.titre);
+                                  setEtapeDescCourte(act.description_courte);
+                                  setEtapeDescLongue(act.description_longue);
+                                  setEtapePrix(act.prix?.toString() ?? '');
+                                  setEtapeHeureDebut(act.heure_debut ?? '');
+                                  setEtapeHeureFin(act.heure_fin ?? '');
+                                  setEtapeSubtypeDetails(act.fields ?? {});
+                                  setEtapeSubtypeUnitDetails(act.unit_details ?? {});
+                                  setEtapeSubtypeNbUnites(act.nb_unites ?? {});
+                                  setEtapeSubtypeFormConfig(act.form_config ?? {});
+                                  setEtapeEntityExistingImages(act.entity_photos ?? {});
+                                  setEtapeAuthorType(act.author_type ?? "self");
+                                  setEtapeCollabSelected(null);
+                                  setEtapeMode(act.etape_mode ?? "service");
+                                  if (act.etape_mode === "guidage" && act.guidage_data) {
+                                    setEtapeGuidageData(act.guidage_data);
+                                  } else {
+                                    setEtapeGuidageData({ categorie: "", sousType: "", details: { _mode: "guide" } });
+                                  }
+                                  setEtapeFormOpen(true); setEtapeFormError('');
+                                }} className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-primary flex items-center justify-center transition-colors cursor-pointer">
+                                  <Edit3 size={10} />
+                                </button>
+                              )}
+                              {!isPublished && !hasCollab && (
+                                <button type="button" onClick={() => {
+                                  if (isCircuitHebergSlot) { setCircuitHebergEtape(null); return; }
+                                  setCircuitEtapes((prev) => prev.filter((e) => e.id !== act.id));
+                                }} className="w-6 h-6 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 flex items-center justify-center transition-colors cursor-pointer" title="Supprimer l'étape">
+                                  <X size={10} />
+                                </button>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex flex-col gap-1 shrink-0">
-                            <button type="button" onClick={() => {
-                              if (isCircuitHebergSlot) { openCircuitHebergConfig(); return; }
-                              resetEtapeForm();
-                              setEditingEtapeId(act.id);
-                              setEtapeJour(jour);
-                              setEtapeDestination(act.destination);
-                              setEtapeAddress(act.address);
-                              setEtapeLat(act.lat); setEtapeLng(act.lng);
-                              setEtapeCategorie(act.categorie);
-                              setEtapeSubtypes(act.subtypes);
-                              setEtapeTitre(act.titre);
-                              setEtapeDescCourte(act.description_courte);
-                              setEtapeDescLongue(act.description_longue);
-                              setEtapePrix(act.prix?.toString() ?? '');
-                              setEtapeHeureDebut(act.heure_debut ?? '');
-                              setEtapeHeureFin(act.heure_fin ?? '');
-                              setEtapeSubtypeDetails(act.fields ?? {});
-                              setEtapeSubtypeUnitDetails(act.unit_details ?? {});
-                              setEtapeSubtypeNbUnites(act.nb_unites ?? {});
-                              setEtapeSubtypeFormConfig(act.form_config ?? {});
-                              setEtapeEntityExistingImages(act.entity_photos ?? {});
-                              setEtapeFormOpen(true); setEtapeFormError('');
-                            }} className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-primary flex items-center justify-center transition-colors cursor-pointer">
-                              <Edit3 size={10} />
-                            </button>
-                            <button type="button" onClick={() => {
-                              if (isCircuitHebergSlot) { setCircuitHebergEtape(null); return; }
-                              setCircuitEtapes((prev) => prev.filter((e) => e.id !== act.id));
-                            }} className="w-6 h-6 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 flex items-center justify-center transition-colors cursor-pointer">
-                              <X size={10} />
-                            </button>
-                          </div>
+                          {/* Ligne collaborateur */}
+                          {hasCollab && (
+                            <div className={`flex items-center gap-2 px-3 py-2 border-t ${collabScheduleConflicts.has(act.id) ? "border-red-200/60 bg-red-50/60" : "border-green-200/50 bg-green-50/60"}`}>
+                              <span className={`material-symbols-outlined text-[13px] ${collabScheduleConflicts.has(act.id) ? "text-red-500" : "text-green-600"}`}>
+                                {collabScheduleConflicts.has(act.id) ? "warning" : "lock"}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[11px] font-bold text-slate-700 truncate">
+                                  Géré par{" "}
+                                  <span className={`font-extrabold ${collabScheduleConflicts.has(act.id) ? "text-red-700" : "text-green-700"}`}>{act.collaborator_name ?? "collaborateur"}</span>
+                                </p>
+                                {collabScheduleConflicts.has(act.id) && (
+                                  <p className="text-[9px] font-bold text-red-600 mt-0.5">Conflit d'agenda détecté — collaborateur notifié</p>
+                                )}
+                              </div>
+                              {sMeta && !collabScheduleConflicts.has(act.id) && (
+                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0 ${sMeta.cls}`}>
+                                  {sMeta.label}
+                                </span>
+                              )}
+                              {collabScheduleConflicts.has(act.id) && (
+                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0 bg-red-100 text-red-600">
+                                  ⚠ Conflit
+                                </span>
+                              )}
+                              {!isPublished && (
+                                <button type="button" onClick={() => {
+                                  if (isCircuitHebergSlot) { setCircuitHebergEtape(null); return; }
+                                  // Enregistrer le kick pour l'exécuter après le save
+                                  if (collabEntry?.collab_id) {
+                                    setPendingKicks((prev) => [...prev, { collabId: collabEntry.collab_id, circuitId: editingCircuit!.id }]);
+                                  }
+                                  setCircuitEtapes((prev) => prev.filter((e) => e.id !== act.id));
+                                }} className="w-5 h-5 rounded-full bg-red-100 hover:bg-red-200 text-red-500 flex items-center justify-center transition-colors cursor-pointer shrink-0" title="Retirer le collaborateur (après enregistrement)">
+                                  <X size={9} />
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -2977,61 +3772,46 @@ export default function ProviderProfilePage() {
                             className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-slate-300" />
                         </div>}
 
-                  {/* Carte */}
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">
-                      Localisation sur la carte *
-                      {etapeLat && <span className="ml-2 text-primary font-black">✓ Positionnée</span>}
-                    </label>
-                    <MapPicker
-                      lat={etapeLat}
-                      lng={etapeLng}
-                      onPick={(lat, lng, address) => {
-                        setEtapeLat(lat); setEtapeLng(lng); setEtapeAddress(address);
-                        if (!etapeDestination) setEtapeDestination(address.split(",")[0].trim());
-                        setEtapeFormError("");
-                      }}
-                    />
-                    {etapeAddress && (
-                      <p className="text-[10px] text-slate-400 mt-1 truncate">{etapeAddress}</p>
-                    )}
-                  </div>
-
-                  {/* Catégorie — masquée pour hébergement circuit (pré-défini à 'hebergement') */}
-                  {!isCircuitHebergSlot && <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Type d'activité *</label>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {PROVIDER_SCHEMA.filter((cat) => !(circuitHebergInclus && circuitHebergType === 'same' && cat.value === 'hebergement')).map((cat) => {
-                        const active = etapeCategorie === cat.value;
-                        return (
-                          <button key={cat.value} type="button"
-                            onClick={() => { setEtapeCategorie(active ? "" : cat.value); setEtapeSubtypes([]); setEtapeFields({}); setEtapeFormError(""); }}
-                            className={`flex flex-col items-center justify-center gap-1 py-2.5 px-1 rounded-xl border-2 text-center transition-all cursor-pointer ${active ? "bg-primary/10 border-primary text-slate-900 shadow-sm" : "bg-white border-slate-200 text-slate-500 hover:border-primary/40"}`}>
-                            <span className={`material-symbols-outlined text-base ${active ? "text-primary" : "text-slate-400"}`}>{cat.icon}</span>
-                            <span className="text-[9px] font-extrabold leading-tight">{cat.label}</span>
-                          </button>
-                        );
-                      })}
+                  {/* Carte — cachée si le collaborateur gère la localisation */}
+                  {(!showCollabSearch || isCircuitHebergSlot) ? (
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">
+                        Localisation sur la carte *
+                        {etapeLat && <span className="ml-2 text-primary font-black">✓ Positionnée</span>}
+                      </label>
+                      <MapPicker
+                        lat={etapeLat}
+                        lng={etapeLng}
+                        onPick={(lat, lng, address) => {
+                          setEtapeLat(lat); setEtapeLng(lng); setEtapeAddress(address);
+                          if (!etapeDestination) setEtapeDestination(address.split(",")[0].trim());
+                          setEtapeFormError("");
+                        }}
+                      />
+                      {etapeAddress && (
+                        <p className="text-[10px] text-slate-400 mt-1 truncate">{etapeAddress}</p>
+                      )}
                     </div>
-                  </div>}
+                  ) : (
+                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-400">
+                      <span className="material-symbols-outlined text-[16px] text-slate-300">location_on</span>
+                      <span className="text-[11px] font-semibold">La localisation sera renseignée par votre collaborateur</span>
+                    </div>
+                  )}
 
-                  {/* Sous-types — multi-sélection */}
-                  {etapeCategorie && (() => {
-                    const cat = PROVIDER_SCHEMA.find((c) => c.value === etapeCategorie);
+                  {/* ── Hébergement circuit : sous-types ── */}
+                  {isCircuitHebergSlot && (() => {
+                    const cat = PROVIDER_SCHEMA.find((c) => c.value === 'hebergement');
                     if (!cat?.subtypes.length) return null;
                     return (
                       <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Sous-types *</label>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Type d'hébergement *</label>
                         <div className="flex flex-wrap gap-1.5">
                           {cat.subtypes.map((st) => {
                             const sel = etapeSubtypes.includes(st.value);
                             return (
                               <button key={st.value} type="button"
-                                onClick={() => {
-                                  setEtapeSubtypes((prev) => sel ? prev.filter((v) => v !== st.value) : [...prev, st.value]);
-                                  if (sel) setEtapeFields((prev) => { const n = { ...prev }; delete n[st.value]; return n; });
-                                  setEtapeFormError("");
-                                }}
+                                onClick={() => { setEtapeSubtypes((prev) => sel ? prev.filter((v) => v !== st.value) : [...prev, st.value]); if (sel) setEtapeFields((prev) => { const n = { ...prev }; delete n[st.value]; return n; }); setEtapeFormError(""); }}
                                 className={`px-3 py-1.5 rounded-xl border-2 text-[11px] font-extrabold transition-all cursor-pointer ${sel ? "bg-primary/10 border-primary text-primary" : "bg-white border-slate-200 text-slate-600 hover:border-primary/40"}`}>
                                 {st.label}
                               </button>
@@ -3042,8 +3822,135 @@ export default function ProviderProfilePage() {
                     );
                   })()}
 
-                  {/* ── Champs communs (identiques à toute offre) ── */}
-                  {etapeSubtypes.length > 0 && (
+                  {/* ── Type d'activité + données + collaborateur (après carte) ── */}
+                  {!isCircuitHebergSlot && (() => {
+                    return (
+                      <div className="space-y-3 p-4 bg-white/70 border border-slate-200 rounded-2xl">
+                        {/* Sélecteur Guidage | Service prestataire */}
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Type d'activité de l'étape</label>
+                          <div className="flex gap-2">
+                            {([["service","Service prestataire","store"],["guidage","Guidage","hiking"]] as const).map(([val, lbl, ico]) => (
+                              <button key={val} type="button"
+                                onClick={() => {
+                                  setEtapeMode(val);
+                                  setEtapeCollabSelected(null); setEtapeCollabSearch(""); setEtapeCollabResults([]); setEtapeCollabPanelOpen(false);
+                                  if (val === "guidage") { setEtapeAuthorType("guide"); setEtapeCategorie(""); setEtapeSubtypes([]); setEtapeFields({}); }
+                                  else { setEtapeAuthorType("self"); setEtapeGuidageData({ categorie: "", sousType: "", details: { _mode: "guide" } }); }
+                                }}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-xs font-black transition-all cursor-pointer ${etapeMode === val ? "border-primary bg-primary/10 text-primary" : "border-slate-200 bg-white text-slate-500 hover:border-primary/30"}`}>
+                                <span className="material-symbols-outlined text-base">{ico}</span>{lbl}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Mode guidage : domaine + expertises (le guide invité gère le reste) */}
+                        {etapeMode === "guidage" && (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Domaine de guidage *</label>
+                              <div className="grid grid-cols-2 gap-2">
+                                {Object.entries(DOMAINES).map(([key, cfg]) => {
+                                  const active = etapeGuidageData.categorie === key;
+                                  return (
+                                    <button key={key} type="button"
+                                      onClick={() => { setEtapeGuidageData((prev) => ({ ...prev, categorie: active ? "" : key, details: { ...prev.details, expertises: [] } })); setEtapeFormError(""); }}
+                                      className={`flex items-center gap-2.5 px-3 py-3 rounded-2xl border-2 text-left transition-all cursor-pointer ${active ? "bg-primary/10 border-primary shadow-sm" : "border-slate-200 bg-white hover:border-primary/30 hover:bg-primary/5"}`}>
+                                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${active ? "bg-primary/20" : "bg-slate-100"}`}>
+                                        <span className={`material-symbols-outlined text-base ${active ? "text-primary" : "text-slate-500"}`}>{cfg.icon}</span>
+                                      </div>
+                                      <p className={`flex-1 font-extrabold text-xs leading-tight ${active ? "text-slate-900" : "text-slate-700"}`}>{cfg.label}</p>
+                                      {active && <span className="material-symbols-outlined text-primary text-base shrink-0">check_circle</span>}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Expertises du domaine sélectionné */}
+                            {etapeGuidageData.categorie && (() => {
+                              const domaine = DOMAINES[etapeGuidageData.categorie];
+                              if (!domaine?.expertises?.length) return null;
+                              const selected: string[] = etapeGuidageData.details?.expertises ?? [];
+                              return (
+                                <div>
+                                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">
+                                    Expertises souhaitées <span className="text-slate-300 normal-case font-medium">(optionnel)</span>
+                                  </label>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {domaine.expertises.map((exp) => {
+                                      const sel = selected.includes(exp);
+                                      return (
+                                        <button key={exp} type="button"
+                                          onClick={() => {
+                                            const next = sel ? selected.filter((e) => e !== exp) : [...selected, exp];
+                                            setEtapeGuidageData((prev) => ({ ...prev, details: { ...prev.details, expertises: next } }));
+                                          }}
+                                          className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer ${sel ? "bg-primary/10 border-primary text-primary" : "bg-white border-slate-200 text-slate-500 hover:border-primary/30 hover:text-slate-700"}`}>
+                                          {exp}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+
+                        {/* Mode service : catégorie */}
+                        {etapeMode === "service" && (
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Catégorie de service *</label>
+                            <div className="grid grid-cols-4 gap-1.5">
+                              {PROVIDER_SCHEMA.filter((cat) => !(circuitHebergInclus && circuitHebergType === 'same' && cat.value === 'hebergement')).map((cat) => {
+                                const active = etapeCategorie === cat.value;
+                                const hasCat = orgActivities.some((a) => a.category === cat.value);
+                                return (
+                                  <button key={cat.value} type="button"
+                                    onClick={() => { setEtapeCategorie(active ? "" : cat.value); setEtapeSubtypes([]); setEtapeFields({}); setEtapeFormError(""); setEtapeCollabPanelOpen(false); if (active) { setEtapeAuthorType("self"); setEtapeCollabSelected(null); } else { setEtapeAuthorType(hasCat ? "self" : "provider"); setEtapeCollabSelected(null); } }}
+                                    className={`flex flex-col items-center justify-center gap-1 py-2.5 px-1 rounded-xl border-2 text-center transition-all cursor-pointer ${active ? "bg-primary/10 border-primary text-slate-900 shadow-sm" : "bg-white border-slate-200 text-slate-500 hover:border-primary/40"}`}>
+                                    <span className={`material-symbols-outlined text-base ${active ? "text-primary" : "text-slate-400"}`}>{cat.icon}</span>
+                                    <span className="text-[9px] font-extrabold leading-tight">{cat.label}</span>
+                                    {hasCat && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <p className="text-[9px] text-slate-400 mt-1">• point vert = dans vos activités</p>
+                          </div>
+                        )}
+
+                        {/* Mode service : sous-types */}
+                        {etapeMode === "service" && etapeCategorie && (() => {
+                          const cat = PROVIDER_SCHEMA.find((c) => c.value === etapeCategorie);
+                          if (!cat?.subtypes.length) return null;
+                          return (
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Sous-types *</label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {cat.subtypes.map((st) => {
+                                  const sel = etapeSubtypes.includes(st.value);
+                                  return (
+                                    <button key={st.value} type="button"
+                                      onClick={() => { setEtapeSubtypes((prev) => sel ? prev.filter((v) => v !== st.value) : [...prev, st.value]); if (sel) setEtapeFields((prev) => { const n = { ...prev }; delete n[st.value]; return n; }); setEtapeFormError(""); }}
+                                      className={`px-3 py-1.5 rounded-xl border-2 text-[11px] font-extrabold transition-all cursor-pointer ${sel ? "bg-primary/10 border-primary text-primary" : "bg-white border-slate-200 text-slate-600 hover:border-primary/40"}`}>
+                                      {st.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                      </div>
+                    );
+                  })()}
+
+                  {/* ── Champs communs (service ou hébergement circuit, assuré par soi-même) ── */}
+                  {(isCircuitHebergSlot || etapeMode === "service") && etapeSubtypes.length > 0 && selfPossible && etapeAuthorType !== "provider" && (
                     <div className="space-y-3">
                       <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Informations de l'offre</p>
                       <div>
@@ -3076,7 +3983,7 @@ export default function ProviderProfilePage() {
                   )}
 
                   {/* ── Détails spécifiques (réplique exacte du formulaire de publication) ── */}
-                  {etapeSubtypes.length > 0 && (() => {
+                  {(isCircuitHebergSlot || etapeMode === "service") && etapeSubtypes.length > 0 && selfPossible && etapeAuthorType !== "provider" && (() => {
                     const isEtapeHeberg = etapeCategorie === 'hebergement';
 
                     // Résolution des dynamicOptions depuis les données d'onboarding des activités
@@ -3509,6 +4416,86 @@ export default function ProviderProfilePage() {
                     );
                   })()}
 
+                  {/* ── Bannières + toggle responsable + invite collaborateur ── */}
+                  <>
+                    {/* Bannière guidage (dès qu'un domaine est choisi) */}
+                    {!isCircuitHebergSlot && etapeMode === "guidage" && etapeGuidageData.categorie && (
+                      <div className="flex items-start gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                        <span className="material-symbols-outlined text-amber-500 text-base mt-0.5 shrink-0">info</span>
+                        <p className="text-xs font-semibold text-amber-800">Ce guidage sera assuré par un guide — invitez-le ci-dessous.</p>
+                      </div>
+                    )}
+
+                    {/* Bannière service/hébergement (catégorie non dans activités) */}
+                    {(!isCircuitHebergSlot ? (etapeMode === "service" && !!etapeCategorie) : true) && !selfPossible && (
+                      <div className="flex items-start gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                        <span className="material-symbols-outlined text-amber-500 text-base mt-0.5 shrink-0">warning</span>
+                        <p className="text-xs font-semibold text-amber-800">
+                          {isCircuitHebergSlot
+                            ? "L'hébergement n'est pas dans vos activités — vous devez inviter un prestataire hébergement."
+                            : "Cette catégorie n'est pas dans vos activités — vous devez inviter un prestataire qualifié."}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Toggle Moi-même | Inviter prestataire (catégorie dans activités) */}
+                    {(!isCircuitHebergSlot ? (etapeMode === "service" && !!etapeCategorie) : etapeSubtypes.length > 0) && selfPossible && (
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Responsable</label>
+                        <div className="flex gap-2">
+                          {([["self","Moi-même","person"],["provider","Inviter un prestataire","person_add"]] as const).map(([val, lbl, ico]) => (
+                            <button key={val} type="button"
+                              onClick={() => { setEtapeAuthorType(val as "self" | "provider"); if (val === "self") { setEtapeCollabSelected(null); setEtapeCollabSearch(""); setEtapeCollabResults([]); } }}
+                              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-xs font-black transition-all cursor-pointer ${etapeAuthorType === val ? "border-primary bg-primary/10 text-primary" : "border-slate-200 bg-white text-slate-500 hover:border-primary/30"}`}>
+                              <span className="material-symbols-outlined text-base">{ico}</span>{lbl}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Invite collaborateur */}
+                    {showCollabSearch && (
+                      etapeCollabSelected ? (
+                        /* Badge collaborateur sélectionné */
+                        <div className="flex items-center gap-3 p-3 bg-primary/5 border-2 border-primary/20 rounded-2xl">
+                          <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                            <span className="text-sm font-extrabold text-primary">{etapeCollabSelected.name.slice(0,1).toUpperCase()}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-extrabold text-slate-800 truncate">{etapeCollabSelected.name}</p>
+                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${etapeCollabSelected.type === "guide" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>
+                              {etapeCollabSelected.type === "guide" ? "Guide" : "Prestataire"}
+                            </span>
+                          </div>
+                          <button type="button"
+                            onClick={() => { setEtapeCollabSelected(null); setEtapeCollabPanelOpen(false); }}
+                            className="w-7 h-7 rounded-full bg-white hover:bg-red-50 border border-slate-200 text-slate-400 hover:text-red-500 flex items-center justify-center transition-colors cursor-pointer shrink-0">
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        /* Bouton "+ Inviter" style InviteButton */
+                        <button type="button"
+                          onClick={() => setEtapeCollabPanelOpen(true)}
+                          className="flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-all group cursor-pointer">
+                          <span className="material-symbols-outlined text-base group-hover:text-primary">person_add</span>
+                          <span className="text-xs font-extrabold">+ Inviter un collaborateur pour cette étape</span>
+                        </button>
+                      )
+                    )}
+
+                    {/* Modal de sélection du collaborateur */}
+                    <EtapeCollabPickerModal
+                      open={etapeCollabPanelOpen}
+                      filterMode={collabSearchMode}
+                      token={token ?? ""}
+                      etapeAvail={etapeConflictAvail}
+                      onClose={() => setEtapeCollabPanelOpen(false)}
+                      onSelect={(r) => { setEtapeCollabSelected(r); setEtapeCollabPanelOpen(false); }}
+                    />
+                  </>
+
                   {etapeFormError && <p className="text-xs font-semibold text-red-500">{etapeFormError}</p>}
 
                   <div className="flex flex-col gap-2 pt-1">
@@ -3533,12 +4520,14 @@ export default function ProviderProfilePage() {
 
             {/* ── Circuit route map ── */}
             {(() => {
-              const mappedPoints = circuitEtapes
-                .filter((e) => e.lat !== null && e.lng !== null)
-                .sort((a, b) => a.jour - b.jour)
-                .map((e) => ({ jour: e.jour, lat: e.lat as number, lng: e.lng as number, destination: e.destination }));
-              const hb = (circuitHebergInclus && circuitHebergType === 'same' && circuitHebergEtape?.lat && circuitHebergEtape?.lng)
-                ? { lat: circuitHebergEtape.lat as number, lng: circuitHebergEtape.lng as number, nom: circuitHebergEtape.titre || circuitHebergEtape.destination || 'Hébergement' }
+              const mappedPoints = (circuitEtapes as any[])
+                .filter((e) => (e.lat != null && e.lng != null) || (e.collab_lat != null && e.collab_lng != null))
+                .sort((a: any, b: any) => a.jour - b.jour)
+                .map((e: any) => ({ jour: e.jour, lat: (e.lat ?? e.collab_lat) as number, lng: (e.lng ?? e.collab_lng) as number, destination: e.destination ?? e.collab_destination ?? "" }));
+              const hbLat = (circuitHebergEtape as any)?.lat ?? (circuitHebergEtape as any)?.collab_lat;
+              const hbLng = (circuitHebergEtape as any)?.lng ?? (circuitHebergEtape as any)?.collab_lng;
+              const hb = (circuitHebergInclus && circuitHebergType === 'same' && hbLat && hbLng)
+                ? { lat: hbLat as number, lng: hbLng as number, nom: (circuitHebergEtape as any)?.titre || (circuitHebergEtape as any)?.destination || 'Hébergement' }
                 : undefined;
               if (mappedPoints.length === 0 && !hb) return null;
               return (
@@ -3561,10 +4550,22 @@ export default function ProviderProfilePage() {
 
           {/* Footer */}
           <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/80 flex items-center justify-end gap-3 shrink-0">
-            <button type="button" onClick={() => setCircuitModalOpen(false)} className="px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer">Annuler</button>
-            <button type="button" onClick={saveCircuit} disabled={circuitSaving} className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs shadow-sm transition-all active:scale-95 disabled:opacity-60 cursor-pointer">
-              {circuitSaving ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Sauvegarde…</> : <><Check size={14} />{editingCircuit ? "Enregistrer" : "Créer le circuit"}</>}
-            </button>
+            {editingCircuit?.status === "approved" ? (
+              <div className="flex items-center gap-3 w-full">
+                <div className="flex-1 flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                  <span className="material-symbols-outlined text-emerald-500 text-base">lock</span>
+                  <p className="text-xs font-bold text-emerald-700">Circuit publié — modification impossible. Supprimez-le si nécessaire.</p>
+                </div>
+                <button type="button" onClick={() => setCircuitModalOpen(false)} className="px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer">Fermer</button>
+              </div>
+            ) : (
+              <>
+                <button type="button" onClick={() => setCircuitModalOpen(false)} className="px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer">Annuler</button>
+                <button type="button" onClick={saveCircuit} disabled={circuitSaving} className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs shadow-sm transition-all active:scale-95 disabled:opacity-60 cursor-pointer">
+                  {circuitSaving ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Sauvegarde…</> : <><Check size={14} />{editingCircuit ? "Enregistrer" : "Créer le circuit"}</>}
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -4348,8 +5349,8 @@ export default function ProviderProfilePage() {
               className="absolute top-5 right-5 z-10 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center transition-colors">
               <X size={16} />
             </button>
-            <div className="px-8 pt-8 pb-5 border-b border-slate-100 shrink-0">
-              <div className="flex items-center gap-3">
+            <div className="px-8 pt-8 pb-4 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
                   <Sparkles size={20} className="text-primary" />
                 </div>
@@ -4357,17 +5358,28 @@ export default function ProviderProfilePage() {
                   <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">
                     {offerEditMode ? "Modifier l'offre" : "Publier une offre éco"}
                   </h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
-                    {offerEditMode ? "Modifiez les informations et enregistrez." : "Proposez une expérience éco-touristique à la communauté"}
-                  </p>
+                  <p className="text-slate-400 text-xs mt-0.5">{PROVIDER_STEPS[offerStep - 1].title}</p>
                 </div>
               </div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-black text-slate-400 uppercase tracking-wider">{PROVIDER_STEPS[offerStep - 1].subtitle}</span>
+                <span className="text-xs font-black text-slate-400">{offerStep}/{PROVIDER_STEPS.length}</span>
+              </div>
+              <div className="flex gap-1 mt-3">
+                {PROVIDER_STEPS.map((s) => (
+                  <button key={s.id} type="button"
+                    onClick={() => s.id < offerStep && setOfferStep(s.id)}
+                    className={`flex-1 h-1 rounded-full transition-all duration-300 ${s.id < offerStep ? "bg-primary cursor-pointer" : s.id === offerStep ? "bg-primary" : "bg-slate-200"}`}
+                  />
+                ))}
+              </div>
             </div>
-            <div className="overflow-y-auto flex-1">
-              <form id="publish-offer-form" onSubmit={handlePublish} className="px-8 py-6 space-y-5">
+            <div className="flex-1 overflow-y-auto">
+              <div className="px-8 py-6 space-y-5">
 
-                {/* ── SECTION : ACTIVITÉ ─────────────────────────────────── */}
-                {orgActivities.length > 0 && (
+                {/* ── ÉTAPE 1 : PRÉSENTATION ───────────────────────────── */}
+                {/* Lier à une activité */}
+                {offerStep === 1 && orgActivities.length > 0 && (
                   <div>
                     <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Lier à une activité</label>
                     <div className="grid grid-cols-2 gap-2">
@@ -4402,8 +5414,8 @@ export default function ProviderProfilePage() {
                   </div>
                 )}
 
-                {/* ── SECTION : SOUS-TYPES ───────────────────────────────── */}
-                {offerActivity && offerActivity.subtypes && offerActivity.subtypes.length > 0 && (
+                {/* ── ÉTAPE 3 : SOUS-TYPES ─────────────────────────────── */}
+                {offerStep === 3 && offerActivity && offerActivity.subtypes && offerActivity.subtypes.length > 0 && (
                   <div>
                     <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Sous-type d'offre</label>
                     <div className="flex flex-wrap gap-2">
@@ -4455,37 +5467,43 @@ export default function ProviderProfilePage() {
 
                 {/* Nb d'unités : maintenant intégré dans chaque carte de sous-type */}
 
-                {/* ── BLOC 1 : INFORMATIONS DE BASE ──────────────────── */}
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Titre de l'offre *</label>
-                  <input type="text" placeholder="Ex : Séjour éco en forêt de Mogods"
-                    value={form.title}
-                    onChange={(e) => { setForm((f) => ({ ...f, title: e.target.value })); setTitleError(""); }}
-                    className={`w-full px-4 py-3 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 transition-all placeholder:font-normal ${titleError ? "bg-red-50 border border-red-300 focus:ring-red-200" : "bg-slate-50 border border-slate-200 focus:ring-primary focus:bg-white"}`}
-                  />
-                  {titleError && <p className="text-xs font-semibold text-red-500 mt-1">{titleError}</p>}
-                </div>
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">
-                    Description courte * <span className="normal-case font-medium text-slate-300">({offerDescCourte.length}/160)</span>
-                  </label>
-                  <textarea rows={2} placeholder="Accroche courte visible dans les résultats de recherche…"
-                    value={offerDescCourte} maxLength={160}
-                    onChange={(e) => setOfferDescCourte(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Description détaillée</label>
-                  <textarea rows={4} placeholder="Décrivez le concept écologique, les activités durables et l'expérience proposée…"
-                    value={form.description}
-                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
-                  />
-                </div>
+                {/* Titre / Descriptions — Étape 1 */}
+                {offerStep === 1 && (
+                  <div>
+                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Titre de l'offre *</label>
+                    <input type="text" placeholder="Ex : Séjour éco en forêt de Mogods"
+                      value={form.title}
+                      onChange={(e) => { setForm((f) => ({ ...f, title: e.target.value })); setTitleError(""); }}
+                      className={`w-full px-4 py-3 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 transition-all placeholder:font-normal ${titleError ? "bg-red-50 border border-red-300 focus:ring-red-200" : "bg-slate-50 border border-slate-200 focus:ring-primary focus:bg-white"}`}
+                    />
+                    {titleError && <p className="text-xs font-semibold text-red-500 mt-1">{titleError}</p>}
+                  </div>
+                )}
+                {offerStep === 1 && (
+                  <div>
+                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">
+                      Description courte * <span className="normal-case font-medium text-slate-300">({offerDescCourte.length}/160)</span>
+                    </label>
+                    <textarea rows={2} placeholder="Accroche courte visible dans les résultats de recherche…"
+                      value={offerDescCourte} maxLength={160}
+                      onChange={(e) => setOfferDescCourte(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
+                    />
+                  </div>
+                )}
+                {offerStep === 1 && (
+                  <div>
+                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Description détaillée</label>
+                    <textarea rows={4} placeholder="Décrivez le concept écologique, les activités durables et l'expérience proposée…"
+                      value={form.description}
+                      onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
+                    />
+                  </div>
+                )}
 
-                {/* Photo de couverture — toujours visible */}
-                <div>
+                {/* Photo de couverture — Étape 1 */}
+                {offerStep === 1 && <div>
                   <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Photo de couverture</label>
                   {publishExistingImages.length === 0 && publishImages.length === 0 ? (
                     <label htmlFor="publish-cover-input"
@@ -4558,9 +5576,28 @@ export default function ProviderProfilePage() {
                       )}
                     </>
                   )}
-                </div>
+                </div>}
 
-                {offerActivity && (() => {
+                {/* ── Public ciblé — Étape 1 ─────────────────────────── */}
+                {offerStep === 1 && <div>
+                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Public ciblé</label>
+                  <div className="flex flex-wrap gap-2">
+                    {PUBLIC_RECOMMANDE.map((p) => {
+                      const active = offerPublicCible.includes(p.value);
+                      return (
+                        <button key={p.value} type="button"
+                          onClick={() => setOfferPublicCible((prev) => active ? prev.filter((x) => x !== p.value) : [...prev, p.value])}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border-2 transition-all ${active ? "bg-primary text-white border-primary" : "bg-slate-100 border-slate-200 text-slate-600 hover:border-primary/40"}`}>
+                          <span className="material-symbols-outlined text-sm">{p.icon}</span>
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>}
+
+                {/* ── ÉTAPE 2 : LOCALISATION ───────────────────────────── */}
+                {offerStep === 2 && offerActivity && (() => {
                   const flat = Object.values(offerActivity.fields ?? {}).reduce<Record<string, any>>((a, s) => ({ ...a, ...s }), {});
                   const langs: string[] = flat.langues_guides ?? flat.langues ?? flat.langues_accueil ?? [];
                   if (!langs.length) return null;
@@ -4575,48 +5612,311 @@ export default function ProviderProfilePage() {
                     </div>
                   );
                 })()}
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Région / Emplacement</label>
-                  <input type="text" placeholder="Tunis, Djerba, Sfax…"
-                    value={form.region}
-                    onChange={(e) => setForm((f) => ({ ...f, region: e.target.value }))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white placeholder:text-slate-400"
-                  />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Localisation</label>
-                    <button type="button" onClick={() => setShowPublishMap((v) => !v)}
-                      className="flex items-center gap-1 text-[10px] font-extrabold text-primary hover:text-primary/80 transition-colors">
-                      <MapPin size={12} />
-                      {showPublishMap ? "Masquer la carte" : "Choisir sur la carte"}
-                    </button>
-                  </div>
-                  <input type="text" placeholder="Ex : Place de la Kasbah, Tunis"
-                    value={form.meeting_point}
-                    onChange={(e) => setForm((f) => ({ ...f, meeting_point: e.target.value }))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white placeholder:text-slate-400 mb-2"
-                  />
-                  {showPublishMap && (
+                {offerStep === 2 && (
+                  <div>
+                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">
+                      Localisation <span className="text-red-500">*</span>
+                    </label>
                     <MapPicker
                       lat={publishMapLat} lng={publishMapLng}
                       onPick={(lat, lng, address) => {
                         setPublishMapLat(lat); setPublishMapLng(lng);
-                        setForm((f) => ({ ...f, meeting_point: address }));
+                        const regionPart = address.split(",").slice(-2).join(",").trim();
+                        setForm((f) => ({ ...f, meeting_point: address, region: regionPart }));
+                        setOfferLocationDesc((prev) => prev.trim() ? prev : address);
                       }}
                     />
-                  )}
-                </div>
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Inclusions</label>
-                  <textarea rows={3} placeholder={"Ex :\n• Transport inclus\n• Repas traditionnels\n• Guide bilingue"}
-                    value={form.inclusions}
-                    onChange={(e) => setForm((f) => ({ ...f, inclusions: e.target.value }))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
-                  />
-                </div>
-                {/* Max. pers. + Âge min. — masqués pour hébergement (capacité par unité dans l'onglet) */}
-                {offerActivity?.category !== 'hebergement' && <div className="grid grid-cols-2 gap-3">
+                  </div>
+                )}
+                {offerStep === 2 && (
+                  <div>
+                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">
+                      Description de la localisation <span className="text-red-500">*</span>
+                    </label>
+                    <textarea rows={3}
+                      placeholder="Décrivez l'emplacement, l'accès, les points de repère…"
+                      value={offerLocationDesc}
+                      onChange={(e) => setOfferLocationDesc(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-slate-400"
+                    />
+                  </div>
+                )}
+                {/* ── ÉTAPE 1 : TYPE DE PRESTATION ──────────────────────── */}
+                {offerStep === 1 && (
+                  <div>
+                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Type de prestation <span className="text-red-500">*</span></label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {TYPE_PRESTATION_PROVIDER.map((tp) => {
+                        const active = offerTypePrestation === tp.value;
+                        return (
+                          <button key={tp.value} type="button"
+                            onClick={() => setOfferTypePrestation(active ? null : tp.value)}
+                            className={`relative flex items-center gap-2.5 px-3 py-3 rounded-2xl border-2 text-xs font-bold transition-all duration-150 text-left ${active ? "bg-primary/10 border-primary shadow-sm" : "border-slate-100 bg-white hover:border-primary/30 hover:bg-slate-50/60 text-slate-600"}`}>
+                            {active && (
+                              <span className="absolute top-2 right-2 w-4 h-4 bg-primary rounded-full flex items-center justify-center">
+                                <Check size={9} className="text-slate-900" strokeWidth={3} />
+                              </span>
+                            )}
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all ${active ? "bg-primary" : "bg-slate-100"}`}>
+                              <span className={`material-symbols-outlined text-lg ${active ? "text-slate-900" : "text-slate-400"}`}>{tp.icon}</span>
+                            </div>
+                            <div className="flex-1 min-w-0 pr-4">
+                              <p className={`font-extrabold text-xs leading-tight ${active ? "text-slate-900" : "text-slate-700"}`}>{tp.label}</p>
+                              <p className={`text-[10px] mt-0.5 leading-tight ${active ? "text-primary/70" : "text-slate-400"}`}>{tp.desc}</p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {/* ── ÉTAPE 5 : CE QUE VOUS FOURNISSEZ ─────────────────── */}
+                {offerStep === 5 && (() => {
+                  const tp = offerTypePrestation;
+                  const showTransport    = tp !== null && ["avec_transport", "transport_repas", "immersion", "sur_mesure"].includes(tp);
+                  const showRepas       = tp !== null && ["transport_repas", "immersion", "sur_mesure"].includes(tp);
+                  const showHebergement = tp !== null && ["immersion", "sur_mesure"].includes(tp);
+                  const isSurMesure     = tp === "sur_mesure";
+                  const activeCollab  = (s: CollabSection) =>
+                    providerOfferCollabs.find((c) => c.section === s && c.status !== "declined") ?? null;
+                  const transportCollab   = activeCollab("transport");
+                  const restaurationCollab = activeCollab("restauration");
+
+                  // Activités déclarées par le prestataire (principale + secondaire)
+                  const myActivities = new Set([
+                    ...(profile?.activity_types ?? []),
+                    ...(profile?.secondary_activity_types ?? []),
+                  ]);
+                  const canFill = (cat: string) => myActivities.has(cat);
+
+                  // Bloc "invitation obligatoire" pour les sections hors activité du prestataire
+                  function InviteRequiredProv({ section, icon, message }: { section: CollabSection; icon: string; message: string }) {
+                    return (
+                      <div className="space-y-2">
+                        <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                          <span className="material-symbols-outlined text-amber-500 text-base shrink-0 mt-0.5">{icon}</span>
+                          <p className="text-xs font-semibold text-amber-700">{message}</p>
+                        </div>
+                        <InviteButton section={section} onInvite={handleProviderInvite} loading={providerCollabSaving} />
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-6">
+                      {/* Récap prestation */}
+                      {tp ? (
+                        <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                          <span className="text-[10px] font-black text-slate-400 uppercase">Prestation :</span>
+                          <span className="px-2.5 py-1 bg-primary/10 rounded-full text-[10px] font-extrabold text-primary">
+                            {TYPE_PRESTATION_PROVIDER.find((o) => o.value === tp)?.label}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-xl border border-amber-200">
+                          <span className="material-symbols-outlined text-amber-500 text-base">info</span>
+                          <p className="text-xs font-semibold text-amber-700">Aucun type de prestation sélectionné — retournez à l'étape 1.</p>
+                        </div>
+                      )}
+
+                      {/* Transport */}
+                      {showTransport && (
+                        <div className="space-y-3">
+                          {isSurMesure && (
+                            <Bool label="Transport inclus dans cette offre" icon="directions_car"
+                              value={providerTransportInclus}
+                              onChange={(v) => setProviderTransportInclus(v)} />
+                          )}
+                          {(!isSurMesure || providerTransportInclus === true) && (
+                            transportCollab ? (
+                              <div className="space-y-2">
+                                <SectionLockedBanner collab={transportCollab} onKick={transportCollab.id ? () => kickProviderCollab(transportCollab.id!) : undefined} />
+                                <div className="pointer-events-none select-none opacity-70 space-y-3">
+                                  <PrestSubBlock title="Transport Éco" icon="electric_bike" subtypes={TRANSPORT_ECO_SUBTYPES}
+                                    sousType={providerTransportEcoST} details={providerTransportEcoDet}
+                                    onSousType={() => {}} onDetails={() => {}} />
+                                  <PrestSubBlock title="Transport" icon="directions_car" subtypes={TRANSPORT_STD_SUBTYPES}
+                                    sousType={providerTransportStdST} details={providerTransportStdDet}
+                                    onSousType={() => {}} onDetails={() => {}} />
+                                </div>
+                              </div>
+                            ) : canFill("transport") || canFill("transport_eco") ? (
+                              <>
+                                <PrestSubBlock
+                                  title="Transport Éco" icon="electric_bike"
+                                  subtypes={TRANSPORT_ECO_SUBTYPES}
+                                  sousType={providerTransportEcoST}
+                                  details={providerTransportEcoDet}
+                                  onSousType={(v) => { setProviderTransportEcoST(v); setProviderTransportEcoDet({}); }}
+                                  onDetails={(k, v) => setProviderTransportEcoDet((prev) => ({ ...prev, [k]: v }))}
+                                />
+                                <PrestSubBlock
+                                  title="Transport" icon="directions_car"
+                                  subtypes={TRANSPORT_STD_SUBTYPES}
+                                  sousType={providerTransportStdST}
+                                  details={providerTransportStdDet}
+                                  onSousType={(v) => { setProviderTransportStdST(v); setProviderTransportStdDet({}); }}
+                                  onDetails={(k, v) => setProviderTransportStdDet((prev) => ({ ...prev, [k]: v }))}
+                                />
+                                <InviteButton section="transport" onInvite={handleProviderInvite} loading={providerCollabSaving} />
+                              </>
+                            ) : (
+                              <InviteRequiredProv section="transport" icon="directions_car"
+                                message="Le transport n'est pas votre activité principale ni secondaire — invitez un prestataire de transport pour compléter cette section." />
+                            )
+                          )}
+                        </div>
+                      )}
+
+                      {/* Restauration */}
+                      {showRepas && (
+                        <div className="space-y-3">
+                          {isSurMesure && (
+                            <Bool label="Repas inclus dans cette offre" icon="restaurant"
+                              value={providerRepasFlag}
+                              onChange={(v) => { setProviderRepasFlag(v); if (!v) { setProviderRepasMode("prestataire"); setProviderRepasGastroExp(""); setProviderRepasGastroDet({}); setProviderRepasST(""); setProviderRepasDet({}); } }} />
+                          )}
+                          {(!isSurMesure || providerRepasFlag === true) && (() => {
+                            const repasData: RepasBlockData = { mode: providerRepasMode, gastroExpertise: providerRepasGastroExp, gastroDet: providerRepasGastroDet, prestSousType: providerRepasST, prestDet: providerRepasDet };
+                            const onRepasUpdate = (patch: Partial<RepasBlockData>) => {
+                              if (patch.mode !== undefined) setProviderRepasMode(patch.mode);
+                              if (patch.gastroExpertise !== undefined) setProviderRepasGastroExp(patch.gastroExpertise);
+                              if (patch.gastroDet !== undefined) setProviderRepasGastroDet(patch.gastroDet);
+                              if (patch.prestSousType !== undefined) setProviderRepasST(patch.prestSousType);
+                              if (patch.prestDet !== undefined) setProviderRepasDet(patch.prestDet);
+                            };
+                            const repasGuidageSlot = (
+                              <InviteRequiredProv section="restauration" icon="hiking"
+                                message="Le guidage gastronomique sera assuré par un guide — invitez-le pour compléter cette section." />
+                            );
+                            const repasPrestSlot = canFill("restaurant_terroir") ? undefined : (
+                              <InviteRequiredProv section="restauration" icon="restaurant"
+                                message="La restauration n'est pas votre activité principale ni secondaire — invitez un restaurateur pour compléter cette section." />
+                            );
+                            return restaurationCollab ? (
+                              <div className="space-y-2">
+                                <SectionLockedBanner collab={restaurationCollab} onKick={restaurationCollab.id ? () => kickProviderCollab(restaurationCollab.id!) : undefined} />
+                                <div className="pointer-events-none select-none opacity-70">
+                                  <RepasBlock data={repasData} onUpdate={() => {}} />
+                                </div>
+                              </div>
+                            ) : (
+                              <RepasBlock data={repasData} onUpdate={onRepasUpdate}
+                                guidageSlot={repasGuidageSlot}
+                                prestataireSlot={repasPrestSlot}
+                              />
+                            );
+                          })()}
+                        </div>
+                      )}
+
+                      {/* Hébergement */}
+                      {showHebergement && (() => {
+                        const hebergementCollab = activeCollab("hebergement");
+                        return (
+                          <div className="space-y-3">
+                            {isSurMesure && (
+                              <Bool label="Hébergement inclus dans cette offre" icon="hotel"
+                                value={providerHebergementInclus}
+                                onChange={(v) => { setProviderHebergementInclus(v); if (!v) { setProviderHebergementST(""); setProviderHebergementDet({}); } }} />
+                            )}
+                            {(!isSurMesure || providerHebergementInclus === true) && (
+                              hebergementCollab ? (
+                                <div className="space-y-2">
+                                  <SectionLockedBanner collab={hebergementCollab} onKick={hebergementCollab.id ? () => kickProviderCollab(hebergementCollab.id!) : undefined} />
+                                  <div className="pointer-events-none select-none opacity-70">
+                                    <PrestSubBlock title="Hébergement" icon="hotel" subtypes={HEBERGEMENT_PREST_SUBTYPES}
+                                      sousType={providerHebergementST} details={providerHebergementDet}
+                                      onSousType={() => {}} onDetails={() => {}} />
+                                  </div>
+                                </div>
+                              ) : canFill("hebergement") ? (
+                                <>
+                                  <PrestSubBlock title="Hébergement" icon="hotel" subtypes={HEBERGEMENT_PREST_SUBTYPES}
+                                    sousType={providerHebergementST} details={providerHebergementDet}
+                                    onSousType={(v) => { setProviderHebergementST(v); setProviderHebergementDet({}); }}
+                                    onDetails={(k, v) => setProviderHebergementDet((prev) => ({ ...prev, [k]: v }))} />
+                                  <InviteButton section="hebergement" onInvite={handleProviderInvite} loading={providerCollabSaving} />
+                                </>
+                              ) : (
+                                <InviteRequiredProv section="hebergement" icon="hotel"
+                                  message="L'hébergement n'est pas votre activité principale ni secondaire — invitez un hébergeur pour compléter cette section." />
+                              )
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Autre service */}
+                      {isSurMesure && (() => {
+                        const autreServiceCollab = activeCollab("autre_service");
+                        const autreData: AutreServiceBlockData = { categorie: providerAutreServiceCat, sousType: providerAutreServiceST, details: providerAutreServiceDet };
+                        const onAutreUpdate = (patch: Partial<AutreServiceBlockData>) => {
+                          if (patch.categorie !== undefined) setProviderAutreServiceCat(patch.categorie);
+                          if (patch.sousType  !== undefined) setProviderAutreServiceST(patch.sousType);
+                          if (patch.details   !== undefined) setProviderAutreServiceDet(patch.details);
+                        };
+                        return (
+                          <div className="space-y-3">
+                            <Bool label="Autre service inclus dans cette offre" icon="add_circle"
+                              value={providerAutreServiceInclus}
+                              onChange={(v) => { setProviderAutreServiceInclus(v); if (!v) { setProviderAutreServiceCat(""); setProviderAutreServiceST(""); setProviderAutreServiceDet({}); } }} />
+                            {providerAutreServiceInclus === true && (
+                              autreServiceCollab ? (
+                                <div className="space-y-2">
+                                  <SectionLockedBanner collab={autreServiceCollab} onKick={autreServiceCollab.id ? () => kickProviderCollab(autreServiceCollab.id!) : undefined} />
+                                  <div className="pointer-events-none select-none opacity-70">
+                                    <AutreServiceBlock data={autreData} onUpdate={() => {}} />
+                                  </div>
+                                </div>
+                              ) : (
+                                <AutreServiceBlock data={autreData} onUpdate={onAutreUpdate}
+                                  guidageSousTypeSlot={(_domaine) =>
+                                    <InviteRequiredProv section="autre_service" icon="hiking"
+                                      message="Le guidage sera assuré par un guide — invitez-le pour compléter cette section." />
+                                  }
+                                  prestataireSousTypeSlot={(cat) =>
+                                    !canFill(cat) ? (
+                                      <InviteRequiredProv section="autre_service" icon="add_circle"
+                                        message="La catégorie sélectionnée n'est pas votre activité — invitez un prestataire pour compléter cette section." />
+                                    ) : undefined
+                                  }
+                                />
+                              )
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Prestation seule */}
+                      {!showTransport && !showRepas && !showHebergement && !!tp && tp !== "sur_mesure" && (
+                        <div className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-xl">
+                          <span className="material-symbols-outlined text-primary text-xl">handyman</span>
+                          <p className="text-xs font-bold text-slate-700">Prestation seule — aucun service transport, repas ou hébergement à renseigner.</p>
+                        </div>
+                      )}
+
+                      {/* Services inclus */}
+                      <div className="space-y-3">
+                        <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Services inclus</p>
+                        <div className="flex flex-wrap gap-2">
+                          {PROVIDER_SERVICES.map((s) => {
+                            const active = providerServicesInclus.includes(s);
+                            return (
+                              <button key={s} type="button"
+                                onClick={() => setProviderServicesInclus((prev) => active ? prev.filter((x) => x !== s) : [...prev, s])}
+                                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border-2 ${active ? "bg-primary border-primary text-slate-900" : "border-slate-200 text-slate-600 hover:border-primary/50 bg-white"}`}>
+                                {s}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+                {/* Max. pers. + Âge min. — Étape 1, masqués pour hébergement */}
+                {offerStep === 1 && offerActivity?.category !== 'hebergement' && <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Max. pers.</label>
                     <input type="number" min="1" placeholder="20"
@@ -4649,8 +5949,8 @@ export default function ProviderProfilePage() {
                     />
                   </div>
                 </div>}
-                {/* Type d'offre — uniquement si le provider n'a aucune activité (fallback) */}
-                {orgActivities.length === 0 && (
+                {/* Type d'offre — fallback si pas d'activité, Étape 1 */}
+                {offerStep === 1 && orgActivities.length === 0 && (
                   <div>
                     <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Type d'offre</label>
                     <div className="grid grid-cols-3 gap-2">
@@ -4668,33 +5968,8 @@ export default function ProviderProfilePage() {
                     </div>
                   </div>
                 )}
-                {/* Tarif/Durée génériques — masqués pour hébergement (prix par unité + nuits_min dans les détails) */}
-                {offerActivity?.category !== 'hebergement' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Tarif (TND)</label>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px] font-bold">DT</span>
-                        <input type="number" min="0" step="1" placeholder="Ex : 350"
-                          value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white font-mono placeholder:text-slate-400 placeholder:font-sans"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Durée (jours)</label>
-                      <div className="relative">
-                        <Clock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input type="number" min="1" step="1" placeholder="Ex : 3"
-                          value={form.duration} onChange={(e) => setForm((f) => ({ ...f, duration: e.target.value }))}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white font-mono placeholder:text-slate-400 placeholder:font-sans"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {/* ── SECTION : DÉTAILS SPÉCIFIQUES PAR SOUS-TYPE ─────── */}
-                {offerSubtypes.length > 0 && (() => {
+                {/* ── ÉTAPE 3 : DÉTAILS SPÉCIFIQUES PAR SOUS-TYPE ───── */}
+                {offerStep === 3 && offerSubtypes.length > 0 && (() => {
                   const isMultiUnit = offerNbUnites > 1 && offerActivity?.category === 'hebergement';
 
                   // ── Résout les options dynamiques depuis les champs d'onboarding ──
@@ -5355,148 +6630,82 @@ export default function ProviderProfilePage() {
                   );
                 })()}
 
-                {/* ── BLOC 3 : DISPONIBILITÉ — global pour non-hébergement seulement ── */}
-                {offerActivity?.category !== 'hebergement' && <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Disponibilité</label>
-                  <div className="grid grid-cols-2 gap-2 mb-3">
-                    {AVAILABILITY_TYPES.map((m) => (
-                      <button key={m.value} type="button" onClick={() => setAvailabilityMode(m.value)}
-                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-xs font-bold transition-all ${availabilityMode === m.value ? "border-primary bg-primary/10 text-slate-900" : "border-slate-200 bg-slate-50 text-slate-500 hover:border-primary/30"}`}>
-                        <span className={`material-symbols-outlined text-base ${availabilityMode === m.value ? "text-primary" : "text-slate-400"}`}>{m.icon}</span>
-                        {m.label}
-                      </button>
-                    ))}
+                {/* ── ÉTAPE 4 : DISPONIBILITÉS ─────────────────────────── */}
+                {offerStep === 4 && offerActivity?.category !== 'hebergement' && (
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Quand êtes-vous disponible ?</label>
+                    <OfferAvailPicker value={offerAvail} onChange={setOfferAvail} />
+                    {offerEditId && offerAvail.type && (
+                      checkingProviderCollabConfs ? (
+                        <div className="bg-slate-50 rounded-2xl p-4 flex items-center gap-3">
+                          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
+                          <p className="text-xs text-slate-500 font-medium">Vérification de l&apos;agenda des collaborateurs…</p>
+                        </div>
+                      ) : providerCollabConflicts.length > 0 ? (
+                        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="material-symbols-outlined text-amber-500 text-base shrink-0">event_busy</span>
+                            <p className="text-xs font-extrabold text-amber-800">
+                              {providerCollabConflicts.length} collaborateur{providerCollabConflicts.length > 1 ? "s ont" : " a"} un conflit avec ces nouvelles dates
+                            </p>
+                          </div>
+                          {providerCollabConflicts.map((c, i) => (
+                            <div key={i} className="pl-6 space-y-1">
+                              <p className="text-xs text-amber-700 font-semibold">
+                                {c.userName} <span className="font-normal text-amber-600">({({ hebergement: "Hébergement", restauration: "Restauration", transport: "Transport", guide: "Guidage", autre: "Autre" } as Record<string,string>)[c.section] ?? c.section})</span>
+                                {" — "}<span className="italic">&ldquo;{c.conflictSlot}&rdquo;</span>
+                              </p>
+                              <div className="flex flex-wrap gap-1">
+                                {c.conflictDays.map((day) => (
+                                  <span key={day} className="text-[10px] bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 font-bold">
+                                    {new Date(day + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                                  </span>
+                                ))}
+                                {c.conflictTimeSlots && [...new Map(
+                                  Object.values(c.conflictTimeSlots).flat()
+                                    .map((ts) => [`${ts.start}-${ts.end}`, ts])
+                                ).values()].map((ts, ti) => (
+                                  <span key={`cts-${ti}`} className="text-[10px] bg-orange-100 text-orange-700 rounded-full px-2 py-0.5 font-bold">
+                                    {ts.start}–{ts.end}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                          <p className="pl-6 text-[10px] text-amber-500 pt-1.5 border-t border-amber-200">
+                            Vous pouvez continuer — le(s) collaborateur(s) seront notifiés du conflit lors de l&apos;enregistrement.
+                          </p>
+                        </div>
+                      ) : null
+                    )}
                   </div>
-                  {availabilityMode === "specific" && (
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <input type="date" value={newSpecificDate} onChange={(e) => setNewSpecificDate(e.target.value)}
-                          className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                        <button type="button"
-                          onClick={() => { if (newSpecificDate && !specificDates.includes(newSpecificDate)) { setSpecificDates((prev) => [...prev, newSpecificDate].sort()); setNewSpecificDate(""); } }}
-                          className="px-4 py-2.5 bg-primary text-white rounded-xl text-xs font-extrabold hover:bg-primary/90 transition-colors">
-                          Ajouter
-                        </button>
-                      </div>
-                      {specificDates.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5">
-                          {specificDates.map((d) => (
-                            <span key={d} className="flex items-center gap-1 px-2.5 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold border border-primary/20">
-                              {d}
-                              <button type="button" onClick={() => setSpecificDates((prev) => prev.filter((x) => x !== d))}><X size={10} /></button>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {availabilityMode === "weekly" && (
-                    <div className="space-y-2">
-                      <div className="flex gap-1.5">
-                        {["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map((day, i) => (
-                          <button key={i} type="button"
-                            onClick={() => setAvailableWeekdays((prev) => prev.includes(i) ? prev.filter((d) => d !== i) : [...prev, i])}
-                            className={`flex-1 py-2 rounded-xl text-[10px] font-black border-2 transition-all ${availableWeekdays.includes(i) ? "border-primary bg-primary text-white" : "border-slate-200 bg-slate-50 text-slate-500 hover:border-primary/30"}`}>
-                            {day}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Début période</label>
-                          <input type="date" value={availabilityStart} onChange={(e) => setAvailabilityStart(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Fin période</label>
-                          <input type="date" value={availabilityEnd} onChange={(e) => setAvailabilityEnd(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {availabilityMode === "period" && (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Date début *</label>
-                          <input type="date" value={availabilityStart} onChange={(e) => setAvailabilityStart(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Date fin *</label>
-                          <input type="date" value={availabilityEnd} onChange={(e) => setAvailabilityEnd(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Jours disponibles</label>
-                        <div className="flex gap-1.5">
-                          {["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map((day, i) => (
-                            <button key={i} type="button"
-                              onClick={() => setAvailableWeekdays((prev) => prev.includes(i) ? prev.filter((d) => d !== i) : [...prev, i])}
-                              className={`flex-1 py-2 rounded-xl text-[10px] font-black border-2 transition-all ${availableWeekdays.includes(i) ? "border-primary bg-primary text-white" : "border-slate-200 bg-slate-50 text-slate-500 hover:border-primary/30"}`}>
-                              {day}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {availabilityMode === "on_demand" && (
-                    <div className="space-y-2">
-                      <div>
-                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Délai de réponse *</label>
-                        <div className="flex gap-2">
-                          {["24h","48h","72h"].map((d) => (
-                            <button key={d} type="button" onClick={() => setAvailDelaiReponse(d)}
-                              className={`px-4 py-2 rounded-xl text-xs font-extrabold border-2 transition-all ${availDelaiReponse === d ? "border-primary bg-primary/10 text-primary" : "border-slate-200 bg-slate-50 text-slate-500 hover:border-primary/30"}`}>
-                              {d}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Message d'accueil</label>
-                        <textarea rows={2} value={availMessageAccueil} onChange={(e) => setAvailMessageAccueil(e.target.value)}
-                          placeholder="Ex : Contactez-moi pour vérifier la disponibilité…"
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none placeholder:text-slate-400" />
-                      </div>
-                    </div>
-                  )}
-                  {availabilityMode === "season" && (
-                    <div>
-                      <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Saisons *</label>
-                      <div className="flex gap-2">
-                        {SAISONS.map((s) => (
-                          <button key={s} type="button"
-                            onClick={() => setAvailSaisons((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s])}
-                            className={`flex-1 py-2 rounded-xl text-[10px] font-black border-2 transition-all ${availSaisons.includes(s) ? "border-primary bg-primary text-white" : "border-slate-200 bg-slate-50 text-slate-500 hover:border-primary/30"}`}>
-                            {s}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {availabilityMode !== "on_demand" && (
-                    <div className="grid grid-cols-2 gap-2 mt-2">
-                      <div>
-                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Heure début</label>
-                        <input type="time" value={availHeureDebut} onChange={(e) => setAvailHeureDebut(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Heure fin</label>
-                        <input type="time" value={availHeureFin} onChange={(e) => setAvailHeureFin(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                      </div>
-                    </div>
-                  )}
-                </div>}
+                )}
+                {offerStep === 4 && offerActivity?.category === 'hebergement' && (
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-500">
+                    <span className="material-symbols-outlined text-slate-400 text-lg align-middle mr-2">info</span>
+                    Les disponibilités sont gérées par unité dans l&apos;étape Détails.
+                  </div>
+                )}
 
-                {/* ── BLOC 4 : TARIFICATION — global pour non-hébergement seulement ── */}
-                {offerActivity?.category !== 'hebergement' && <div className="space-y-3">
+                {/* ── ÉTAPE 6 : TARIFICATION ───────────────────────────── */}
+                {offerStep === 6 && offerActivity?.category === 'hebergement' && (
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-500">
+                    <span className="material-symbols-outlined text-slate-400 text-lg align-middle mr-2">info</span>
+                    La tarification est gérée par unité dans l&apos;étape Détails.
+                  </div>
+                )}
+                {offerStep === 6 && offerActivity?.category !== 'hebergement' && <div className="space-y-3">
                   <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase block">Tarification</label>
+                  <div>
+                    <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1.5 block">Durée (jours) <span className="normal-case font-medium text-slate-300">(optionnel)</span></label>
+                    <div className="relative">
+                      <Clock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input type="number" min="1" step="1" placeholder="Ex : 3"
+                        value={form.duration} onChange={(e) => setForm((f) => ({ ...f, duration: e.target.value }))}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white font-mono placeholder:text-slate-400 placeholder:font-sans"
+                      />
+                    </div>
+                  </div>
 
                   {/* Prix par sous-type en mode VARIANT */}
                   {offerMode === "variant" && offerSubtypes.length > 1 && (
@@ -5595,84 +6804,59 @@ export default function ProviderProfilePage() {
                   </div>
                 </div>}
 
-                {/* ── BLOC 5 : CONFIRMATION ──────────────────────────────── */}
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Mode de confirmation</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {CONFIRMATION_TYPES.slice(0, 3).map((m) => (
-                      <button key={m.value} type="button" onClick={() => setOfferConfirmMode(m.value)}
-                        className={`flex flex-col items-center gap-1 py-3 px-2 rounded-2xl border-2 text-center transition-all ${offerConfirmMode === m.value ? "border-primary bg-primary/10 text-slate-900 shadow-sm" : "border-slate-200 bg-slate-50 text-slate-500 hover:border-primary/30 hover:bg-white"}`}>
-                        <span className={`material-symbols-outlined text-xl ${offerConfirmMode === m.value ? "text-primary" : "text-slate-400"}`}>{m.icon}</span>
-                        <span className="text-[10px] font-extrabold">{m.label}</span>
-                        <span className="text-[9px] font-medium text-slate-400">{m.desc}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    {CONFIRMATION_TYPES.slice(3).map((m) => (
-                      <button key={m.value} type="button" onClick={() => setOfferConfirmMode(m.value)}
-                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-xs font-bold transition-all ${offerConfirmMode === m.value ? "border-primary bg-primary/10 text-slate-900" : "border-slate-200 bg-slate-50 text-slate-500 hover:border-primary/30"}`}>
-                        <span className={`material-symbols-outlined text-base ${offerConfirmMode === m.value ? "text-primary" : "text-slate-400"}`}>{m.icon}</span>
-                        <div>
-                          <p className="font-extrabold">{m.label}</p>
-                          <p className="text-[9px] font-medium text-slate-400">{m.desc}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                  {offerConfirmMode === "deposit" && (
-                    <div className="mt-3">
-                      <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-1 block">Acompte requis (%)</label>
-                      <input type="number" min="1" max="100" value={offerDepositPct} onChange={(e) => setOfferDepositPct(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
-                    </div>
-                  )}
-                </div>
-
-                {/* ── BLOC 6 : ANNULATION ────────────────────────────────── */}
-                <div>
-                  <label className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2 block">Politique d'annulation *</label>
-                  <div className="space-y-1.5">
-                    {CANCELLATION_POLICIES.map((p) => (
-                      <button key={p.value} type="button" onClick={() => setCancellationPolicy(p.value)}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${cancellationPolicy === p.value ? "border-primary bg-primary/10" : "border-slate-200 bg-slate-50 hover:border-primary/30"}`}>
-                        <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 flex items-center justify-center ${cancellationPolicy === p.value ? "border-primary" : "border-slate-300"}`}>
-                          {cancellationPolicy === p.value && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
-                        </div>
-                        <div>
-                          <p className={`text-xs font-extrabold ${cancellationPolicy === p.value ? "text-slate-900" : "text-slate-600"}`}>{p.label}</p>
-                          <p className="text-[10px] font-medium text-slate-400">{p.desc}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                  {cancellationPolicy === "custom" && (
-                    <textarea rows={2} value={cancellationDesc} onChange={(e) => setCancellationDesc(e.target.value)}
-                      placeholder="Décrivez votre politique d'annulation personnalisée…"
-                      className="w-full mt-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none placeholder:text-slate-400" />
-                  )}
-                </div>
-
-                {publishError && (
-                  <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
-                    <span className="material-symbols-outlined text-red-500 text-base">error</span>
-                    <p className="text-sm font-semibold text-red-600">{publishError}</p>
-                  </div>
+                {/* ── ÉTAPE 7 : CONDITIONS ─────────────────────────────── */}
+                {offerStep === 7 && (
+                  <ConfirmationTypePicker
+                    value={offerConfirmation}
+                    onChange={(v) => setOfferConfirmation((c) => ({ ...c, ...v }))}
+                    hideMeteо
+                  />
                 )}
-              </form>
+
+
+              </div>
             </div>
-            <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/80 flex items-center justify-end gap-3 shrink-0">
-              <button type="button" onClick={closeModal}
-                className="px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer">
-                Annuler
-              </button>
-              <button type="submit" form="publish-offer-form" disabled={publishing}
-                className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs shadow-sm hover:shadow transition-all active:scale-95 disabled:opacity-60 cursor-pointer">
-                {publishing
-                  ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />{offerEditMode ? "Enregistrement…" : "Publication…"}</>
-                  : <><Send size={14} />{offerEditMode ? "Enregistrer les modifications" : "Publier l'offre"}</>
-                }
-              </button>
+            <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/80 shrink-0 space-y-3">
+              {publishError && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
+                  <span className="material-symbols-outlined text-red-500 text-base">error</span>
+                  <p className="text-sm font-semibold text-red-600">{publishError}</p>
+                </div>
+              )}
+              <div className="flex gap-2 items-center">
+                {offerEditMode && (
+                  <>
+                    <button type="button" onClick={handleDeleteOffer} disabled={offerDeleting || publishing}
+                      className="flex items-center gap-1.5 px-3 py-2.5 rounded-2xl border-2 border-red-200 text-red-500 hover:bg-red-50 font-bold text-xs transition-all disabled:opacity-50 shrink-0">
+                      {offerDeleting ? <span className="w-3.5 h-3.5 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" /> : <Trash2 size={13} />}
+                      Supprimer
+                    </button>
+                    <button type="button" onClick={closeModal} disabled={publishing}
+                      className="flex items-center gap-1.5 px-3 py-2.5 rounded-2xl border-2 border-slate-200 text-slate-500 hover:bg-slate-50 font-bold text-xs transition-all disabled:opacity-50 shrink-0">
+                      Annuler
+                    </button>
+                  </>
+                )}
+                <div className="flex-1" />
+                {offerStep > 1 && (
+                  <button type="button" onClick={() => { setOfferStep((s) => s - 1); setTitleError(""); }}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border-2 border-slate-200 text-slate-600 hover:border-slate-300 font-bold text-sm transition-all shrink-0">
+                    <ArrowLeft size={16} /> Retour
+                  </button>
+                )}
+                <button type="button" onClick={handleNextProvider} disabled={publishing}
+                  className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-primary hover:bg-primary/90 text-slate-900 font-extrabold text-sm transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed shrink-0">
+                  {publishing ? (
+                    <span className="w-4 h-4 border-2 border-slate-900/30 border-t-slate-900 rounded-full animate-spin" />
+                  ) : offerStep < PROVIDER_STEPS.length ? (
+                    <> Continuer <ArrowRight size={16} /> </>
+                  ) : offerEditMode ? (
+                    <> Enregistrer <Check size={16} /> </>
+                  ) : (
+                    <> Publier l'offre <Check size={16} /> </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -5693,7 +6877,7 @@ export default function ProviderProfilePage() {
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-3xl w-full max-w-xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-white rounded-3xl w-full max-w-3xl h-[90vh] shadow-2xl relative overflow-hidden flex flex-col">
 
               <button onClick={closeEditModal}
                 className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center transition-colors">
@@ -5703,301 +6887,41 @@ export default function ProviderProfilePage() {
               {!editMode ? (
                 /* ── VIEW MODE ───────────────────────────────────────────── */
                 <>
-                  <div
-                    className="relative h-56 w-full overflow-hidden shrink-0 select-none"
-                    onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
-                    onTouchEnd={(e) => {
-                      if (touchStartX === null || sliderImgs.length <= 1) return;
-                      const diff = touchStartX - e.changedTouches[0].clientX;
-                      if (Math.abs(diff) > 40) {
-                        setSliderIdx((i) => diff > 0
-                          ? Math.min(i + 1, sliderImgs.length - 1)
-                          : Math.max(i - 1, 0));
-                      }
-                      setTouchStartX(null);
-                    }}
-                  >
-                    {sliderImgs.length > 0 ? (
-                      <div
-                        className="flex h-full transition-transform duration-300 ease-out"
-                        style={{ transform: `translateX(-${(safeIdx / sliderImgs.length) * 100}%)`, width: `${sliderImgs.length * 100}%` }}
-                      >
-                        {sliderImgs.map((src, i) => (
-                          <div key={i} className="h-full" style={{ width: `${100 / sliderImgs.length}%` }}>
-                            <img src={src} alt="" className="w-full h-full object-cover" />
-                          </div>
-                        ))}
+                  {/* Owner context banner */}
+                  {(() => {
+                    const s = viewOffer.status;
+                    const slabel = s === "approved" ? "Active" : s === "attente_publication" ? "Prêt à publier" : s === "draft" ? "Brouillon" : s === "pending" ? "En attente" : "Refusée";
+                    const scls   = s === "approved" ? "bg-primary/10 text-primary border-primary/20" : s === "attente_publication" ? "bg-teal-50 text-teal-700 border-teal-200" : s === "draft" ? "bg-slate-100 text-slate-600 border-slate-200" : "bg-amber-50 text-amber-700 border-amber-200";
+                    return (
+                      <div className="shrink-0 px-5 py-2.5 flex items-center gap-2.5 bg-slate-50 border-b border-slate-100">
+                        <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                          <span className="material-symbols-outlined text-primary text-[14px]">storefront</span>
+                        </div>
+                        <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex-1">Mon offre</span>
+                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-xl border ${scls}`}>{slabel}</span>
                       </div>
-                    ) : (
-                      <>
-                        <div className={`absolute inset-0 bg-gradient-to-br ${td.gradient} opacity-90`} />
-                        <span className="material-symbols-outlined text-white/25 absolute inset-0 flex items-center justify-center" style={{ fontSize: 110 }}>{td.icon}</span>
-                      </>
-                    )}
-
-                    {sliderImgs.length > 1 && (
-                      <>
-                        <button type="button"
-                          onClick={() => setSliderIdx((i) => Math.max(i - 1, 0))}
-                          disabled={safeIdx === 0}
-                          className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-all disabled:opacity-30">
-                          <ChevronLeft size={18} />
-                        </button>
-                        <button type="button"
-                          onClick={() => setSliderIdx((i) => Math.min(i + 1, sliderImgs.length - 1))}
-                          disabled={safeIdx === sliderImgs.length - 1}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-all disabled:opacity-30">
-                          <ChevronRight size={18} />
-                        </button>
-                      </>
-                    )}
-
-                    {sliderImgs.length > 1 && (
-                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-                        {sliderImgs.map((_, i) => (
-                          <button key={i} type="button" onClick={() => setSliderIdx(i)}
-                            className={`h-1.5 rounded-full transition-all duration-200 ${i === safeIdx ? "w-5 bg-white" : "w-1.5 bg-white/50"}`}
-                          />
-                        ))}
-                      </div>
-                    )}
-
-                    {sliderImgs.length > 1 && (
-                      <div className="absolute top-3 left-3 bg-black/40 text-white text-[10px] font-bold px-2 py-1 rounded-lg">
-                        {safeIdx + 1} / {sliderImgs.length}
-                      </div>
-                    )}
+                    );
+                  })()}
+                  <div className="flex-1 overflow-y-auto">
+                    <OfferDetailView offer={viewOffer as OfferFull} />
                   </div>
-
-                  <div className="overflow-y-auto flex-1 px-8 py-6 space-y-5">
-                    <h2 className="text-2xl font-extrabold text-slate-800 tracking-tight leading-tight pr-8">{viewOffer.title}</h2>
-
-                    <div className="flex flex-wrap gap-2.5">
-                      {viewOffer.offer_type && (() => {
-                        const t = OFFER_TYPES.find((x) => x.value === viewOffer.offer_type);
-                        return t ? (
-                          <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl px-3 py-1.5 text-[11px] font-extrabold tracking-wider flex items-center gap-1.5 uppercase">
-                            <span className="material-symbols-outlined text-sm leading-none">{t.icon}</span>{t.label}
-                          </span>
-                        ) : null;
-                      })()}
-                      {viewOffer.price !== null && (
-                        <span className="bg-primary/10 text-primary border border-primary/20 rounded-xl px-3 py-1.5 text-[11px] font-extrabold tracking-wider flex items-center gap-1.5">
-                          <span className="font-extrabold">{viewOffer.price} DT</span>
-                          {viewOffer.duration && <span className="text-slate-400 font-bold">/ {viewOffer.duration}j</span>}
-                        </span>
-                      )}
-                      {viewOffer.duration && viewOffer.price === null && (
-                        <span className="bg-slate-50 text-slate-500 border border-slate-200 rounded-xl px-3 py-1.5 text-[11px] font-extrabold tracking-wider flex items-center gap-1.5">
-                          <Clock size={12} />{viewOffer.duration} jours
-                        </span>
-                      )}
-                    </div>
-
-                    {viewOffer.description && (
-                      <div>
-                        <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Description</p>
-                        <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-line">{viewOffer.description}</p>
-                      </div>
-                    )}
-                    {(viewOffer.details as any)?.description_longue && (
-                      <div>
-                        <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">Description détaillée</p>
-                        <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-line">{(viewOffer.details as any).description_longue}</p>
-                      </div>
-                    )}
-
-                    {/* ── Détails spécifiques au(x) sous-type(s) ── */}
-                    {(() => {
-                      const details = viewOffer.details as Record<string, any> | null;
-                      if (!details) return null;
-
-                      function renderFieldValue(type: string, v: any): React.ReactNode {
-                        if (type === "boolean") {
-                          return <span className={`text-xs font-extrabold px-2 py-0.5 rounded-lg ${v ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{v ? "Oui" : "Non"}</span>;
-                        }
-                        if (type === "multiselect" && Array.isArray(v)) {
-                          return (
-                            <div className="flex flex-wrap gap-1 mt-0.5">
-                              {v.map((item: string) => (
-                                <span key={item} className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-lg">{item}</span>
-                              ))}
-                            </div>
-                          );
-                        }
-                        return <span className="text-sm font-semibold text-slate-700">{String(v)}</span>;
-                      }
-
-                      function renderFieldsFromData(data: Record<string, any>, config: { sections: any[] }) {
-                        return config.sections.map((section, si) => {
-                          const rows = section.fields.filter((f: any) => {
-                            const v = data[f.key];
-                            return v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0);
-                          });
-                          if (!rows.length) return null;
-                          return (
-                            <div key={si}>
-                              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">{section.label}</p>
-                              <div className="grid grid-cols-2 gap-2">
-                                {rows.map((field: any) => (
-                                  <div key={field.key} className="bg-slate-50 border border-slate-100 rounded-xl p-3">
-                                    <p className="text-[9px] font-black tracking-widest text-slate-400 uppercase mb-1">{field.label}</p>
-                                    {renderFieldValue(field.type, data[field.key])}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        });
-                      }
-
-                      // ── Cas hébergement : subtypes_units + subtypes_config ──
-                      const subtypesUnits = details.subtypes_units as Record<string, Record<string, any>[]> | undefined;
-                      if (subtypesUnits) {
-                        const allSubtypes = viewOffer.offer_subtypes ?? Object.keys(subtypesUnits);
-                        const PROVIDER_SCHEMA_MAP: Record<string, string> = {
-                          chambre_standard: "Chambre standard", chambre_superieure: "Chambre supérieure",
-                          suite: "Suite", dortoir: "Dortoir", bungalow: "Bungalow",
-                          tente_glamping: "Tente glamping", gite_rural: "Gîte rural",
-                          maison_hotes: "Maison d'hôtes", riad_traditionnel: "Riad",
-                          ecolodge: "Écolodge", camping_sauvage: "Camping", ferme_agritouristique: "Ferme agritouristique",
-                        };
-
-                        return (
-                          <div className="space-y-5">
-                            {allSubtypes.map((st) => {
-                              const stConfig = OFFER_DETAIL_FIELDS[st];
-                              if (!stConfig) return null;
-                              const units = subtypesUnits[st] ?? [];
-                              const stCfg = (details.subtypes_config as Record<string, any> | undefined)?.[st] ?? {};
-                              const stLabel = PROVIDER_SCHEMA_MAP[st] ?? st;
-
-                              return (
-                                <div key={st} className="rounded-2xl border border-slate-100 overflow-hidden">
-                                  <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-100">
-                                    <p className="text-[11px] font-black tracking-widest text-slate-500 uppercase">{stLabel}</p>
-                                  </div>
-                                  <div className="p-4 space-y-4">
-                                    {/* Config partagé (check-in, restauration…) */}
-                                    {Object.keys(stCfg).length > 0 && renderFieldsFromData(stCfg, stConfig)}
-
-                                    {/* Unités */}
-                                    {units.map((unit, ui) => {
-                                      const unitKey = `${st}_unit_${ui}`;
-                                      const photosMap = details.photos as Record<string, string[]> | undefined;
-                                      // fallback sur clé ancienne format (suite) si suite_unit_0 absent
-                                      const unitPhotos = photosMap?.[unitKey] ?? photosMap?.[st] ?? [];
-                                      return (
-                                        <div key={ui} className="space-y-3">
-                                          {units.length > 1 && (
-                                            <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Unité {ui + 1}</p>
-                                          )}
-                                          {unitPhotos.length > 0 && (
-                                            <div className="grid grid-cols-3 gap-1.5">
-                                              {unitPhotos.map((url, pi) => (
-                                                <div key={pi} className={`aspect-square rounded-xl overflow-hidden border-2 ${pi === 0 ? "border-primary" : "border-transparent"}`}>
-                                                  <img src={url} alt="" className="w-full h-full object-cover" />
-                                                </div>
-                                              ))}
-                                            </div>
-                                          )}
-                                          {renderFieldsFromData({ ...stCfg, ...unit }, stConfig)}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      }
-
-                      // ── Cas activité/circuit : champs plats ──
-                      const subtype = viewOffer.offer_subtype ?? viewOffer.offer_subtypes?.[0];
-                      if (!subtype) return null;
-                      const config = OFFER_DETAIL_FIELDS[subtype];
-                      if (!config) return null;
-                      const nodes = renderFieldsFromData(details, config);
-                      if (!nodes.some(Boolean)) return null;
-                      return <div className="space-y-4">{nodes}</div>;
-                    })()}
-
-                    {viewOffer.inclusions && (
-                      <div className="bg-emerald-50/60 border border-emerald-100/70 rounded-2xl p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="material-symbols-outlined text-emerald-600 text-base leading-none">check_circle</span>
-                          <p className="text-[10px] font-black tracking-widest text-emerald-700 uppercase">Inclusions</p>
-                        </div>
-                        <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-line">{viewOffer.inclusions}</p>
-                      </div>
-                    )}
-
-                    {viewOffer.meeting_point && (
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="material-symbols-outlined text-slate-500 text-base leading-none">location_on</span>
-                          <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Localisation</p>
-                        </div>
-                        <p className="text-sm font-semibold text-slate-700 mb-2">{viewOffer.meeting_point}</p>
-                        <LocationMap
-                          lat={viewOffer.meeting_lat ?? null}
-                          lng={viewOffer.meeting_lng ?? null}
-                          address={viewOffer.meeting_point}
-                        />
-                      </div>
-                    )}
-
-                    {(viewOffer.min_group_size !== null || viewOffer.max_group_size !== null || viewOffer.min_age !== null) && (
-                      <div className="grid grid-cols-2 gap-3">
-                        {(viewOffer.min_group_size !== null || viewOffer.max_group_size !== null) && (
-                          <div className="flex items-start gap-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
-                            <span className="material-symbols-outlined text-slate-500 text-xl mt-0.5">group</span>
-                            <div>
-                              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Groupe</p>
-                              <p className="text-sm font-semibold text-slate-700 mt-0.5">
-                                {viewOffer.min_group_size ?? 1} – {viewOffer.max_group_size ?? "∞"} pers.
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                        {viewOffer.min_age !== null && (
-                          <div className="flex items-start gap-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
-                            <span className="material-symbols-outlined text-slate-500 text-xl mt-0.5">person</span>
-                            <div>
-                              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Âge minimum</p>
-                              <p className="text-sm font-semibold text-slate-700 mt-0.5">{viewOffer.min_age} ans</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {viewOffer.cancellation_policy && (
-                      <div className="flex items-start gap-3 p-4 bg-amber-50/60 border border-amber-100/70 rounded-2xl">
-                        <span className="material-symbols-outlined text-amber-500 text-xl mt-0.5">policy</span>
-                        <div>
-                          <p className="text-[10px] font-black tracking-widest text-amber-700 uppercase mb-1">Politique d'annulation</p>
-                          <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-line">{viewOffer.cancellation_policy}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    <p className="text-[11px] font-bold text-slate-400">
-                      Publiée le {new Date(viewOffer.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
-                    </p>
-                  </div>
-
                   <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/80 flex items-center justify-end gap-3 shrink-0">
-                    <button type="button" onClick={closeEditModal}
-                      className="px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer">
-                      Fermer
-                    </button>
-                    <button type="button"
-                      onClick={() => { if (viewOffer) openPublishModalForEdit(viewOffer); }}
-                      className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-white font-extrabold rounded-2xl text-xs shadow-sm transition-all active:scale-95 cursor-pointer">
-                      <Edit3 size={14} />Gérer
-                    </button>
+                    {viewOffer.status === "approved" ? (
+                      <>
+                        <p className="text-xs text-slate-400 font-semibold">Offre publiée — aucune modification possible</p>
+                        <button type="button" onClick={handleDeleteOffer} disabled={offerDeleting}
+                          className="flex items-center gap-1.5 px-4 py-2 border border-red-200 text-red-600 bg-white rounded-2xl text-xs font-bold hover:bg-red-50 transition-colors disabled:opacity-60">
+                          <span className="material-symbols-outlined text-sm">delete</span>
+                          {offerDeleting ? "Suppression…" : "Supprimer"}
+                        </button>
+                      </>
+                    ) : (
+                      <button type="button"
+                        onClick={() => { if (viewOffer) openPublishModalForEdit(viewOffer); }}
+                        className="flex items-center gap-2 px-6 py-2.5 bg-primary text-slate-900 font-extrabold rounded-2xl text-xs shadow-sm hover:bg-primary/90 transition-all active:scale-95">
+                        <Edit3 size={14} />Gérer
+                      </button>
+                    )}
                   </div>
                 </>
               ) : (
@@ -6595,12 +7519,13 @@ export default function ProviderProfilePage() {
           <div className="lg:col-span-8 space-y-6">
             <div className="bg-slate-100 p-1.5 rounded-2xl flex flex-wrap gap-1 border border-slate-200/50">
               {[
-                { key: "tout",      label: "Tout",       Icon: LayoutGrid },
-                { key: "offres",    label: "Offres",     Icon: Tag },
-                { key: "activites", label: "Activités",  Icon: Sparkles },
-                { key: "circuits",  label: "Circuits",   Icon: Route },
-                { key: "reseau",    label: "Réseau",     Icon: Users },
-                { key: "apropos",   label: "À propos",   Icon: Info },
+                { key: "tout",           label: "Tout",           Icon: LayoutGrid },
+                { key: "offres",         label: "Offres",         Icon: Tag },
+                { key: "activites",      label: "Activités",      Icon: Sparkles },
+                { key: "circuits",       label: "Circuits",       Icon: Route },
+                { key: "reseau",         label: "Réseau",         Icon: Users },
+                { key: "collaborations", label: "Collaborations", Icon: Users },
+                { key: "apropos",        label: "À propos",       Icon: Info },
               ].map(({ key, label, Icon }) => (
                 <button key={key} onClick={() => setActiveTab(key as Tab)}
                   className={`flex-1 min-w-[60px] py-3 px-3 rounded-xl text-xs font-black tracking-tight flex items-center justify-center gap-1.5 transition-all cursor-pointer ${activeTab === key ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-50/50"}`}>
@@ -6614,30 +7539,215 @@ export default function ProviderProfilePage() {
                 ...(profile.activity_types ?? []).map((v) => ({ value: v, level: "primary" as const })),
                 ...(profile.secondary_activity_types ?? []).map((v) => ({ value: v, level: "secondary" as const })),
               ];
+              const approvedOffersTout = offers.filter((o) => o.status === "approved");
               return (
                 <div className="space-y-6">
-                  {/* Offers section — first, like project-owner */}
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
-                      <Tag size={12} className="text-primary" /><span>Offres Écotourisme Actives</span>
-                    </h3>
-                    {offers.length === 0 ? (
-                      <div className="bg-white rounded-3xl border border-slate-100/90 shadow-sm p-12 text-center">
-                        <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                          <span className="material-symbols-outlined text-primary text-3xl">sell</span>
-                        </div>
-                        <p className="text-slate-800 font-extrabold text-base mb-1">Aucune offre publiée</p>
-                        <p className="text-slate-400 text-sm mb-5">Publiez votre première expérience éco-touristique.</p>
-                        <button onClick={openModal} className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-2xl text-sm font-bold hover:bg-primary/90 shadow-sm">
-                          <Plus size={16} /> Publier une offre
-                        </button>
-                      </div>
-                    ) : (
-                      offers.map((offer) => <OfferCard key={offer.id} offer={offer} />)
-                    )}
-                  </div>
+                  {/* Offers section — seulement si des offres approuvées existent */}
+                  {approvedOffersTout.length > 0 && (
+                    <div className="space-y-4">
+                      <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
+                        <Tag size={12} className="text-primary" /><span>Offres Écotourisme Actives</span>
+                      </h3>
+                      {approvedOffersTout.map((offer) => <OfferCard key={offer.id} offer={offer} />)}
+                    </div>
+                  )}
 
-                  {/* Activities section */}
+                  {/* ── Circuits publiés — même carte que l'onglet Circuits ─────── */}
+                  {(() => {
+                    const approvedCircuits = circuits.filter((c) => c.status === "approved");
+                    if (approvedCircuits.length === 0) return null;
+                    return (
+                      <div className="space-y-4">
+                        <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
+                          <Route size={12} className="text-primary" /><span>Circuits publiés</span>
+                        </h3>
+                        <div className="grid grid-cols-1 gap-4">
+                          {approvedCircuits.map((circuit) => {
+                            const catLabels = [...new Set(circuit.etapes.map((e) => PROVIDER_SCHEMA.find((c) => c.value === e.categorie)?.label ?? DOMAINES[e.categorie as string]?.label ?? e.categorie))];
+                            return (
+                              <div key={circuit.id} id={`circuit-tout-${circuit.id}`} className="bg-white rounded-3xl border border-slate-100/80 shadow-sm overflow-hidden hover:shadow-md transition-all duration-500">
+                                <div className="flex gap-0">
+                                  <div className="relative w-40 shrink-0 bg-gradient-to-br from-primary/20 to-emerald-100 flex items-center justify-center">
+                                    {circuit.cover_image ? <img src={circuit.cover_image} alt="" className="w-full h-full object-cover absolute inset-0" /> : <Route size={32} className="text-primary/40" />}
+                                    <span className="absolute top-2 left-2 text-[9px] font-black tracking-widest uppercase px-2 py-0.5 rounded-lg bg-emerald-500 text-white">Publié</span>
+                                  </div>
+                                  <div className="flex-1 p-5">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <h4 className="text-base font-extrabold text-slate-800 leading-tight">{circuit.title}</h4>
+                                        {circuit.description && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{circuit.description}</p>}
+                                      </div>
+                                      <button onClick={async () => { if (!confirm("Supprimer ce circuit publié ? Les créneaux agenda de tous les collaborateurs seront supprimés.")) return; try { await apiFetch(`/circuits/${circuit.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }); setCircuits((prev) => prev.filter((c) => c.id !== circuit.id)); } catch {} }} className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-500 flex items-center justify-center transition-colors cursor-pointer shrink-0"><Trash2 size={14} /></button>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 mt-3">
+                                      <span className="flex items-center gap-1 text-[10px] font-black tracking-widest uppercase text-primary bg-primary/10 px-2.5 py-1 rounded-xl"><Calendar size={10} />{circuit.nb_jours} jour{circuit.nb_jours > 1 ? "s" : ""}</span>
+                                      <span className="flex items-center gap-1 text-[10px] font-black tracking-widest uppercase text-slate-500 bg-slate-100 px-2.5 py-1 rounded-xl"><MapPin size={10} />{circuit.etapes.length} étape{circuit.etapes.length > 1 ? "s" : ""}</span>
+                                      {catLabels.slice(0, 3).map((l) => (<span key={l} className="text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-100 px-2 py-1 rounded-xl">{l}</span>))}
+                                    </div>
+                                    <div className="mt-3 space-y-1">
+                                      {circuit.etapes.slice(0, 3).map((etape) => {
+                                        const cat = PROVIDER_SCHEMA.find((c) => c.value === etape.categorie);
+                                        const stLabels = etape.subtypes.map((sv) => cat?.subtypes.find((s) => s.value === sv)?.label ?? sv);
+                                        return (
+                                          <div key={etape.id} className="flex items-center gap-2 text-xs">
+                                            <span className="w-5 h-5 rounded-full bg-primary/10 text-primary font-black flex items-center justify-center text-[10px] shrink-0">{etape.jour}</span>
+                                            <span className="font-semibold text-slate-700 truncate">{etape.destination}</span>
+                                            <span className="text-slate-400 shrink-0">·</span>
+                                            <span className="text-slate-400 truncate">{stLabels.join(", ")}</span>
+                                          </div>
+                                        );
+                                      })}
+                                      {circuit.etapes.length > 3 && <p className="text-[10px] text-slate-400 font-semibold">+{circuit.etapes.length - 3} étape{circuit.etapes.length - 3 > 1 ? "s" : ""}…</p>}
+                                    </div>
+                                    <button onClick={async () => { setViewingCircuit(circuit); setViewingCircuitCollabsMap({}); setPublishCircuitError(""); try { const enriched = await apiFetch<any>(`/circuits/${circuit.id}/view`, { headers: { Authorization: `Bearer ${token}` } }); if (enriched) setViewingCircuit(enriched); const m: Record<string, string> = {}; ((enriched?.etapes ?? []) as any[]).forEach((e: any) => { if (e.id && e.collaborator_status) m[e.id] = e.collaborator_status; }); setViewingCircuitCollabsMap(m); } catch {} }} className="mt-3 flex items-center gap-1.5 text-[11px] font-extrabold text-primary hover:text-primary/80 transition-colors cursor-pointer"><Info size={12} />Voir les détails</button>
+                                  </div>
+                                </div>
+                                <PubInteractions pubId={circuit.id} token={token} viewerId={profile?.user_id ?? ""} shareUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/profile/provider/${profile?.user_id}?tab=circuits&circuit=${circuit.id}`} pubTitle={circuit.title} itemApiBase="/interactions/circuit" commentApiBase="/interactions" />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* ── Collaborations publiées — même carte que l'onglet Collaborations ── */}
+                  {collabLoading && (
+                    <div className="flex items-center gap-2 text-slate-400 text-xs py-2">
+                      <span className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />Chargement des collaborations…
+                    </div>
+                  )}
+                  {!collabLoading && (() => {
+                    const INACTIVE = ["offer_deleted", "circuit_deleted", "collab_kicked", "collab_quit"];
+                    const approvedCollabs = collaborations.filter((c) => {
+                      const resStatus = c.source_type !== "circuit" ? c.offer_status : c.circuit_status;
+                      if (INACTIVE.includes(resStatus ?? "")) return false;
+                      return c.status === "accepted" || c.status === "completed";
+                    });
+                    if (approvedCollabs.length === 0) return null;
+                    const SECTION_META: Record<string, { label: string; icon: string; grad: string }> = {
+                      restauration: { label: "Restauration", icon: "restaurant",    grad: "from-emerald-600 to-green-500" },
+                      transport:    { label: "Transport",    icon: "directions_bus", grad: "from-slate-600 to-slate-500" },
+                      hebergement:  { label: "Hébergement", icon: "hotel",          grad: "from-teal-600 to-emerald-500" },
+                      guide:        { label: "Guidage",     icon: "hiking",         grad: "from-emerald-500 to-green-500" },
+                      autre:        { label: "Autre",       icon: "category",       grad: "from-slate-500 to-slate-600" },
+                      nature_ecotourisme:   { label: "Nature & Écotourisme",    icon: "park",             grad: "from-green-600 to-emerald-500" },
+                      culture_patrimoine:   { label: "Culture & Patrimoine",    icon: "account_balance",  grad: "from-amber-600 to-orange-500" },
+                      historique_archeo:    { label: "Historique & Archéo",     icon: "history_edu",      grad: "from-stone-600 to-amber-700" },
+                      aventure_randonnee:   { label: "Aventure & Randonnée",    icon: "hiking",           grad: "from-teal-600 to-cyan-500" },
+                      gastronomie_locale:   { label: "Gastronomie locale",      icon: "restaurant",       grad: "from-orange-600 to-amber-500" },
+                      artisanat_traditions: { label: "Artisanat & Traditions",  icon: "palette",          grad: "from-rose-600 to-pink-500" },
+                      decouverte_urbaine:   { label: "Découverte urbaine",      icon: "location_city",    grad: "from-slate-600 to-blue-600" },
+                      eco_tour:             { label: "Éco-Tour",                icon: "eco",              grad: "from-green-600 to-teal-500" },
+                      activite:             { label: "Activité",                icon: "sports",           grad: "from-teal-600 to-emerald-500" },
+                      bien_etre_spa:        { label: "Bien-être & Spa",         icon: "spa",              grad: "from-purple-500 to-violet-500" },
+                      volontariat_eco:      { label: "Volontariat Éco",         icon: "volunteer_activism", grad: "from-emerald-600 to-green-500" },
+                      autre_service:        { label: "Autre service",           icon: "category",         grad: "from-slate-500 to-slate-600" },
+                    };
+                    const STATUS_META: Record<string, { label: string; cls: string; icon: string }> = {
+                      accepted:  { label: "Acceptée",  cls: "bg-teal-100 text-teal-700 border-teal-200",          icon: "check_circle" },
+                      completed: { label: "Complétée", cls: "bg-emerald-100 text-emerald-700 border-emerald-200", icon: "task_alt" },
+                    };
+                    return (
+                      <div className="space-y-4">
+                        <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
+                          <Users size={12} className="text-primary" /><span>Collaborations actives</span>
+                        </h3>
+                        {approvedCollabs.map((c) => {
+                          const sm = SECTION_META[c.section] ?? SECTION_META.autre;
+                          const isCircuit = c.source_type === "circuit";
+                          const st = STATUS_META[c.status] ?? STATUS_META.accepted;
+                          const displayTitle = isCircuit ? (c.circuit_title ?? "Circuit") : (c.offer_title ?? "Offre");
+                          const displayCover = isCircuit ? c.circuit_cover : c.offer_cover;
+                          return (
+                            <div key={c.id} className="relative group bg-white rounded-3xl border border-slate-100/90 shadow-sm overflow-hidden hover:shadow-md transition-all duration-300">
+                              {isCircuit ? (
+                                <div className="flex gap-0">
+                                  <div className="relative w-40 shrink-0 bg-gradient-to-br from-primary/20 to-emerald-100 flex items-center justify-center overflow-hidden">
+                                    {displayCover ? <img src={displayCover} alt={displayTitle} className="absolute inset-0 w-full h-full object-cover" /> : <span className="material-symbols-outlined text-primary/30" style={{ fontSize: 32 }}>route</span>}
+                                    <span className={`absolute top-2 left-2 text-[9px] font-black tracking-widest uppercase px-2 py-0.5 rounded-lg ${st.cls}`}>{st.label}</span>
+                                  </div>
+                                  <div className="flex-1 p-5">
+                                    <h4 className="text-base font-extrabold text-slate-800 leading-tight">{displayTitle}</h4>
+                                    {c.circuit_description && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{c.circuit_description}</p>}
+                                    <div className="flex flex-wrap gap-2 mt-3">
+                                      {c.circuit_nb_jours && <span className="flex items-center gap-1 text-[10px] font-black tracking-widest uppercase text-primary bg-primary/10 px-2.5 py-1 rounded-xl"><Calendar size={10} />{c.circuit_nb_jours} jour{c.circuit_nb_jours > 1 ? "s" : ""}</span>}
+                                      {c.circuit_nb_etapes != null && c.circuit_nb_etapes > 0 && <span className="flex items-center gap-1 text-[10px] font-black tracking-widest uppercase text-slate-500 bg-slate-100 px-2.5 py-1 rounded-xl"><MapPin size={10} />{c.circuit_nb_etapes} étape{c.circuit_nb_etapes > 1 ? "s" : ""}</span>}
+                                    </div>
+                                    {(c.circuit_etapes_preview ?? []).length > 0 && (
+                                      <div className="mt-3 space-y-1">
+                                        {(c.circuit_etapes_preview ?? []).map((etape, i) => {
+                                          const isGuidage = etape.etape_mode === "guidage";
+                                          const eCat = PROVIDER_SCHEMA.find((s) => s.value === etape.categorie);
+                                          const catLabel = eCat?.label ?? (DOMAINES as any)[etape.categorie ?? ""]?.label ?? SECTION_META[etape.categorie ?? ""]?.label ?? etape.categorie ?? "";
+                                          const displayName = etape.titre || etape.destination || catLabel || "Étape";
+                                          const stLabels = isGuidage ? (etape.expertises ?? []).slice(0, 2) : (etape.subtypes ?? []).slice(0, 2).map((sv) => eCat?.subtypes.find((s) => s.value === sv)?.label ?? sv);
+                                          return (
+                                            <div key={i} className="flex items-center gap-2 text-xs">
+                                              <span className="w-5 h-5 rounded-full bg-primary/10 text-primary font-black flex items-center justify-center text-[10px] shrink-0">{etape.jour}</span>
+                                              <span className="font-semibold text-slate-700 truncate">{displayName}</span>
+                                              {stLabels.length > 0 && (<><span className="text-slate-300 shrink-0">·</span><span className="text-slate-400 truncate text-[11px]">{stLabels.join(", ")}</span></>)}
+                                              {etape.heure_debut && (<><span className="text-slate-300 shrink-0">·</span><span className="text-slate-400 truncate text-[10px] shrink-0">{etape.heure_debut}{etape.heure_fin ? ` → ${etape.heure_fin}` : ""}</span></>)}
+                                            </div>
+                                          );
+                                        })}
+                                        {(c.circuit_nb_etapes ?? 0) > (c.circuit_etapes_preview ?? []).length && <p className="text-[10px] text-slate-400 font-semibold">+{(c.circuit_nb_etapes ?? 0) - (c.circuit_etapes_preview ?? []).length} étape{((c.circuit_nb_etapes ?? 0) - (c.circuit_etapes_preview ?? []).length) > 1 ? "s" : ""}…</p>}
+                                      </div>
+                                    )}
+                                    {c.message && <p className="mt-2 text-slate-400 text-xs leading-relaxed line-clamp-1 italic border-l-2 border-slate-200 pl-2">&ldquo;{c.message}&rdquo;</p>}
+                                    <button onClick={() => { setOpenCollab(c); setDetailOffer(null); setCircuitFullDetail(null); if (c.circuit_id) { setCircuitFullDetailLoading(true); apiFetch<any>(`/circuits/${c.circuit_id}/view`, { headers: { Authorization: `Bearer ${token}` } }).then(setCircuitFullDetail).catch(() => setCircuitFullDetail(null)).finally(() => setCircuitFullDetailLoading(false)); } }} className="mt-3 flex items-center gap-1.5 text-[11px] font-extrabold text-primary hover:text-primary/80 cursor-pointer"><Info size={12} />Voir les détails</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col sm:flex-row">
+                                  <div className="relative bg-slate-50 flex items-center justify-center overflow-hidden border-b sm:border-b-0 sm:border-r border-slate-100 sm:w-2/5 min-h-[180px]">
+                                    {displayCover ? <img src={displayCover} alt={displayTitle} className="absolute inset-0 w-full h-full object-cover" /> : (<><div className={`absolute inset-0 bg-gradient-to-br ${sm.grad} opacity-90`} /><span className="material-symbols-outlined text-white/40 relative z-10" style={{ fontSize: 100 }}>{sm.icon}</span></>)}
+                                    <div className={`absolute top-2 left-2 text-[10px] font-black tracking-widest uppercase px-2.5 py-1 rounded-xl shadow border flex items-center gap-1 ${st.cls}`}><span className="material-symbols-outlined text-xs">{st.icon}</span>{st.label}</div>
+                                  </div>
+                                  <div className="flex-1 flex flex-col justify-between p-6 md:p-8">
+                                    <div>
+                                      <h3 className="text-lg md:text-xl font-extrabold text-slate-800 tracking-tight leading-tight mb-2">{displayTitle}</h3>
+                                      {c.offer_description && <p className="text-slate-500 text-sm leading-relaxed mb-3 line-clamp-2">{c.offer_description}</p>}
+                                      {c.message && <p className="text-slate-400 text-xs leading-relaxed mb-3 line-clamp-2 italic border-l-2 border-slate-200 pl-3">&ldquo;{c.message}&rdquo;</p>}
+                                      <div className="flex flex-wrap gap-2.5 mb-4"><span className={`flex items-center gap-1.5 text-[11px] font-extrabold tracking-wider px-3 py-1 rounded-xl text-white bg-gradient-to-r ${sm.grad} uppercase`}><span className="material-symbols-outlined text-sm">{sm.icon}</span>{sm.label}</span></div>
+                                    </div>
+                                    <div className="flex items-center justify-between border-t border-slate-50 pt-4 mt-3">
+                                      <p className="text-[11px] font-bold text-slate-400">{new Date(c.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}</p>
+                                      <button onClick={() => { setOpenCollab(c); setDetailOffer(null); setCircuitFullDetail(null); if (c.offer_id) { setDetailOfferLoading(true); apiFetch<OfferFull>(`/guide/offers/${c.offer_id}/detail`, { headers: { Authorization: `Bearer ${token}` } }).then(setDetailOffer).catch(() => setDetailOffer(null)).finally(() => setDetailOfferLoading(false)); } }} className="text-primary hover:text-primary/80 font-extrabold text-xs inline-flex items-center gap-1 hover:translate-x-1 transition-transform duration-200"><span>Voir les détails</span><ArrowRight size={14} strokeWidth={2.5} /></button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              {!isCircuit && c.offer_status === "approved" && c.offer_id && (
+                                <PubInteractions
+                                  pubId={c.offer_id}
+                                  token={token}
+                                  viewerId={profile?.user_id ?? ""}
+                                  shareUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/profile/guide/${c.guide_id}?offer=${c.offer_id}`}
+                                  pubTitle={c.offer_title ?? undefined}
+                                  itemApiBase="/interactions/offer"
+                                  commentApiBase="/interactions"
+                                />
+                              )}
+                              {isCircuit && c.circuit_status === "approved" && c.circuit_id && (
+                                <PubInteractions
+                                  pubId={c.circuit_id}
+                                  token={token}
+                                  viewerId={profile?.user_id ?? ""}
+                                  shareUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/profile/${c.circuit_owner_type === "guide" ? "guide" : "provider"}/${c.owner_id}?tab=circuits&circuit=${c.circuit_id}`}
+                                  pubTitle={c.circuit_title ?? undefined}
+                                  itemApiBase="/interactions/circuit"
+                                  commentApiBase="/interactions"
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+
+                  {/* ── Activités proposées ─────────────────────────────────────── */}
                   <div className="space-y-4">
                     <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center justify-between">
                       <span className="flex items-center gap-1.5"><Sparkles size={12} className="text-primary" />Activités Proposées</span>
@@ -6830,15 +7940,19 @@ export default function ProviderProfilePage() {
                 ) : (
                   <div className="grid grid-cols-1 gap-4">
                     {circuits.map((circuit) => {
-                      const catLabels = [...new Set(circuit.etapes.map((e) => PROVIDER_SCHEMA.find((c) => c.value === e.categorie)?.label ?? e.categorie))];
+                      const catLabels = [...new Set(circuit.etapes.map((e) => PROVIDER_SCHEMA.find((c) => c.value === e.categorie)?.label ?? DOMAINES[e.categorie as string]?.label ?? e.categorie))];
+                      const cStatus = circuit.status ?? "draft";
+                      const cStatusLabel = cStatus === "approved" ? "Publié" : cStatus === "attente_publication" ? "Prêt à publier" : "Brouillon";
+                      const cStatusCls = cStatus === "approved" ? "bg-emerald-500 text-white" : cStatus === "attente_publication" ? "bg-teal-500 text-white" : "bg-slate-400 text-white";
                       return (
-                        <div key={circuit.id} className="bg-white rounded-3xl border border-slate-100/80 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+                        <div key={circuit.id} id={`circuit-${circuit.id}`} className={`bg-white rounded-3xl border shadow-sm overflow-hidden hover:shadow-md transition-all duration-500 ${highlightCircuitId === circuit.id ? "border-primary ring-2 ring-primary/30 shadow-primary/20" : "border-slate-100/80"}`}>
                           <div className="flex gap-0">
                             {/* Cover */}
                             <div className="relative w-40 shrink-0 bg-gradient-to-br from-primary/20 to-emerald-100 flex items-center justify-center">
                               {circuit.cover_image
                                 ? <img src={circuit.cover_image} alt="" className="w-full h-full object-cover absolute inset-0" />
                                 : <Route size={32} className="text-primary/40" />}
+                              <span className={`absolute top-2 left-2 text-[9px] font-black tracking-widest uppercase px-2 py-0.5 rounded-lg ${cStatusCls}`}>{cStatusLabel}</span>
                             </div>
                             {/* Info */}
                             <div className="flex-1 p-5">
@@ -6848,10 +7962,12 @@ export default function ProviderProfilePage() {
                                   {circuit.description && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{circuit.description}</p>}
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
-                                  <button onClick={() => openCircuitModal(circuit)} className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-primary/10 text-slate-500 hover:text-primary flex items-center justify-center transition-colors cursor-pointer">
-                                    <Edit3 size={14} />
-                                  </button>
-                                  <button onClick={async () => { if (!confirm("Supprimer ce circuit ?")) return; try { await apiFetch(`/circuits/${circuit.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }); setCircuits((prev) => prev.filter((c) => c.id !== circuit.id)); } catch {} }} className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-500 flex items-center justify-center transition-colors cursor-pointer">
+                                  {cStatus !== "approved" && (
+                                    <button onClick={() => openCircuitModal(circuit)} className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-primary/10 text-slate-500 hover:text-primary flex items-center justify-center transition-colors cursor-pointer" title="Modifier">
+                                      <Edit3 size={14} />
+                                    </button>
+                                  )}
+                                  <button onClick={async () => { if (!confirm(cStatus === "approved" ? "Supprimer ce circuit publié ? Les créneaux agenda de tous les collaborateurs seront supprimés." : "Supprimer ce circuit ?")) return; try { await apiFetch(`/circuits/${circuit.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }); setCircuits((prev) => prev.filter((c) => c.id !== circuit.id)); } catch {} }} className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-500 flex items-center justify-center transition-colors cursor-pointer">
                                     <Trash2 size={14} />
                                   </button>
                                 </div>
@@ -6884,13 +8000,63 @@ export default function ProviderProfilePage() {
                                 {circuit.etapes.length > 3 && <p className="text-[10px] text-slate-400 font-semibold">+{circuit.etapes.length - 3} étape{circuit.etapes.length - 3 > 1 ? "s" : ""}…</p>}
                               </div>
                               <button
-                                onClick={() => setViewingCircuit(circuit)}
+                                onClick={async () => {
+                                  setViewingCircuit(circuit);
+                                  setViewingCircuitCollabsMap({});
+                                  setPublishCircuitError("");
+                                  try {
+                                    // Charger la version enrichie (contribution_data + collaborator_status par étape)
+                                    const enriched = await apiFetch<any>(`/circuits/${circuit.id}/view`, { headers: { Authorization: `Bearer ${token}` } });
+                                    if (enriched) setViewingCircuit(enriched);
+                                    // Construire la map de statuts depuis les étapes enrichies
+                                    const m: Record<string, string> = {};
+                                    ((enriched?.etapes ?? []) as any[]).forEach((e: any) => { if (e.id && e.collaborator_status) m[e.id] = e.collaborator_status; });
+                                    setViewingCircuitCollabsMap(m);
+                                  } catch {}
+                                }}
                                 className="mt-3 flex items-center gap-1.5 text-[11px] font-extrabold text-primary hover:text-primary/80 transition-colors cursor-pointer"
                               >
                                 <Info size={12} />Voir les détails
                               </button>
                             </div>
                           </div>
+                          {/* Bandeau prêt à publier */}
+                          {cStatus === "attente_publication" && (
+                            <div className="border-t border-teal-200 bg-teal-50 px-6 py-3 flex items-center gap-3">
+                              <span className="material-symbols-outlined text-teal-600 text-[18px]">pending_actions</span>
+                              <p className="text-teal-700 text-xs font-bold flex-1">Tous les collaborateurs ont complété leur partie. Vérifiez le circuit et confirmez la publication.</p>
+                              <button
+                                onClick={async () => {
+                                  setViewingCircuit(circuit);
+                                  setViewingCircuitCollabsMap({});
+                                  setPublishCircuitError("");
+                                  try {
+                                    const enriched = await apiFetch<any>(`/circuits/${circuit.id}/view`, { headers: { Authorization: `Bearer ${token}` } });
+                                    if (enriched) setViewingCircuit(enriched);
+                                    const m: Record<string, string> = {};
+                                    ((enriched?.etapes ?? []) as any[]).forEach((e: any) => { if (e.id && e.collaborator_status) m[e.id] = e.collaborator_status; });
+                                    setViewingCircuitCollabsMap(m);
+                                  } catch {}
+                                }}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 text-white text-xs font-extrabold hover:bg-teal-700 transition-colors shrink-0"
+                              >
+                                <span className="material-symbols-outlined text-sm">check_circle</span>
+                                Vérifier et confirmer
+                              </button>
+                            </div>
+                          )}
+                          {/* J'aime / Commentaire / Partage — circuits publiés uniquement */}
+                          {cStatus === "approved" && (
+                            <PubInteractions
+                              pubId={circuit.id}
+                              token={token}
+                              viewerId={profile?.user_id ?? ""}
+                              shareUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/profile/provider/${profile?.user_id}?tab=circuits&circuit=${circuit.id}`}
+                              pubTitle={circuit.title}
+                              itemApiBase="/interactions/circuit"
+                              commentApiBase="/interactions"
+                            />
+                          )}
                         </div>
                       );
                     })}
@@ -6903,25 +8069,32 @@ export default function ProviderProfilePage() {
               <div className="space-y-5">
                 {/* Search */}
                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
-                  <h3 className="font-extrabold text-slate-800 text-base mb-4 flex items-center gap-2"><Search size={16} className="text-primary" />Rechercher un guide certifié</h3>
+                  <h3 className="font-extrabold text-slate-800 text-base mb-4 flex items-center gap-2"><Search size={16} className="text-primary" />Rechercher un utilisateur à suivre</h3>
                   <div className="relative">
                     <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                    <input type="text" value={netSearch} onChange={(e) => setNetSearch(e.target.value)} placeholder="Nom d'un guide…"
+                    <input type="text" value={netSearch} onChange={(e) => setNetSearch(e.target.value)} placeholder="Nom d'un guide ou prestataire…"
                       className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white transition-colors" />
                     {netSearch && <button onClick={() => { setNetSearch(""); setNetResults([]); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={14} /></button>}
                   </div>
                   {netLoading && <div className="mt-3 flex items-center gap-2 text-xs text-slate-400"><div className="w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />Recherche…</div>}
                   {!netLoading && netResults.length > 0 && (
                     <div className="mt-3 divide-y divide-slate-50">
-                      {netResults.map((r) => (
+                      {netResults.map((r) => {
+                        const path = r._type === "guide" ? `/profile/guide/${r.user_id}` : `/profile/provider/${r.user_id}`;
+                        const typeLabel = r._type === "guide" ? "Guide" : "Prestataire";
+                        return (
                         <div key={r.user_id} className="flex items-center justify-between py-3 gap-3">
-                          <button onClick={() => router.push(`/profile/guide/${r.user_id}`)} className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 text-left">
+                          <button onClick={() => router.push(path)} className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 text-left">
                             <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center shrink-0">{r.photo ? <img src={r.photo} alt={r.full_name} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-slate-400">person</span>}</div>
-                            <div className="min-w-0"><p className="font-extrabold text-slate-800 text-sm truncate">{r.full_name}</p>{r.sub && <p className="text-xs text-slate-400">{r.sub}</p>}</div>
+                            <div className="min-w-0">
+                              <p className="font-extrabold text-slate-800 text-sm truncate">{r.full_name}</p>
+                              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{typeLabel}</span>
+                            </div>
                           </button>
-                          <button onClick={() => router.push(`/profile/guide/${r.user_id}`)} className="shrink-0 px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary text-xs font-bold rounded-xl hover:bg-primary hover:text-slate-900 transition-all">Voir</button>
+                          <button onClick={() => router.push(path)} className="shrink-0 px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary text-xs font-bold rounded-xl hover:bg-primary hover:text-slate-900 transition-all">Voir</button>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                   {!netLoading && netSearch.trim() && netResults.length === 0 && <p className="mt-3 text-xs text-slate-400 italic">Aucun résultat pour "{netSearch}"</p>}
@@ -6972,6 +8145,53 @@ export default function ProviderProfilePage() {
                     </div>
                   )}
                 </div>
+
+                {/* Demandes de suivi reçues */}
+                {followRequests.length > 0 && (
+                  <div className="bg-white rounded-3xl border border-amber-100 shadow-sm p-6">
+                    <h3 className="font-extrabold text-slate-800 text-base mb-4 flex items-center gap-2">
+                      <UserPlus size={16} className="text-amber-500" />Demandes de suivi
+                      <span className="bg-amber-100 text-amber-700 text-xs font-black px-2 py-0.5 rounded-full">{followRequests.length}</span>
+                    </h3>
+                    <div className="divide-y divide-slate-50">
+                      {followRequests.map((req) => {
+                        const roleLabel = req.sender.role === "eco_traveler" ? "Éco-Voyageur" : req.sender.role === "guide" ? "Guide" : "Prestataire";
+                        return (
+                          <div key={req.id} className="flex items-center justify-between py-3 gap-2">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center shrink-0">
+                                {req.sender.photo ? <img src={req.sender.photo} alt={req.sender.full_name ?? ""} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-slate-400">person</span>}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-extrabold text-slate-800 text-sm truncate">{req.sender.full_name ?? "Utilisateur"}</p>
+                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{roleLabel}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button onClick={async () => {
+                                try {
+                                  await apiFetch(`/follows/${req.id}/accept`, { method: "PATCH", headers: { Authorization: `Bearer ${token}` } });
+                                  setFollowRequests((prev) => prev.filter((r) => r.id !== req.id));
+                                  setFollowers((prev) => [...prev, { user_id: req.sender.user_id, full_name: req.sender.full_name ?? "", photo: req.sender.photo, _type: req.sender.role }]);
+                                } catch {}
+                              }} className="px-3 py-1.5 bg-primary text-slate-900 text-xs font-extrabold rounded-xl hover:bg-primary/90 transition-all">
+                                Accepter
+                              </button>
+                              <button onClick={async () => {
+                                try {
+                                  await apiFetch(`/follows/${req.id}/reject`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+                                  setFollowRequests((prev) => prev.filter((r) => r.id !== req.id));
+                                } catch {}
+                              }} className="px-3 py-1.5 border border-slate-200 text-slate-500 text-xs font-bold rounded-xl hover:bg-slate-50 transition-all">
+                                Refuser
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Mes abonnés */}
                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
@@ -7422,6 +8642,461 @@ export default function ProviderProfilePage() {
               </div>
             )}
 
+            {/* ── Onglet Collaborations ── */}
+            {activeTab === "collaborations" && (() => {
+              const SECTION_META: Record<string, { label: string; icon: string; grad: string }> = {
+                // Sections offre
+                restauration: { label: "Restauration", icon: "restaurant",    grad: "from-emerald-600 to-green-500" },
+                transport:    { label: "Transport",    icon: "directions_bus", grad: "from-slate-600 to-slate-500" },
+                hebergement:  { label: "Hébergement", icon: "hotel",          grad: "from-teal-600 to-emerald-500" },
+                guide:        { label: "Guidage",     icon: "hiking",         grad: "from-emerald-500 to-green-500" },
+                autre:        { label: "Autre",       icon: "category",       grad: "from-slate-500 to-slate-600" },
+                // Domaines guidage circuit
+                nature_ecotourisme:   { label: "Nature & Écotourisme",    icon: "park",                grad: "from-green-600 to-emerald-500" },
+                culture_patrimoine:   { label: "Culture & Patrimoine",    icon: "account_balance",     grad: "from-amber-600 to-orange-500" },
+                historique_archeo:    { label: "Historique & Archéo",     icon: "history_edu",         grad: "from-stone-600 to-amber-700" },
+                aventure_randonnee:   { label: "Aventure & Randonnée",    icon: "hiking",              grad: "from-teal-600 to-cyan-500" },
+                gastronomie_locale:   { label: "Gastronomie locale",      icon: "restaurant",          grad: "from-orange-600 to-amber-500" },
+                artisanat_traditions: { label: "Artisanat & Traditions",  icon: "palette",             grad: "from-rose-600 to-pink-500" },
+                decouverte_urbaine:   { label: "Découverte urbaine",      icon: "location_city",       grad: "from-slate-600 to-blue-600" },
+                eco_tour:             { label: "Éco-Tour",                icon: "eco",                 grad: "from-green-600 to-teal-500" },
+                activite:             { label: "Activité",                icon: "sports",              grad: "from-teal-600 to-emerald-500" },
+                bien_etre_spa:        { label: "Bien-être & Spa",         icon: "spa",                 grad: "from-purple-500 to-violet-500" },
+                volontariat_eco:      { label: "Volontariat Éco",         icon: "volunteer_activism",  grad: "from-emerald-600 to-green-500" },
+                autre_service:        { label: "Autre service",           icon: "category",            grad: "from-slate-500 to-slate-600" },
+              };
+              const STATUS_META: Record<string, { label: string; cls: string; icon: string }> = {
+                pending:         { label: "En attente",               cls: "bg-slate-100 text-slate-600 border-slate-200",     icon: "schedule" },
+                accepted:        { label: "Acceptée",                 cls: "bg-teal-100 text-teal-700 border-teal-200",       icon: "check_circle" },
+                completed:       { label: "Complétée",                cls: "bg-emerald-100 text-emerald-700 border-emerald-200", icon: "task_alt" },
+                declined:        { label: "Refusée",                  cls: "bg-red-100 text-red-700 border-red-200",          icon: "cancel" },
+                offer_deleted:   { label: "Offre supprimée",          cls: "bg-orange-100 text-orange-700 border-orange-200", icon: "delete_forever" },
+                circuit_deleted: { label: "Circuit supprimé",         cls: "bg-orange-100 text-orange-700 border-orange-200", icon: "delete_forever" },
+                collab_kicked:   { label: "Retiré par le propriétaire", cls: "bg-red-100 text-red-700 border-red-200",       icon: "person_remove" },
+                collab_quit:     { label: "Vous avez quitté",         cls: "bg-slate-100 text-slate-500 border-slate-200",   icon: "exit_to_app" },
+              };
+              return (
+                <div className="space-y-4">
+                  {collabLoading ? (
+                    <div className="flex items-center justify-center py-20 gap-3 text-slate-400">
+                      <span className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                      <span className="text-sm">Chargement…</span>
+                    </div>
+                  ) : collaborations.length === 0 ? (
+                    <div className="bg-white rounded-3xl border border-slate-100/90 shadow-sm p-14 text-center">
+                      <span className="material-symbols-outlined text-5xl text-slate-300 block mb-3">handshake</span>
+                      <p className="font-extrabold text-slate-700 text-base mb-1">Aucune invitation de collaboration</p>
+                      <p className="text-slate-400 text-sm">Vous recevrez ici les invitations des guides pour leurs offres.</p>
+                    </div>
+                  ) : (
+                    collaborations.map((c) => {
+                      const sm = SECTION_META[c.section] ?? SECTION_META.autre;
+                      const isCircuit = c.source_type === "circuit";
+                      const effectiveStatus = isCircuit ? c.circuit_status : c.offer_status;
+                      const isOfferDeleted = effectiveStatus === "offer_deleted" || effectiveStatus === "circuit_deleted";
+                      const isKicked = effectiveStatus === "collab_kicked";
+                      const isGuideQuit = effectiveStatus === "collab_quit";
+                      const isInactive = isOfferDeleted || isKicked || isGuideQuit;
+                      const st = isOfferDeleted ? (isCircuit ? STATUS_META.circuit_deleted : STATUS_META.offer_deleted) : isKicked ? STATUS_META.collab_kicked : isGuideQuit ? STATUS_META.collab_quit : (STATUS_META[c.status] ?? STATUS_META.pending);
+                      const displayTitle = isCircuit ? (c.circuit_title ?? "Circuit") : (c.offer_title ?? "Offre");
+                      const displayCover = isCircuit ? c.circuit_cover : c.offer_cover;
+                      return (
+                        <div key={c.id} id={`collab-${c.id}`} className={`relative group bg-white rounded-3xl border shadow-sm overflow-hidden hover:shadow-md transition-all duration-300 ${highlightCollabId === c.id ? "border-primary ring-2 ring-primary/30 shadow-primary/20" : "border-slate-100/90"}`}>
+                          <button
+                            onClick={async () => {
+                              try {
+                                if (['accepted', 'completed'].includes(c.status)) {
+                                  await apiFetch(`/guide/collaborations/${c.id}/withdraw`, { method: "PATCH", headers: { Authorization: `Bearer ${token}` } });
+                                } else {
+                                  await apiFetch(`/guide/collaborations/${c.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+                                }
+                                setCollaborations(prev => prev.filter(x => x.id !== c.id));
+                              } catch {
+                                alert("Erreur lors de la suppression. Veuillez réessayer.");
+                              }
+                            }}
+                            className="absolute top-2.5 right-2.5 z-10 w-7 h-7 rounded-full bg-white/80 hover:bg-red-50 border border-slate-100 hover:border-red-200 text-slate-300 hover:text-red-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-sm">
+                            <span className="material-symbols-outlined text-sm">delete</span>
+                          </button>
+                          {isCircuit ? (
+                            /* ── Card circuit — même design que la card Circuits du propriétaire ── */
+                            <div className="flex gap-0">
+                              {/* Cover compact w-40 */}
+                              <div className="relative w-40 shrink-0 bg-gradient-to-br from-primary/20 to-emerald-100 flex items-center justify-center overflow-hidden">
+                                {displayCover
+                                  ? <img src={displayCover} alt={displayTitle} className="absolute inset-0 w-full h-full object-cover" />
+                                  : <span className="material-symbols-outlined text-primary/30" style={{ fontSize: 32 }}>route</span>
+                                }
+                                <span className={`absolute top-2 left-2 text-[9px] font-black tracking-widest uppercase px-2 py-0.5 rounded-lg ${st.cls}`}>{st.label}</span>
+                              </div>
+                              {/* Contenu */}
+                              <div className="flex-1 p-5">
+                                <h4 className="text-base font-extrabold text-slate-800 leading-tight">{displayTitle}</h4>
+                                {c.circuit_description && (
+                                  <p className="text-xs text-slate-500 mt-1 line-clamp-2">{c.circuit_description}</p>
+                                )}
+                                {/* Badges : jours + étapes — même style que la card propriétaire */}
+                                <div className="flex flex-wrap gap-2 mt-3">
+                                  {c.circuit_nb_jours && (
+                                    <span className="flex items-center gap-1 text-[10px] font-black tracking-widest uppercase text-primary bg-primary/10 px-2.5 py-1 rounded-xl">
+                                      <Calendar size={10} />{c.circuit_nb_jours} jour{c.circuit_nb_jours > 1 ? "s" : ""}
+                                    </span>
+                                  )}
+                                  {c.circuit_nb_etapes != null && c.circuit_nb_etapes > 0 && (
+                                    <span className="flex items-center gap-1 text-[10px] font-black tracking-widest uppercase text-slate-500 bg-slate-100 px-2.5 py-1 rounded-xl">
+                                      <MapPin size={10} />{c.circuit_nb_etapes} étape{c.circuit_nb_etapes > 1 ? "s" : ""}
+                                    </span>
+                                  )}
+                                </div>
+                                {/* Liste étapes preview — même style que la card propriétaire */}
+                                {(c.circuit_etapes_preview ?? []).length > 0 && (
+                                  <div className="mt-3 space-y-1">
+                                    {(c.circuit_etapes_preview ?? []).map((etape, i) => {
+                                      const isGuidage = etape.etape_mode === "guidage";
+                                      const eCat = PROVIDER_SCHEMA.find((s) => s.value === etape.categorie);
+                                      const catLabel = eCat?.label ?? (DOMAINES as any)[etape.categorie ?? ""]?.label ?? SECTION_META[etape.categorie ?? ""]?.label ?? etape.categorie ?? "";
+                                      const displayName = etape.titre || etape.destination || catLabel || "Étape";
+                                      const stLabels = isGuidage
+                                        ? (etape.expertises ?? []).slice(0, 2)
+                                        : (etape.subtypes ?? []).slice(0, 2).map((sv) => eCat?.subtypes.find((s) => s.value === sv)?.label ?? sv);
+                                      return (
+                                        <div key={i} className="flex items-center gap-2 text-xs">
+                                          <span className="w-5 h-5 rounded-full bg-primary/10 text-primary font-black flex items-center justify-center text-[10px] shrink-0">{etape.jour}</span>
+                                          <span className="font-semibold text-slate-700 truncate">{displayName}</span>
+                                          {stLabels.length > 0 && (
+                                            <>
+                                              <span className="text-slate-300 shrink-0">·</span>
+                                              <span className="text-slate-400 truncate text-[11px]">{stLabels.join(", ")}</span>
+                                            </>
+                                          )}
+                                          {etape.heure_debut && (
+                                            <>
+                                              <span className="text-slate-300 shrink-0">·</span>
+                                              <span className="text-slate-400 truncate text-[10px] shrink-0">{etape.heure_debut}{etape.heure_fin ? ` → ${etape.heure_fin}` : ""}</span>
+                                            </>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                    {(c.circuit_nb_etapes ?? 0) > (c.circuit_etapes_preview ?? []).length && (
+                                      <p className="text-[10px] text-slate-400 font-semibold">+{(c.circuit_nb_etapes ?? 0) - (c.circuit_etapes_preview ?? []).length} étape{((c.circuit_nb_etapes ?? 0) - (c.circuit_etapes_preview ?? []).length) > 1 ? "s" : ""}…</p>
+                                    )}
+                                  </div>
+                                )}
+                                {c.message && (
+                                  <p className="mt-2 text-slate-400 text-xs leading-relaxed line-clamp-1 italic border-l-2 border-slate-200 pl-2">&ldquo;{c.message}&rdquo;</p>
+                                )}
+                                {isInactive ? (
+                                  <span className={`mt-3 inline-flex items-center gap-1 font-extrabold text-xs ${isKicked ? "text-red-400" : isGuideQuit ? "text-slate-400" : "text-orange-400"}`}>
+                                    <span className="material-symbols-outlined text-sm">{st.icon}</span>
+                                    {st.label}
+                                  </span>
+                                ) : (
+                                  <button onClick={() => {
+                                    setOpenCollab(c);
+                                    setDetailOffer(null);
+                                    setCircuitFullDetail(null);
+                                    if (c.circuit_id) {
+                                      setCircuitFullDetailLoading(true);
+                                      apiFetch<any>(`/circuits/${c.circuit_id}/view`, { headers: { Authorization: `Bearer ${token}` } })
+                                        .then(setCircuitFullDetail).catch(() => setCircuitFullDetail(null)).finally(() => setCircuitFullDetailLoading(false));
+                                    }
+                                  }}
+                                    className="mt-3 flex items-center gap-1.5 text-[11px] font-extrabold text-primary hover:text-primary/80 cursor-pointer">
+                                    <Info size={12} />Voir les détails
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            /* ── Card offre — layout d'origine ── */
+                            <div className="flex flex-col sm:flex-row">
+                              <div className="relative bg-slate-50 flex items-center justify-center overflow-hidden border-b sm:border-b-0 sm:border-r border-slate-100 sm:w-2/5 min-h-[180px]">
+                                {displayCover ? (
+                                  <img src={displayCover} alt={displayTitle} className="absolute inset-0 w-full h-full object-cover" />
+                                ) : (
+                                  <>
+                                    <div className={`absolute inset-0 bg-gradient-to-br ${sm.grad} opacity-90`} />
+                                    <span className="material-symbols-outlined text-white/40 relative z-10" style={{ fontSize: 100 }}>{sm.icon}</span>
+                                  </>
+                                )}
+                                <div className={`absolute top-2 left-2 text-[10px] font-black tracking-widest uppercase px-2.5 py-1 rounded-xl shadow border flex items-center gap-1 ${st.cls}`}>
+                                  <span className="material-symbols-outlined text-xs">{st.icon}</span>{st.label}
+                                </div>
+                              </div>
+                              <div className="flex-1 flex flex-col justify-between p-6 md:p-8">
+                                <div>
+                                  <h3 className="text-lg md:text-xl font-extrabold text-slate-800 tracking-tight leading-tight mb-2">{displayTitle}</h3>
+                                  {c.offer_description && (
+                                    <p className="text-slate-500 text-sm leading-relaxed mb-3 line-clamp-2">{c.offer_description}</p>
+                                  )}
+                                  {c.message && (
+                                    <p className="text-slate-400 text-xs leading-relaxed mb-3 line-clamp-2 italic border-l-2 border-slate-200 pl-3">&ldquo;{c.message}&rdquo;</p>
+                                  )}
+                                  <div className="flex flex-wrap gap-2.5 mb-4">
+                                    <span className={`flex items-center gap-1.5 text-[11px] font-extrabold tracking-wider px-3 py-1 rounded-xl text-white bg-gradient-to-r ${sm.grad} uppercase`}>
+                                      <span className="material-symbols-outlined text-sm">{sm.icon}</span>{sm.label}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between border-t border-slate-50 pt-4 mt-3">
+                                  <p className="text-[11px] font-bold text-slate-400">
+                                    {new Date(c.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
+                                  </p>
+                                  {isInactive ? (
+                                    <span className={`font-extrabold text-xs inline-flex items-center gap-1 ${isKicked ? "text-red-400" : isGuideQuit ? "text-slate-400" : "text-orange-400"}`}>
+                                      <span className="material-symbols-outlined text-sm">{st.icon}</span>
+                                      {st.label}
+                                    </span>
+                                  ) : (
+                                    <button onClick={() => {
+                                      setOpenCollab(c);
+                                      setDetailOffer(null);
+                                      setCircuitFullDetail(null);
+                                      if (c.offer_id) {
+                                        setDetailOfferLoading(true);
+                                        apiFetch<OfferFull>(`/guide/offers/${c.offer_id}/detail`, { headers: { Authorization: `Bearer ${token}` } })
+                                          .then(setDetailOffer).catch(() => setDetailOffer(null)).finally(() => setDetailOfferLoading(false));
+                                      }
+                                    }}
+                                      className="text-primary hover:text-primary/80 font-extrabold text-xs inline-flex items-center gap-1 hover:translate-x-1 transition-transform duration-200">
+                                      <span>Voir les détails</span><ArrowRight size={14} strokeWidth={2.5} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {/* J'aime / Commentaire / Partage de la ressource associée */}
+                          {!isCircuit && c.offer_status === "approved" && c.offer_id && (
+                            <PubInteractions
+                              pubId={c.offer_id}
+                              token={token}
+                              viewerId={profile?.user_id ?? ""}
+                              shareUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/profile/guide/${c.guide_id}?offer=${c.offer_id}`}
+                              pubTitle={c.offer_title ?? undefined}
+                              itemApiBase="/interactions/offer"
+                              commentApiBase="/interactions"
+                            />
+                          )}
+                          {isCircuit && c.circuit_status === "approved" && c.circuit_id && (
+                            <PubInteractions
+                              pubId={c.circuit_id}
+                              token={token}
+                              viewerId={profile?.user_id ?? ""}
+                              shareUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/profile/${c.circuit_owner_type === "guide" ? "guide" : "provider"}/${c.owner_id}?tab=circuits&circuit=${c.circuit_id}`}
+                              pubTitle={c.circuit_title ?? undefined}
+                              itemApiBase="/interactions/circuit"
+                              commentApiBase="/interactions"
+                            />
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ── Formulaire collaboration (après acceptation) ── */}
+            {openCollab && showCollabForm && (
+              <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="w-full max-w-3xl h-[90vh] bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+                  <CollaborationModal
+                    collabId={openCollab.id}
+                    offerId={openCollab.offer_id ?? ""}
+                    section={openCollab.section}
+                    token={token}
+                    offerApproved={openCollab.source_type === "circuit" ? openCollab.circuit_status === "approved" : openCollab.offer_status === "approved"}
+                    circuitId={openCollab.source_type === "circuit" ? (openCollab.circuit_id ?? undefined) : undefined}
+                    etapeId={openCollab.source_type === "circuit" ? (openCollab.etape_id ?? undefined) : undefined}
+                    onClose={() => { setShowCollabForm(false); setOpenCollab(null); }}
+                    onContributed={() => {
+                      setCollaborations((prev) => prev.map((x) => x.id === openCollab!.id ? { ...x, status: "completed" as const } : x));
+                      setOpenCollab((prev) => prev ? { ...prev, status: "completed" } : null);
+                    }}
+                    onSaved={() => {
+                      setShowCollabForm(false);
+                      setDetailOfferLoading(true);
+                      apiFetch<OfferFull>(`/guide/offers/${openCollab!.offer_id}/detail`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                      }).then(setDetailOffer).catch(() => setDetailOffer(null)).finally(() => setDetailOfferLoading(false));
+                    }}
+                    onDeleted={() => {
+                      setCollaborations((prev) => prev.map((x) => x.id === openCollab!.id ? { ...x, status: "declined" } : x));
+                      setOpenCollab(null);
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ── Détail de l'offre (OfferDetailView) + actions ── */}
+            {openCollab && !showCollabForm && (
+              <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="w-full max-w-3xl h-[90vh] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col relative">
+                  <button onClick={() => { setOpenCollab(null); setDetailOffer(null); setCircuitFullDetail(null); }}
+                    className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 flex items-center justify-center transition-colors">
+                    <X size={16} className="text-white" />
+                  </button>
+                  {/* Collaboration context banner */}
+                  {(() => {
+                    const sectionLabels: Record<string, string> = { restauration: "Restauration", transport: "Transport", hebergement: "Hébergement", guide: "Guidage", autre_service: "Autre service", autre: "Autre" };
+                    const statusInfo: Record<string, { label: string; cls: string }> = {
+                      pending:       { label: "En attente",      cls: "bg-slate-100 text-slate-600 border-slate-200" },
+                      accepted:      { label: "Acceptée",        cls: "bg-teal-50 text-teal-700 border-teal-200" },
+                      completed:     { label: "Complétée",       cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                      declined:      { label: "Refusée",         cls: "bg-red-50 text-red-600 border-red-200" },
+                      offer_deleted: { label: "Offre supprimée", cls: "bg-orange-50 text-orange-700 border-orange-200" },
+                    };
+                    const si = openCollab.offer_status === "offer_deleted"
+                      ? statusInfo.offer_deleted
+                      : (statusInfo[openCollab.status] ?? { label: openCollab.status, cls: "bg-slate-100 text-slate-600 border-slate-200" });
+                    return (
+                      <div className="shrink-0 px-5 py-2.5 flex items-center gap-2.5 bg-amber-50/80 border-b border-amber-100">
+                        <div className="w-6 h-6 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                          <span className="material-symbols-outlined text-amber-600 text-[14px]">handshake</span>
+                        </div>
+                        <span className="text-[11px] font-extrabold text-amber-700 flex-1">
+                          Collaboration · {sectionLabels[openCollab.section] ?? openCollab.section}
+                        </span>
+                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-xl border ${si.cls}`}>{si.label}</span>
+                      </div>
+                    );
+                  })()}
+                  {/* Corps scrollable */}
+                  <div className="flex-1 overflow-y-auto">
+                    {openCollab.source_type === "circuit" ? (
+                      /* ── Circuit complet côté collaborateur ── */
+                      circuitFullDetailLoading ? (
+                        <div className="flex items-center justify-center h-full gap-3 text-slate-400">
+                          <span className="w-7 h-7 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                          <span className="text-sm">Chargement du circuit…</span>
+                        </div>
+                      ) : circuitFullDetail ? (
+                        <>
+                          {/* Hero cover */}
+                          <div className="relative shrink-0">
+                            {circuitFullDetail.cover_image
+                              ? <img src={circuitFullDetail.cover_image} alt="" className="w-full h-40 object-cover" />
+                              : <div className="w-full h-40 bg-gradient-to-br from-primary/20 to-emerald-100 flex items-center justify-center">
+                                  <span className="material-symbols-outlined text-primary/30" style={{ fontSize: 56 }}>route</span>
+                                </div>
+                            }
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                            <div className="absolute bottom-0 left-0 right-0 px-6 pb-4">
+                              <h3 className="text-xl font-extrabold text-white leading-tight">{circuitFullDetail.title}</h3>
+                              <div className="flex items-center gap-3 mt-1">
+                                <span className="flex items-center gap-1 text-[11px] font-black text-white/90">
+                                  <Calendar size={11} />{circuitFullDetail.nb_jours} jour{circuitFullDetail.nb_jours > 1 ? "s" : ""}
+                                </span>
+                                <span className="flex items-center gap-1 text-[11px] font-black text-white/90">
+                                  <MapPin size={11} />{(circuitFullDetail.etapes ?? []).length} étape{(circuitFullDetail.etapes ?? []).length > 1 ? "s" : ""}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <CircuitViewContent circuit={circuitFullDetail} />
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full gap-4 p-8 text-slate-400">
+                          <span className="material-symbols-outlined text-5xl text-slate-300">route</span>
+                          <div className="text-center">
+                            <p className="font-extrabold text-slate-600 text-sm mb-1">Impossible de charger le circuit</p>
+                            <p className="text-xs text-slate-400">Vérifiez votre connexion et réessayez.</p>
+                          </div>
+                        </div>
+                      )
+                    ) : detailOfferLoading ? (
+                      <div className="flex items-center justify-center h-full gap-3 text-slate-400">
+                        <span className="w-7 h-7 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                        <span className="text-sm">Chargement de l&apos;offre…</span>
+                      </div>
+                    ) : detailOffer ? (
+                      <OfferDetailView offer={detailOffer} />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full gap-4 text-slate-400">
+                        <span className="material-symbols-outlined text-5xl text-orange-300">delete_forever</span>
+                        <div className="text-center">
+                          <p className="font-extrabold text-slate-600 text-base mb-1">Offre supprimée</p>
+                          <p className="text-sm text-slate-400">Cette offre a été supprimée par son propriétaire.</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {/* Pied : boutons action */}
+                  <div className="px-6 py-4 border-t border-slate-100 shrink-0 flex gap-3">
+                    {openCollab.status === "pending" && (
+                      <>
+                        <button onClick={async () => {
+                          setCollabResponding(true);
+                          try {
+                            await apiFetch(`/guide/collaborations/${openCollab.id}/respond`, {
+                              method: "PATCH",
+                              headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                              body: JSON.stringify({ status: "accepted" }),
+                            });
+                            setCollaborations((prev) => prev.map((x) => x.id === openCollab!.id ? { ...x, status: "accepted" } : x));
+                            setOpenCollab((prev) => prev ? { ...prev, status: "accepted" } : null);
+                            setShowCollabForm(true);
+                          } finally { setCollabResponding(false); }
+                        }} disabled={collabResponding}
+                          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-slate-900 font-extrabold text-sm hover:bg-primary/90 transition-all disabled:opacity-60">
+                          {collabResponding ? <span className="w-4 h-4 rounded-full border-2 border-slate-900 border-t-transparent animate-spin" /> : <span className="material-symbols-outlined text-base">check</span>}
+                          Accepter et remplir ma partie
+                        </button>
+                        <button onClick={async () => {
+                          setCollabResponding(true);
+                          try {
+                            await apiFetch(`/guide/collaborations/${openCollab.id}/respond`, {
+                              method: "PATCH",
+                              headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                              body: JSON.stringify({ status: "declined" }),
+                            });
+                            setCollaborations((prev) => prev.map((x) => x.id === openCollab!.id ? { ...x, status: "declined" } : x));
+                            setOpenCollab(null);
+                          } finally { setCollabResponding(false); }
+                        }} disabled={collabResponding}
+                          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-slate-200 text-slate-600 font-bold text-sm hover:border-red-300 hover:text-red-600 transition-all disabled:opacity-60">
+                          <span className="material-symbols-outlined text-base">close</span>Refuser
+                        </button>
+                      </>
+                    )}
+                    {openCollab.status === "accepted" && (
+                      <button onClick={() => setShowCollabForm(true)}
+                        className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-slate-900 font-extrabold text-sm hover:bg-primary/90 transition-all">
+                        <span className="material-symbols-outlined text-base">edit</span>Compléter ma contribution
+                      </button>
+                    )}
+                    {openCollab.status === "completed" && (
+                      (openCollab.source_type === "circuit" ? openCollab.circuit_status === "approved" : openCollab.offer_status === "approved") ? (
+                        <button onClick={() => setShowCollabForm(true)}
+                          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-600 text-white font-extrabold text-sm hover:bg-emerald-700 transition-all">
+                          <span className="material-symbols-outlined text-base">visibility</span>Voir ma contribution
+                        </button>
+                      ) : (
+                        <div className="flex-1 flex items-center justify-end gap-3">
+                          <button onClick={() => setOpenCollab(null)}
+                            className="px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-2xl text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer">
+                            Fermer
+                          </button>
+                          <button onClick={() => setShowCollabForm(true)}
+                            className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-slate-900 font-extrabold rounded-2xl text-xs shadow-sm transition-all active:scale-95 cursor-pointer">
+                            <span className="material-symbols-outlined text-base">edit</span>Gérer
+                          </button>
+                        </div>
+                      )
+                    )}
+                    {openCollab.status === "declined" && (
+                      <div className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-sm font-bold">
+                        <span className="material-symbols-outlined text-base">cancel</span>Invitation refusée
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       </div>
@@ -7768,6 +9443,56 @@ export default function ProviderProfilePage() {
         </div>
       );
     })()}
+
+      {providerInviteSection && offerEditId && (
+        <InviteCollaboratorModal
+          section={providerInviteSection}
+          token={token}
+          offerId={offerEditId}
+          offerAvail={offerAvail}
+          filterMode={(() => {
+            if (providerInviteSection === "restauration") {
+              return providerRepasMode === "guide" ? "guide" : "restaurant_terroir";
+            }
+            if (providerInviteSection === "autre_service") {
+              const asMode = (providerAutreServiceDet._mode as string) || "guide";
+              if (asMode === "guide") return "guide";
+              return providerAutreServiceCat || undefined;
+            }
+            return undefined;
+          })()}
+          alreadyInvited={providerOfferCollabs
+            .filter((c) => c.section === providerInviteSection && c.status !== "declined")
+            .map((c) => c.userId)}
+          onClose={() => setProviderInviteSection(null)}
+          onInvited={(collaborator) => {
+            const sec = providerInviteSection;
+            const eid = offerEditId;
+            setProviderOfferCollabs((prev) => [
+              ...prev.filter((c) => !(c.section === sec && c.userId === collaborator.user_id)),
+              { userId: collaborator.user_id, userName: collaborator.name, userType: collaborator.type, section: sec, status: "pending" },
+            ]);
+            setProviderInviteSection(null);
+            // Re-fetch pour obtenir l'id du collab (nécessaire pour kick)
+            if (eid && token) {
+              apiFetch<any[]>(`/guide/offers/${eid}/collaborations`, {
+                headers: { Authorization: `Bearer ${token}` },
+              }).then((list) => {
+                setProviderOfferCollabs(
+                  (list ?? []).filter((c: any) => c.status !== "declined").map((c: any) => ({
+                    id: c.id,
+                    userId: c.invited_user_id,
+                    userName: c.invited_user_name ?? c.invited_user_id,
+                    userType: c.invited_user_type ?? "provider",
+                    section: c.section as CollabSection,
+                    status: c.status,
+                  }))
+                );
+              }).catch(() => {});
+            }
+          }}
+        />
+      )}
     </>
   );
 }
